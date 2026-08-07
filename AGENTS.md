@@ -7,9 +7,10 @@
 
 1. [STATUS.md](STATUS.md) — current focus, blockers, run commands  
 2. [CHECKLIST.md](CHECKLIST.md) — markable tasks with stable IDs (`S0-01`, `M1-04`, …)  
-3. [docs/vault-format.md](docs/vault-format.md) — vault schema (do not violate)  
-4. [docs/portability.md](docs/portability.md) — move vault / iCloud mirror rules  
-5. [docs/brief/Windows_Markdown_Notes_Server_Agent_Brief.md](docs/brief/Windows_Markdown_Notes_Server_Agent_Brief.md) — engineering detail  
+3. [docs/changelog.md](docs/changelog.md) — **why** recent fixes/behavior changes (read when debugging; update when landing non-trivial fixes)  
+4. [docs/vault-format.md](docs/vault-format.md) — vault schema (do not violate)  
+5. [docs/portability.md](docs/portability.md) — move vault / iCloud mirror rules  
+6. [docs/brief/Windows_Markdown_Notes_Server_Agent_Brief.md](docs/brief/Windows_Markdown_Notes_Server_Agent_Brief.md) — engineering detail  
 
 ## Stack
 
@@ -37,12 +38,13 @@
 
 ## Agent protocol
 
-1. Read `STATUS.md` and the next unchecked items for the **active milestone only**.
+1. Read `STATUS.md`, `docs/changelog.md` (for prior fix context), and the next unchecked items for the **active milestone only**.
 2. Claim work in `STATUS.md` → In progress.
 3. Complete the smallest coherent checklist item; mark `- [x]` in `CHECKLIST.md`.
 4. Do not start a later milestone until the previous **gate** is done (or Joshua overrides).
 5. Stop and report if a change would violate a non-negotiable.
 6. Do not commit secrets or personal vault content into git.
+7. After a non-trivial fix or behavior change: append a short *why* entry to `docs/changelog.md` (and prefer commit messages that match). ADRs in `docs/decisions/` for larger design choices.
 
 ### Autonomous verification
 
