@@ -73,30 +73,76 @@ type AuthInfo = {
   developmentBypass?: boolean
 }
 
+function loadCollapsedFolders(): Set<string> {
+  try {
+    const raw = localStorage.getItem('jotdex.collapsedFolders')
+    if (!raw) return new Set()
+    const arr = JSON.parse(raw) as unknown
+    return Array.isArray(arr) ? new Set(arr.filter((x): x is string => typeof x === 'string')) : new Set()
+  } catch {
+    return new Set()
+  }
+}
+
+function saveCollapsedFolders(paths: Set<string>) {
+  localStorage.setItem('jotdex.collapsedFolders', JSON.stringify([...paths]))
+}
+
 function FolderTree({
   node,
   depth,
   selected,
   onSelect,
+  collapsed,
+  onToggle,
 }: {
   node: FolderNode
   depth: number
   selected: string
   onSelect: (path: string) => void
+  collapsed: Set<string>
+  onToggle: (path: string) => void
 }) {
+  const hasKids = node.children.length > 0
+  // Root (empty path) stays expanded; collapse applies to real folders
+  const isCollapsed = node.relativePath !== '' && collapsed.has(node.relativePath)
+  const showKids = hasKids && !isCollapsed
+
   return (
     <div className="tree-branch">
-      <button
-        type="button"
-        className={`tree-item${selected === node.relativePath ? ' active' : ''}`}
-        style={{ paddingLeft: `${0.7 + depth * 0.85}rem` }}
-        onClick={() => onSelect(node.relativePath)}
-      >
-        {node.name}
-      </button>
-      {node.children.map((c) => (
-        <FolderTree key={c.id} node={c} depth={depth + 1} selected={selected} onSelect={onSelect} />
-      ))}
+      <div className={`tree-row${selected === node.relativePath ? ' active' : ''}`} style={{ paddingLeft: `${0.35 + depth * 0.85}rem` }}>
+        {hasKids && node.relativePath !== '' ? (
+          <button
+            type="button"
+            className="tree-twist"
+            aria-label={isCollapsed ? 'Expand folder' : 'Collapse folder'}
+            aria-expanded={!isCollapsed}
+            onClick={(e) => {
+              e.stopPropagation()
+              onToggle(node.relativePath)
+            }}
+          >
+            {isCollapsed ? '▸' : '▾'}
+          </button>
+        ) : (
+          <span className="tree-twist spacer" aria-hidden />
+        )}
+        <button type="button" className="tree-item" onClick={() => onSelect(node.relativePath)}>
+          {node.name}
+        </button>
+      </div>
+      {showKids &&
+        node.children.map((c) => (
+          <FolderTree
+            key={c.id}
+            node={c}
+            depth={depth + 1}
+            selected={selected}
+            onSelect={onSelect}
+            collapsed={collapsed}
+            onToggle={onToggle}
+          />
+        ))}
     </div>
   )
 }
@@ -106,6 +152,7 @@ function App() {
   const [vault, setVault] = useState<VaultInfo | null>(null)
   const [tree, setTree] = useState<FolderNode | null>(null)
   const [folder, setFolder] = useState('')
+  const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(() => loadCollapsedFolders())
   const [notes, setNotes] = useState<NoteSummary[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [note, setNote] = useState<NoteDetail | null>(null)
@@ -624,8 +671,22 @@ function App() {
     await loadVault()
   }
 
+  function toggleFolderCollapsed(path: string) {
+    setCollapsedFolders((prev) => {
+      const next = new Set(prev)
+      if (next.has(path)) next.delete(path)
+      else next.add(path)
+      saveCollapsedFolders(next)
+      return next
+    })
+  }
+
   async function createFolder() {
-    const name = window.prompt('New folder name')
+    const name = window.prompt(
+      folder
+        ? `New folder inside "${folder}"`
+        : 'New folder at vault root (top level)',
+    )
     if (!name?.trim()) return
     const res = await fetch('/api/folders', {
       method: 'POST',
@@ -656,6 +717,31 @@ function App() {
     const data = await res.json()
     if (!res.ok) {
       setError(data.error ?? 'Could not rename folder')
+      return
+    }
+    setFolder(data.path ?? '')
+    setSelectedId(null)
+    await loadVault()
+  }
+
+  async function moveFolder() {
+    if (!folder) {
+      setError('Select a folder first')
+      return
+    }
+    const dest = window.prompt(
+      `Move "${folder}" into which folder?\n\nLeave blank to put it at the vault root (top level).\nExample: Joshua's Notebook`,
+      '',
+    )
+    if (dest === null) return
+    const res = await fetch('/api/folders', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: folder, newParent: dest.trim() }),
+    })
+    const data = await res.json()
+    if (!res.ok) {
+      setError(data.error ?? 'Could not move folder')
       return
     }
     setFolder(data.path ?? '')
@@ -710,20 +796,18 @@ function App() {
     setNotes(list)
   }
 
-  async function renameOrMoveNote() {
+  async function renameNote() {
     if (!selectedId || !note) return
-    const title = window.prompt('Note title (filename stem)', note.title)
-    if (title === null) return
-    const dest = window.prompt('Folder path (blank = vault root)', note.folderPath)
-    if (dest === null) return
+    const title = window.prompt('Rename note to', note.title)
+    if (title === null || !title.trim() || title.trim() === note.title) return
     const res = await fetch(`/api/notes/${selectedId}/move`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title: title.trim() || note.title, folder: dest.trim() }),
+      body: JSON.stringify({ title: title.trim(), folder: note.folderPath }),
     })
     const data = await res.json()
     if (!res.ok || !data.success) {
-      setError(data.error ?? 'Move/rename failed')
+      setError(data.error ?? 'Rename failed')
       return
     }
     if (data.note) {
@@ -732,7 +816,42 @@ function App() {
       setFrontMatter(split.frontMatter)
       setDraft(split.body)
       setEtag(data.note.etag)
+      etagRef.current = data.note.etag
+      draftRef.current = split.body
+      frontMatterRef.current = split.frontMatter
+      baselineRef.current = joinFrontMatter(split.frontMatter, split.body)
+    }
+    await loadVault()
+  }
+
+  async function moveNote() {
+    if (!selectedId || !note) return
+    const dest = window.prompt(
+      `Move note into which folder?\n\nLeave blank for vault root.\nCurrent: ${note.folderPath || '(root)'}`,
+      note.folderPath,
+    )
+    if (dest === null) return
+    const res = await fetch(`/api/notes/${selectedId}/move`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: note.title, folder: dest.trim() }),
+    })
+    const data = await res.json()
+    if (!res.ok || !data.success) {
+      setError(data.error ?? 'Move failed')
+      return
+    }
+    if (data.note) {
+      setNote(data.note)
+      const split = splitFrontMatter(data.note.markdown)
+      setFrontMatter(split.frontMatter)
+      setDraft(split.body)
+      setEtag(data.note.etag)
+      etagRef.current = data.note.etag
       setFolder(data.note.folderPath)
+      draftRef.current = split.body
+      frontMatterRef.current = split.frontMatter
+      baselineRef.current = joinFrontMatter(split.frontMatter, split.body)
     }
     await loadVault()
   }
@@ -1263,6 +1382,9 @@ function App() {
             <button type="button" className="ghost" disabled={!folder} onClick={() => void renameFolder()}>
               Rename
             </button>
+            <button type="button" className="ghost" disabled={!folder} onClick={() => void moveFolder()}>
+              Move
+            </button>
             <button type="button" className="ghost" disabled={!folder} onClick={() => void deleteFolder()}>
               Trash
             </button>
@@ -1272,6 +1394,8 @@ function App() {
               node={tree}
               depth={0}
               selected={folder}
+              collapsed={collapsedFolders}
+              onToggle={toggleFolderCollapsed}
               onSelect={(p) => {
                 setFolder(p)
                 setSelectedId(null)
@@ -1341,7 +1465,10 @@ function App() {
                   >
                     {showSource ? 'Visual' : 'Source'}
                   </button>
-                  <button type="button" className="ghost" onClick={() => void renameOrMoveNote()}>
+                  <button type="button" className="ghost" onClick={() => void renameNote()}>
+                    Rename
+                  </button>
+                  <button type="button" className="ghost" onClick={() => void moveNote()}>
                     Move
                   </button>
                   <button type="button" className="ghost" onClick={() => void duplicateNote()}>

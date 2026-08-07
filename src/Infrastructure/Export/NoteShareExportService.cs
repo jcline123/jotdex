@@ -211,7 +211,7 @@ public sealed partial class NoteShareExportService : INoteShareExportService
             "<style>\n" + ShareCss() + "\n</style>\n" +
             "</head><body>\n" +
             "<article class=\"note\">\n" +
-            $"<header><p class=\"brand\">Jotdex</p><h1>{WebUtility.HtmlEncode(title)}</h1>{tagHtml}</header>\n" +
+            $"<header><h1>{WebUtility.HtmlEncode(title)}</h1>{tagHtml}</header>\n" +
             "<div class=\"body\">\n" + bodyHtml + "\n</div>\n" +
             "</article>\n" +
             copyScript +
@@ -225,7 +225,6 @@ public sealed partial class NoteShareExportService : INoteShareExportService
           radial-gradient(ellipse at top, #ebe4d8 0%, var(--bg) 55%); color: var(--ink); line-height: 1.55; }
         article.note { max-width: 44rem; margin: 2rem auto; padding: 2rem 1.75rem 3rem; background: var(--paper);
           border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 18px 40px rgba(28,25,23,.06); }
-        .brand { margin: 0 0 .35rem; font-size: .75rem; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
         h1 { margin: 0 0 1rem; font-size: 1.85rem; line-height: 1.2; }
         .tags { display: flex; flex-wrap: wrap; gap: .4rem; margin: 0 0 1.25rem; }
         .tags span { font-size: .75rem; padding: .15rem .55rem; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); }

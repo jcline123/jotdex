@@ -7,6 +7,24 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 
 ---
 
+## 2026-08-07 — Folder UX, note rename, unbranded share, README
+
+**Share HTML had a “Jotdex” label**
+- Removed the brand line from the shared HTML header so emailed notes look generic.
+
+**Folders hard to reorganize**
+- Left tree folders are now collapsible (▸/▾), with collapse state remembered in the browser.
+- Added **Move** for folders (blank parent = vault root) so e.g. `Work` can sit beside `Joshua's Notebook` instead of inside it. API already existed; UI was missing.
+
+**Note rename wasn’t obvious**
+- The old **Move** control mixed rename + folder change in two prompts.
+- Split into **Rename** (title/filename only) and **Move** (folder only).
+
+**README too thin for new users**
+- Rewrote GitHub README: plain-language “what it is”, step-by-step setup, first actions, LAN tip, where files live.
+
+---
+
 ## 2026-08-07 — Share HTML, LAN bind, drag-drop images (`e430416`)
 
 **LAN stopped working after restarts**
