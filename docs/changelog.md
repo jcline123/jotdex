@@ -7,7 +7,7 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 
 ---
 
-## 2026-08-07 — Obsidian-style editor loop + search keys
+## 2026-08-07 — Obsidian-style editor loop + search keys (`c02bb3e`)
 
 **Search needed arrow keys**
 - Search dropdown: ↑/↓ move highlight, Enter opens note, Escape closes (also works from the search box).
