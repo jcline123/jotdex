@@ -7,7 +7,7 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 
 ---
 
-## 2026-08-07 — Mobile navigation (desktop unchanged)
+## 2026-08-07 — Mobile navigation (desktop unchanged) (`4bf3186`)
 
 **Phone layout was unusable**
 - Narrow screens now show one pane at a time with a bottom **Folders / Notes / Note** bar, a ← Notes back control, and larger touch targets.
