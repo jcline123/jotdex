@@ -613,6 +613,7 @@ function App() {
           const pick = filtered[quickIndex] ?? filtered[0]
           if (pick) {
             setSelectedId(pick.id)
+            setMobilePane('editor')
             setQuickOpen(false)
           }
           return
@@ -636,6 +637,7 @@ function App() {
           const pick = list[searchIndexRef.current] ?? list[0]
           if (pick) {
             setSelectedId(pick.noteId)
+            setMobilePane('editor')
             setQuery('')
             setSearchOpen(false)
           }
@@ -1334,13 +1336,16 @@ function App() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onFocus={() => query.trim() && setSearchOpen(true)}
-            onBlur={() => {
-              // Fallback when focus leaves search (click-outside handler covers most cases)
+            onBlur={(e) => {
+              // Safari often blurs before the result button receives click; don't dismiss
+              // if focus is moving into the dropdown (or still inside the wrap).
+              const next = e.relatedTarget
+              if (next instanceof Node && searchWrapRef.current?.contains(next)) return
               window.setTimeout(() => {
                 const wrap = searchWrapRef.current
                 if (wrap?.contains(document.activeElement)) return
                 setSearchOpen(false)
-              }, 0)
+              }, 180)
             }}
             onKeyDown={(e) => {
               if (e.key === 'ArrowDown' && hits.length) {
@@ -1355,6 +1360,7 @@ function App() {
                 const pick = hits[searchIndex] ?? hits[0]
                 if (pick) {
                   setSelectedId(pick.noteId)
+                  setMobilePane('editor')
                   setQuery('')
                   setSearchOpen(false)
                 }
@@ -1381,8 +1387,13 @@ function App() {
                       aria-selected={i === searchIndex}
                       className={i === searchIndex ? 'active' : ''}
                       onMouseEnter={() => setSearchIndex(i)}
+                      onMouseDown={(e) => {
+                        // Prevent input blur from unmounting this button before click (Safari/Mac).
+                        e.preventDefault()
+                      }}
                       onClick={() => {
                         setSelectedId(h.noteId)
+                        setMobilePane('editor')
                         setQuery('')
                         setSearchOpen(false)
                       }}
@@ -2169,8 +2180,10 @@ function App() {
                       aria-selected={i === quickIndex}
                       className={i === quickIndex ? 'active' : ''}
                       onMouseEnter={() => setQuickIndex(i)}
+                      onMouseDown={(e) => e.preventDefault()}
                       onClick={() => {
                         setSelectedId(n.id)
+                        setMobilePane('editor')
                         setQuickOpen(false)
                       }}
                     >
