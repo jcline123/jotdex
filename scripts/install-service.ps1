@@ -1,11 +1,11 @@
 # Install Jotdex as a Windows Service (run elevated).
 # Expects to live beside Jotdex.Server.exe (portable publish output) or pass -ExePath.
+# Starts Automatically after reboot. Prefer data/config/network.json for bind/port (do not force --urls).
 
 param(
     [string]$ServiceName = "Jotdex",
     [string]$DisplayName = "Jotdex Markdown Notes Server",
-    [string]$ExePath = "",
-    [string]$Urls = "http://127.0.0.1:5180"
+    [string]$ExePath = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -33,17 +33,21 @@ if ($existing) {
     Start-Sleep -Seconds 2
 }
 
-# Use LocalSystem for MVP; harden to a dedicated account later.
-$binPath = "`"$exeFull`" --urls $Urls"
-Write-Host "Creating service $ServiceName"
+# No --urls: NetworkListenConfigurator reads network.json (LAN/HTTPS settings survive reboot).
+$binPath = "`"$exeFull`""
+Write-Host "Creating service $ServiceName (Automatic start)"
 New-Service -Name $ServiceName -BinaryPathName $binPath -DisplayName $DisplayName -StartupType Automatic -Description "Self-hosted Markdown notes server (Jotdex)" | Out-Null
 
-# Working directory for portable .\data — set via registry AppDirectory if needed.
-# Kestrel inherits the service's working directory from sc; set it explicitly:
-sc.exe config $ServiceName start= auto | Out-Null
+# Ensure the service starts in the publish folder so portable .\data works
+sc.exe config $ServiceName binPath= $binPath start= auto | Out-Null
+# AppDirectory via registry for working directory
+$reg = "HKLM:\SYSTEM\CurrentControlSet\Services\$ServiceName"
+New-ItemProperty -Path $reg -Name AppDirectory -Value $workDir -PropertyType String -Force | Out-Null
 
 Write-Host "Starting $ServiceName..."
 Start-Service -Name $ServiceName
 Get-Service -Name $ServiceName | Format-List Name, Status, StartType
+Write-Host "Working directory: $workDir"
 Write-Host "App data: $workDir\data (PortableMode) or %LOCALAPPDATA%\Jotdex"
-Write-Host "Open $Urls — complete first-run setup if prompted."
+Write-Host "Logs: (app data)\logs\jotdex-YYYYMMDD.log"
+Write-Host "Open the listen URL from Settings → Network (default http://127.0.0.1:5180)."

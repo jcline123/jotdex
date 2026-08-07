@@ -7,6 +7,21 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 
 ---
 
+## 2026-08-07 — History detail, editor color/size, autostart, file logs
+
+**History was timestamps only**
+- List API now includes a short diff summary (`+N / −M lines`) and a one-line preview vs the next newer version (or current note). History button toggles the panel closed.
+
+**Headings applied to whole blocks; no color/size**
+- H1–H3 with a text selection now split so only the selected words become the heading line (Markdown still needs a full heading line).
+- Added text color + font size toolbar controls. These store limited HTML `<span style=…>` in the note (`tiptap-markdown` `html: true`) so they round-trip.
+
+**Reboot persistence / logs**
+- Dev runs were not “always on.” Added Settings → **Start with Windows** (user Startup shortcut) and improved `install-service.ps1` (Automatic, no forced `--urls`). Hosting uses `UseWindowsService()`.
+- Logs go to `{dataRoot}/logs/jotdex-YYYYMMDD.log` (Notepad-friendly) and **Settings → Logs → View recent log**.
+
+---
+
 ## 2026-08-07 — Folder UX, note rename, unbranded share, README
 
 **Share HTML had a “Jotdex” label**

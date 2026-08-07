@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using Jotdex.Core.Configuration;
 using Jotdex.Core.Search;
 using Jotdex.Core.Vault;
@@ -7,16 +8,21 @@ using Jotdex.Infrastructure.Config;
 using Jotdex.Infrastructure.Export;
 using Jotdex.Infrastructure.History;
 using Jotdex.Infrastructure.Images;
+using Jotdex.Infrastructure.Logging;
 using Jotdex.Infrastructure.Maintenance;
 using Jotdex.Infrastructure.Net;
 using Jotdex.Infrastructure.Paths;
 using Jotdex.Infrastructure.Search;
 using Jotdex.Infrastructure.Vault;
 using Jotdex.Server.Auth;
+using Jotdex.Server.Hosting;
 using Microsoft.Extensions.Options;
 
 var builder = WebApplication.CreateBuilder(args);
 Jotdex.Server.Hosting.NetworkListenConfigurator.Apply(builder);
+
+if (OperatingSystem.IsWindows())
+    builder.Host.UseWindowsService();
 
 builder.Services.Configure<JotdexOptions>(builder.Configuration.GetSection(JotdexOptions.SectionName));
 builder.Services.AddSingleton<IDataRootResolver, DataRootResolver>();
@@ -46,13 +52,24 @@ builder.Services.AddSingleton(new StopwatchHolder(Stopwatch.StartNew()));
 builder.Services.AddSingleton<Jotdex.Server.Hosting.IServerRestartService, Jotdex.Server.Hosting.ServerRestartService>();
 builder.Services.AddJotdexAuth(builder.Configuration);
 
+// Resolve data root early so file logs land next to other app data
+var earlyOpts = builder.Configuration.GetSection(JotdexOptions.SectionName).Get<JotdexOptions>() ?? new JotdexOptions();
+var earlyDataRoot = !string.IsNullOrWhiteSpace(earlyOpts.DataRoot)
+    ? Path.GetFullPath(earlyOpts.DataRoot)
+    : earlyOpts.PortableMode
+        ? Path.Combine(builder.Environment.ContentRootPath, "data")
+        : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Jotdex");
+Directory.CreateDirectory(earlyDataRoot);
+var fileLogs = new FileLoggerProvider(earlyDataRoot);
+builder.Services.AddSingleton(fileLogs);
+
 builder.Logging.ClearProviders();
 builder.Logging.AddSimpleConsole(o =>
 {
     o.SingleLine = true;
     o.TimestampFormat = "HH:mm:ss ";
 });
-
+builder.Logging.AddProvider(fileLogs);
 var app = builder.Build();
 
 _ = app.Services.GetRequiredService<IDataRootResolver>().ResolveDataRoot();
@@ -207,6 +224,33 @@ app.MapGet("/api/admin/integrity", (IIntegrityScanService integrity, IVaultPathG
 });
 
 app.MapGet("/api/admin/diagnostics", (IMaintenanceService maintenance) => Results.Json(maintenance.GetDiagnostics()));
+
+app.MapGet("/api/admin/logs", (FileLoggerProvider logs, int? lines) =>
+{
+    var tail = logs.ReadTail(lines ?? 250);
+    return Results.Json(new
+    {
+        logsDirectory = logs.LogsDirectory,
+        latestLogPath = logs.LatestLogPath,
+        text = tail
+    });
+});
+
+app.MapGet("/api/admin/autostart", () =>
+{
+    var info = AutostartHelper.GetStatus();
+    return Results.Json(info);
+});
+
+app.MapPost("/api/admin/autostart", async (HttpRequest request) =>
+{
+    var body = await request.ReadFromJsonAsync<AutostartBody>();
+    var enable = body?.Enabled ?? true;
+    var (ok, error, status) = AutostartHelper.SetUserStartupShortcut(enable);
+    return ok
+        ? Results.Json(new { success = true, status })
+        : Results.BadRequest(new { success = false, error });
+});
 
 app.MapPost("/api/admin/trash/empty", (IMaintenanceService maintenance, HttpRequest request) =>
 {
@@ -418,10 +462,11 @@ app.MapDelete("/api/notes/{id:guid}", (Guid id, INoteCommandService commands, IV
     return commands.MoveToTrash(id) ? Results.NoContent() : Results.NotFound();
 });
 
-app.MapGet("/api/notes/{id:guid}/history", (Guid id, INoteHistoryService history, IVaultPathGuard paths) =>
+app.MapGet("/api/notes/{id:guid}/history", (Guid id, INoteHistoryService history, IVaultService vault, IVaultPathGuard paths) =>
 {
     if (!paths.IsConfigured) return Results.NotFound();
-    return Results.Json(history.List(id));
+    var current = vault.GetNote(id)?.Markdown;
+    return Results.Json(history.ListWithSummaries(id, current));
 });
 
 app.MapGet("/api/notes/{id:guid}/export-html", (Guid id, INoteShareExportService share, IVaultPathGuard paths) =>
@@ -506,6 +551,11 @@ internal sealed class PreservePageBody
 internal sealed class VaultSettingsBody
 {
     public string VaultPath { get; set; } = "";
+}
+
+internal sealed class AutostartBody
+{
+    public bool Enabled { get; set; } = true;
 }
 
 internal sealed class AssemblyAppVersion : IAppVersion

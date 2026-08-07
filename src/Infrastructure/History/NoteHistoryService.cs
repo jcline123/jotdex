@@ -11,12 +11,18 @@ public sealed class NoteHistoryEntry
     public required DateTimeOffset CreatedUtc { get; init; }
     public required string ContentHash { get; init; }
     public required long SizeBytes { get; init; }
+    /// <summary>Short human summary vs the next-newer version (or current note).</summary>
+    public string? Summary { get; init; }
+    /// <summary>One-line preview of a changed region.</summary>
+    public string? Preview { get; init; }
 }
 
 public interface INoteHistoryService
 {
     NoteHistoryEntry? SnapshotIfChanged(Guid noteId, string markdown);
     IReadOnlyList<NoteHistoryEntry> List(Guid noteId);
+    /// <summary>List with diff summaries. Pass current note markdown for the newest row.</summary>
+    IReadOnlyList<NoteHistoryEntry> ListWithSummaries(Guid noteId, string? currentMarkdown = null);
     string? ReadSnapshot(Guid noteId, string snapshotId);
     void Prune(Guid noteId, int maxSnapshots = 50, int maxAgeDays = 30);
 }
@@ -67,6 +73,67 @@ public sealed class NoteHistoryService : INoteHistoryService
             .OrderByDescending(e => e.CreatedUtc)
             .ToList();
     }
+
+    public IReadOnlyList<NoteHistoryEntry> ListWithSummaries(Guid noteId, string? currentMarkdown = null)
+    {
+        var entries = List(noteId).ToList();
+        if (entries.Count == 0) return entries;
+
+        // entries[0] = oldest change that led to "newer"; compare each to the version after it
+        for (var i = 0; i < entries.Count; i++)
+        {
+            var older = ReadSnapshot(noteId, entries[i].SnapshotId) ?? "";
+            string newer;
+            if (i == 0)
+                newer = currentMarkdown ?? older;
+            else
+                newer = ReadSnapshot(noteId, entries[i - 1].SnapshotId) ?? older;
+
+            var (summary, preview) = DescribeChange(older, newer);
+            entries[i] = new NoteHistoryEntry
+            {
+                SnapshotId = entries[i].SnapshotId,
+                CreatedUtc = entries[i].CreatedUtc,
+                ContentHash = entries[i].ContentHash,
+                SizeBytes = entries[i].SizeBytes,
+                Summary = summary,
+                Preview = preview
+            };
+        }
+
+        return entries;
+    }
+
+    private static (string Summary, string? Preview) DescribeChange(string older, string newer)
+    {
+        if (string.Equals(older, newer, StringComparison.Ordinal))
+            return ("No text change", null);
+
+        var oldLines = SplitLines(older);
+        var newLines = SplitLines(newer);
+        var oldSet = oldLines.ToHashSet(StringComparer.Ordinal);
+        var newSet = newLines.ToHashSet(StringComparer.Ordinal);
+        var added = newLines.Count(l => !oldSet.Contains(l));
+        var removed = oldLines.Count(l => !newSet.Contains(l));
+
+        var summary = $"+{added} / -{removed} lines · {FormatSize(Encoding.UTF8.GetByteCount(older))}";
+
+        string? preview = newLines.FirstOrDefault(l => !oldSet.Contains(l) && !string.IsNullOrWhiteSpace(l));
+        preview ??= oldLines.FirstOrDefault(l => !newSet.Contains(l) && !string.IsNullOrWhiteSpace(l));
+        if (preview is not null)
+        {
+            preview = preview.Trim();
+            if (preview.Length > 120) preview = preview[..117] + "…";
+        }
+
+        return (summary, preview);
+    }
+
+    private static IReadOnlyList<string> SplitLines(string text) =>
+        text.Replace("\r\n", "\n", StringComparison.Ordinal).Replace('\r', '\n').Split('\n');
+
+    private static string FormatSize(long bytes) =>
+        bytes < 1024 ? $"{bytes} B" : bytes < 1024 * 1024 ? $"{bytes / 1024.0:0.#} KB" : $"{bytes / (1024.0 * 1024):0.#} MB";
 
     public string? ReadSnapshot(Guid noteId, string snapshotId)
     {

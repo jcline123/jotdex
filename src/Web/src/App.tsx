@@ -162,7 +162,10 @@ function App() {
   const [frontMatter, setFrontMatter] = useState('')
   const [etag, setEtag] = useState('')
   const [saveStatus, setSaveStatus] = useState<'saved' | 'editing' | 'saving' | 'conflict' | 'error'>('saved')
-  const [history, setHistory] = useState<{ snapshotId: string; createdUtc: string }[]>([])
+  const [history, setHistory] = useState<
+    { snapshotId: string; createdUtc: string; summary?: string; preview?: string; sizeBytes?: number }[]
+  >([])
+  const [historyOpen, setHistoryOpen] = useState(false)
   const saveTimer = useRef<number | null>(null)
   const [conflictDisk, setConflictDisk] = useState<NoteDetail | null>(null)
   const [sourceForced, setSourceForced] = useState<string | null>(null)
@@ -201,6 +204,14 @@ function App() {
   const [mirrorStatus, setMirrorStatus] = useState<string | null>(null)
   const [integrityReport, setIntegrityReport] = useState<string | null>(null)
   const [diagText, setDiagText] = useState<string | null>(null)
+  const [logText, setLogText] = useState<string | null>(null)
+  const [logPath, setLogPath] = useState<string | null>(null)
+  const [autostartInfo, setAutostartInfo] = useState<{
+    userStartupEnabled?: boolean
+    userStartupPath?: string | null
+    windowsService?: { installed?: boolean; status?: string | null; startType?: string | null }
+    hint?: string
+  } | null>(null)
 
   const loadAuth = useCallback(async () => {
     const a = (await fetch('/api/auth/status', { credentials: 'same-origin' }).then((r) => r.json())) as AuthInfo
@@ -449,6 +460,11 @@ function App() {
   }, [draft, note, frontMatter, saveNote])
 
   useEffect(() => {
+    setHistoryOpen(false)
+    setHistory([])
+  }, [selectedId])
+
+  useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'p')) {
         e.preventDefault()
@@ -465,9 +481,15 @@ function App() {
     return () => window.removeEventListener('keydown', onKey)
   }, [draft, etag, saveNote])
 
-  async function loadHistory() {
+  async function toggleHistory() {
     if (!selectedId) return
-    setHistory(await fetch(`/api/notes/${selectedId}/history`).then((r) => r.json()))
+    if (historyOpen) {
+      setHistoryOpen(false)
+      return
+    }
+    const rows = await fetch(`/api/notes/${selectedId}/history`).then((r) => r.json())
+    setHistory(rows)
+    setHistoryOpen(true)
   }
 
   async function restoreSnapshot(snapshotId: string) {
@@ -484,9 +506,41 @@ function App() {
       setFrontMatter(split.frontMatter)
       setDraft(split.body)
       setEtag(data.etag)
+      etagRef.current = data.etag
+      draftRef.current = split.body
+      frontMatterRef.current = split.frontMatter
+      baselineRef.current = joinFrontMatter(split.frontMatter, split.body)
+      setEditorEpoch((e) => e + 1)
       setSaveStatus('saved')
     }
-    await loadHistory()
+    const rows = await fetch(`/api/notes/${selectedId}/history`).then((r) => r.json())
+    setHistory(rows)
+    setHistoryOpen(true)
+  }
+
+  async function loadLogs() {
+    const data = await fetch('/api/admin/logs?lines=300').then((r) => r.json())
+    setLogText(data.text ?? '')
+    setLogPath(data.latestLogPath ?? data.logsDirectory ?? null)
+  }
+
+  async function loadAutostart() {
+    setAutostartInfo(await fetch('/api/admin/autostart').then((r) => r.json()))
+  }
+
+  async function setAutostart(enabled: boolean) {
+    const res = await fetch('/api/admin/autostart', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled }),
+    })
+    const data = await res.json()
+    if (!res.ok) {
+      setError(data.error ?? 'Could not update Start with Windows')
+      return
+    }
+    setAutostartInfo(data.status ?? data)
+    setNetworkHint(enabled ? 'Start with Windows enabled for this user.' : 'Start with Windows disabled.')
   }
 
   async function openBrowse(path?: string) {
@@ -1256,6 +1310,54 @@ function App() {
             </div>
             {mirrorStatus && <p className="muted">{mirrorStatus}</p>}
 
+            <h2 className="settings-section">Start with Windows</h2>
+            <p className="lede">
+              After a reboot, Jotdex should come back by itself. Easiest: enable a Startup shortcut for your Windows user.
+              For a always-on PC, prefer the Windows Service (run <code>install-service.ps1</code> as Administrator once).
+            </p>
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="ghost"
+                onClick={() => void loadAutostart()}
+              >
+                Check status
+              </button>
+              <button type="button" className="primary" onClick={() => void setAutostart(true)}>
+                Enable Start with Windows
+              </button>
+              <button type="button" className="ghost" onClick={() => void setAutostart(false)}>
+                Disable
+              </button>
+            </div>
+            {autostartInfo && (
+              <div className="autostart-status muted">
+                <p>{autostartInfo.hint}</p>
+                <p>
+                  User startup: {autostartInfo.userStartupEnabled ? 'on' : 'off'}
+                  {autostartInfo.userStartupPath ? ` — ${autostartInfo.userStartupPath}` : ''}
+                </p>
+                <p>
+                  Windows Service:{' '}
+                  {autostartInfo.windowsService?.installed
+                    ? `${autostartInfo.windowsService.status} (${autostartInfo.windowsService.startType})`
+                    : 'not installed'}
+                </p>
+              </div>
+            )}
+
+            <h2 className="settings-section">Logs</h2>
+            <p className="lede">
+              Logs are written to a daily file under app data (readable in Notepad). Use this viewer for the latest lines.
+            </p>
+            <div className="modal-actions">
+              <button type="button" className="ghost" onClick={() => void loadLogs()}>
+                View recent log
+              </button>
+            </div>
+            {logPath && <p className="muted">File: {logPath}</p>}
+            {logText && <pre className="maint-report log-view">{logText}</pre>}
+
             <h2 className="settings-section">Maintenance</h2>
             <p className="lede">
               Diagnostics, integrity scan, trash cleanup, backup ZIP, and full-vault static HTML export. To share one note,
@@ -1477,7 +1579,11 @@ function App() {
                   <button type="button" className="ghost" onClick={() => void trashNote()}>
                     Trash
                   </button>
-                  <button type="button" className="ghost" onClick={() => void loadHistory()}>
+                  <button
+                    type="button"
+                    className={`ghost${historyOpen ? ' on' : ''}`}
+                    onClick={() => void toggleHistory()}
+                  >
                     History
                   </button>
                   <button
@@ -1553,19 +1659,27 @@ function App() {
                   }}
                 />
               )}
-              {history.length > 0 && (
+              {historyOpen && (
                 <div className="history-panel">
                   <h3>History</h3>
-                  <ul>
-                    {history.map((h) => (
-                      <li key={h.snapshotId}>
-                        <span>{new Date(h.createdUtc).toLocaleString()}</span>
-                        <button type="button" className="ghost" onClick={() => void restoreSnapshot(h.snapshotId)}>
-                          Restore
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
+                  {history.length === 0 ? (
+                    <p className="muted">No earlier versions yet. History is saved when the note changes.</p>
+                  ) : (
+                    <ul>
+                      {history.map((h) => (
+                        <li key={h.snapshotId}>
+                          <div className="history-meta">
+                            <strong>{new Date(h.createdUtc).toLocaleString()}</strong>
+                            {h.summary && <span className="history-summary">{h.summary}</span>}
+                            {h.preview && <span className="history-preview">{h.preview}</span>}
+                          </div>
+                          <button type="button" className="ghost" onClick={() => void restoreSnapshot(h.snapshotId)}>
+                            Restore
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
               )}
             </>

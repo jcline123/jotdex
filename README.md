@@ -136,6 +136,8 @@ In Development it may start with a sample vault. Use **Settings** to point at `C
 3. Click **New note**, type something, wait for the green **saved** chip.
 4. Press **Ctrl+K** and search.
 5. Open a note → **Share HTML** to download a file you can email (no app name on the page).
+6. **Settings → Start with Windows** so Jotdex comes back after a reboot (or install the Windows Service — see below).
+7. **Settings → Logs → View recent log** if something goes wrong (files also live under app data `\logs\`).
 
 ### Folders
 

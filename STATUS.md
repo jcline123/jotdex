@@ -22,6 +22,12 @@
 - Leftover `tools/SampleVault/Conflict *.md` from earlier conflict tests (safe to delete)
 - NuGet NU1903 warning on SQLitePCLRaw (dependency bump later)
 
+## Persistence after reboot
+
+- **Settings → Start with Windows** — creates a Startup-folder shortcut for the current user (no Admin needed).
+- **Machine-wide service:** run `artifacts\win-x64\install-service.ps1` elevated once (Automatic start).
+- **Logs:** `{app data}\logs\jotdex-YYYYMMDD.log` — also **Settings → Logs**.
+
 ## Dev run
 
 ```powershell

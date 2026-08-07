@@ -16,7 +16,10 @@ import { common, createLowlight } from 'lowlight'
 import powershell from 'highlight.js/lib/languages/powershell'
 import dos from 'highlight.js/lib/languages/dos'
 import { Markdown } from 'tiptap-markdown'
+import { TextStyle } from '@tiptap/extension-text-style'
+import { Color } from '@tiptap/extension-color'
 import { CodeBlockView } from './CodeBlockView'
+import { applyHeadingToSelection } from './headingSelection'
 
 const lowlight = createLowlight(common)
 lowlight.register('powershell', powershell)
@@ -25,12 +28,45 @@ lowlight.register('pwsh', powershell)
 lowlight.register('cmd', dos)
 lowlight.register('bat', dos)
 
+const FontSizeTextStyle = TextStyle.extend({
+  addAttributes() {
+    return {
+      ...this.parent?.(),
+      fontSize: {
+        default: null,
+        parseHTML: (element) => (element as HTMLElement).style.fontSize?.replace(/['"]+/g, '') || null,
+        renderHTML: (attributes) => {
+          if (!attributes.fontSize) return {}
+          return { style: `font-size: ${attributes.fontSize}` }
+        },
+      },
+    }
+  },
+})
+
 const CodeBlockBox = CodeBlockLowlight.extend({
   addNodeView() {
     return ReactNodeViewRenderer(CodeBlockView)
   },
 }).configure({ lowlight, defaultLanguage: 'plaintext' })
 
+const TEXT_COLORS = [
+  { label: 'Default', value: '' },
+  { label: 'Red', value: '#b42318' },
+  { label: 'Orange', value: '#b54708' },
+  { label: 'Green', value: '#027a48' },
+  { label: 'Blue', value: '#175cd3' },
+  { label: 'Purple', value: '#6941c6' },
+  { label: 'Gray', value: '#667085' },
+]
+
+const FONT_SIZES = [
+  { label: 'Size', value: '' },
+  { label: 'Small', value: '0.85em' },
+  { label: 'Normal', value: '1em' },
+  { label: 'Large', value: '1.25em' },
+  { label: 'Larger', value: '1.5em' },
+]
 export type PasteMode = 'smart' | 'plain' | 'code' | 'keep' | 'preserve'
 
 type AttachmentInfo = { id: string; fileName: string; contentType: string }
@@ -300,8 +336,11 @@ export function NoteEditor({
       TableRow,
       TableHeader,
       TableCell,
+      FontSizeTextStyle,
+      Color,
       Markdown.configure({
-        html: false,
+        // Allow <span style="color/font-size"> so color & size round-trip in the vault.
+        html: true,
         transformPastedText: true,
         transformCopiedText: true,
       }),
@@ -458,13 +497,28 @@ export function NoteEditor({
   return (
     <div className="rich-editor">
       <div className="editor-toolbar" role="toolbar" aria-label="Formatting">
-        <button type="button" className={editor.isActive('heading', { level: 1 }) ? 'on' : ''} onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}>
+        <button
+          type="button"
+          className={editor.isActive('heading', { level: 1 }) ? 'on' : ''}
+          title="Heading 1 — with a selection, only the selected text becomes the heading"
+          onClick={() => applyHeadingToSelection(editor, 1)}
+        >
           H1
         </button>
-        <button type="button" className={editor.isActive('heading', { level: 2 }) ? 'on' : ''} onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}>
+        <button
+          type="button"
+          className={editor.isActive('heading', { level: 2 }) ? 'on' : ''}
+          title="Heading 2 — with a selection, only the selected text becomes the heading"
+          onClick={() => applyHeadingToSelection(editor, 2)}
+        >
           H2
         </button>
-        <button type="button" className={editor.isActive('heading', { level: 3 }) ? 'on' : ''} onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}>
+        <button
+          type="button"
+          className={editor.isActive('heading', { level: 3 }) ? 'on' : ''}
+          title="Heading 3 — with a selection, only the selected text becomes the heading"
+          onClick={() => applyHeadingToSelection(editor, 3)}
+        >
           H3
         </button>
         <span className="sep" />
@@ -477,6 +531,45 @@ export function NoteEditor({
         <button type="button" className={editor.isActive('code') ? 'on' : ''} onClick={() => editor.chain().focus().toggleCode().run()}>
           Code
         </button>
+        <label className="toolbar-select" title="Text color for the selection">
+          <span className="sr-only">Color</span>
+          <select
+            aria-label="Text color"
+            value={editor.getAttributes('textStyle').color ?? ''}
+            onChange={(e) => {
+              const v = e.target.value
+              if (!v) editor.chain().focus().unsetColor().run()
+              else editor.chain().focus().setColor(v).run()
+            }}
+          >
+            {TEXT_COLORS.map((c) => (
+              <option key={c.label} value={c.value}>
+                {c.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="toolbar-select" title="Font size for the selection">
+          <span className="sr-only">Font size</span>
+          <select
+            aria-label="Font size"
+            value={editor.getAttributes('textStyle').fontSize ?? ''}
+            onChange={(e) => {
+              const v = e.target.value
+              if (!v || v === '1em') {
+                editor.chain().focus().unsetMark('textStyle').run()
+              } else {
+                editor.chain().focus().setMark('textStyle', { fontSize: v }).run()
+              }
+            }}
+          >
+            {FONT_SIZES.map((s) => (
+              <option key={s.label} value={s.value}>
+                {s.label}
+              </option>
+            ))}
+          </select>
+        </label>
         <span className="sep" />
         <button type="button" className={editor.isActive('bulletList') ? 'on' : ''} onClick={() => editor.chain().focus().toggleBulletList().run()}>
           List
