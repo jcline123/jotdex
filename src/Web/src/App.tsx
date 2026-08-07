@@ -749,6 +749,33 @@ function App() {
     setSelectedId(data.id)
   }
 
+  async function exportNoteHtml() {
+    if (!selectedId || !note) return
+    setError(null)
+    try {
+      const res = await fetch(`/api/notes/${selectedId}/export-html`)
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        setError((data as { error?: string }).error ?? 'Could not export note')
+        return
+      }
+      const blob = await res.blob()
+      const cd = res.headers.get('Content-Disposition') ?? ''
+      const match = /filename\*?=(?:UTF-8''|")?([^\";]+)/i.exec(cd)
+      const rawName = match?.[1] ? decodeURIComponent(match[1].replace(/"/g, '')) : `${note.title || 'note'}.html`
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = rawName
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+    } catch {
+      setError('Could not export note')
+    }
+  }
+
   function reloadFromDisk() {
     if (!conflictDisk) return
     setNote(conflictDisk)
@@ -957,25 +984,6 @@ function App() {
           <button type="button" className="ghost" onClick={() => void fetch('/api/admin/rescan', { method: 'POST' }).then(loadVault)}>
             Rescan
           </button>
-          <button
-            type="button"
-            className="ghost"
-            onClick={() => {
-              void (async () => {
-                setError(null)
-                const res = await fetch('/api/admin/export-static', { method: 'POST' })
-                const data = await res.json()
-                if (!res.ok || !data.success) {
-                  setError(data.error ?? 'Static export failed')
-                  return
-                }
-                setNetworkHint(`Exported ${data.noteCount} notes to ${data.exportPath}`)
-                window.alert(`Static export ready:\n${data.exportPath}\n\nOpen index.html from that folder.`)
-              })()
-            }}
-          >
-            Export HTML
-          </button>
           {auth && !auth.developmentBypass && auth.authenticated && (
             <button
               type="button"
@@ -1130,7 +1138,10 @@ function App() {
             {mirrorStatus && <p className="muted">{mirrorStatus}</p>}
 
             <h2 className="settings-section">Maintenance</h2>
-            <p className="lede">Diagnostics, integrity scan, trash cleanup, backup ZIP, and static export.</p>
+            <p className="lede">
+              Diagnostics, integrity scan, trash cleanup, backup ZIP, and full-vault static HTML export. To share one note,
+              open it and use Share HTML.
+            </p>
             <div className="modal-actions">
               <button
                 type="button"
@@ -1201,6 +1212,27 @@ function App() {
                 }}
               >
                 Empty trash
+              </button>
+              <button
+                type="button"
+                className="ghost"
+                onClick={() => {
+                  void (async () => {
+                    setError(null)
+                    setNetworkHint('Exporting vault to static HTML…')
+                    const res = await fetch('/api/admin/export-static', { method: 'POST' })
+                    const data = await res.json()
+                    if (!res.ok || !data.success) {
+                      setError(data.error ?? 'Static export failed')
+                      setNetworkHint(null)
+                      return
+                    }
+                    setNetworkHint(`Exported ${data.noteCount} notes to ${data.exportPath}`)
+                    window.alert(`Static vault export ready:\n${data.exportPath}\n\nOpen index.html from that folder.`)
+                  })()
+                }}
+              >
+                Export vault as HTML
               </button>
               <button
                 type="button"
@@ -1320,6 +1352,14 @@ function App() {
                   </button>
                   <button type="button" className="ghost" onClick={() => void loadHistory()}>
                     History
+                  </button>
+                  <button
+                    type="button"
+                    className="ghost"
+                    onClick={() => void exportNoteHtml()}
+                    title="Download a self-contained HTML file you can send to someone"
+                  >
+                    Share HTML
                   </button>
                   {countRemoteImages(joinFrontMatter(frontMatter, draft)) > 0 && (
                     <button type="button" className="ghost" onClick={() => void localizeRemoteImages()}>

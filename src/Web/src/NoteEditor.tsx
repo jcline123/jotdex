@@ -65,11 +65,31 @@ function getMarkdown(editor: Editor): string {
 }
 
 function encodeSpaces(value: string) {
-  return value.replace(/ /g, '%20')
+  return Array.from(value)
+    .map((ch) => {
+      const code = ch.codePointAt(0)!
+      if (ch === ' ' || code === 0x00a0 || code === 0x202f || code === 0x2007) return '%20'
+      return ch
+    })
+    .join('')
+}
+
+/** Encode markdown link/image targets so ? # & and odd whitespace don't break the URL. */
+function encodeMdPath(value: string) {
+  return Array.from(value)
+    .map((ch) => {
+      const code = ch.codePointAt(0)!
+      if (ch === ' ') return '%20'
+      if (code === 0x00a0 || code === 0x202f || code === 0x2007) return '%20'
+      if (/[%?#&[\]()'"\\]/.test(ch)) return `%${code.toString(16).toUpperCase().padStart(2, '0')}`
+      if (code < 32 || code === 127) return ''
+      return ch
+    })
+    .join('')
 }
 
 function mdPathFor(stem: string, fileName: string) {
-  return `${encodeSpaces(stem)}.assets/${encodeSpaces(fileName)}`
+  return `${encodeMdPath(stem)}.assets/${encodeMdPath(fileName)}`
 }
 
 function markdownForEditor(markdown: string, attachments: AttachmentInfo[]): string {
@@ -77,13 +97,18 @@ function markdownForEditor(markdown: string, attachments: AttachmentInfo[]): str
   let result = markdown
   for (const att of attachments) {
     const api = `/api/attachments/${att.id}`
-    const suffixes = [
-      `.assets/${att.fileName}`,
-      `.assets/${encodeSpaces(att.fileName)}`,
-      `.assets/${encodeURIComponent(att.fileName)}`,
-    ]
-    for (const suffix of suffixes) {
-      const re = new RegExp(`\\(([^)\\s]*${escapeRegExp(suffix)})\\)`, 'gi')
+    // Match any markdown image/link target that ends with this attachment file name
+    // (plain, space-encoded, or fully path-encoded), including odd stems like '#tags'.
+    const nameVariants = Array.from(
+      new Set([
+        att.fileName,
+        encodeSpaces(att.fileName),
+        encodeMdPath(att.fileName),
+        encodeURIComponent(att.fileName),
+      ]),
+    )
+    for (const name of nameVariants) {
+      const re = new RegExp(`\\(([^)\\s]*${escapeRegExp('.assets/' + name)})\\)`, 'gi')
       result = result.replace(re, `(${api})`)
     }
   }
@@ -165,6 +190,7 @@ export function NoteEditor({
   const readyRef = useRef(false)
   const lastEmittedRef = useRef(markdown)
   const appliedEpochRef = useRef(contentEpoch)
+  const lastAttKeyRef = useRef(attachments.map((a) => a.id).join(','))
   const pasteModeRef = useRef<PasteMode>('smart')
   const attachmentsRef = useRef(attachments)
   const stemRef = useRef(noteStem)
@@ -338,11 +364,35 @@ export function NoteEditor({
         return false
       },
       handleDrop: (_view, event) => {
-        const files = event.dataTransfer?.files
-        if (!files?.length) return false
+        const dt = event.dataTransfer
+        if (!dt) return false
+
+        const files: File[] = []
+        if (dt.files?.length) {
+          files.push(...Array.from(dt.files))
+        } else if (dt.items?.length) {
+          for (const item of Array.from(dt.items)) {
+            if (item.kind === 'file') {
+              const f = item.getAsFile()
+              if (f) files.push(f)
+            }
+          }
+        }
+
+        if (!files.length) {
+          // Block file:// URI drops from becoming broken image links in the editor
+          const uri = dt.getData('text/uri-list') || dt.getData('text/plain')
+          if (uri && /^(file:|[A-Za-z]:\\|\\\\)/i.test(uri.trim())) {
+            event.preventDefault()
+            return true
+          }
+          return false
+        }
+
         event.preventDefault()
+        event.stopPropagation()
         void (async () => {
-          for (const file of Array.from(files)) {
+          for (const file of files) {
             await uploadRef.current(file)
           }
         })()
@@ -377,15 +427,18 @@ export function NoteEditor({
     editorRef.current = editor
   }, [editor])
 
-  // Only reload editor document on external content changes (note open / conflict / preserve-page).
-  // Do NOT reset on our own onChange echoes — that blocked typing and broke autosave.
+  // Only reload editor document on external content changes (note open / conflict / preserve-page),
+  // or when attachments arrive so local image paths can be rewritten to /api/attachments/{id}.
   useEffect(() => {
     if (!editor) return
+    const attKey = attachments.map((a) => a.id).join(',')
     const epochChanged = appliedEpochRef.current !== contentEpoch
-    const external = epochChanged || markdown !== lastEmittedRef.current
-    if (!external) return
+    const markdownChanged = markdown !== lastEmittedRef.current
+    const attachmentsChanged = attKey !== lastAttKeyRef.current
+    if (!epochChanged && !markdownChanged && !attachmentsChanged) return
 
     appliedEpochRef.current = contentEpoch
+    lastAttKeyRef.current = attKey
     readyRef.current = false
     const display = markdownForEditor(markdown, attachments)
     editor.commands.setContent(display, { emitUpdate: false })

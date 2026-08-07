@@ -32,6 +32,7 @@ builder.Services.AddSingleton<SafeRemoteImageClient>();
 builder.Services.AddSingleton<IImageLocalizer, ImageLocalizer>();
 builder.Services.AddSingleton<IPreservePageService, PreservePageService>();
 builder.Services.AddSingleton<IStaticExportService, StaticExportService>();
+builder.Services.AddSingleton<INoteShareExportService, NoteShareExportService>();
 builder.Services.AddSingleton<IIntegrityScanService, IntegrityScanService>();
 builder.Services.AddSingleton<IMaintenanceService, MaintenanceService>();
 builder.Services.AddSingleton<IBackupBundleService, BackupBundleService>();
@@ -421,6 +422,17 @@ app.MapGet("/api/notes/{id:guid}/history", (Guid id, INoteHistoryService history
 {
     if (!paths.IsConfigured) return Results.NotFound();
     return Results.Json(history.List(id));
+});
+
+app.MapGet("/api/notes/{id:guid}/export-html", (Guid id, INoteShareExportService share, IVaultPathGuard paths) =>
+{
+    if (!paths.IsConfigured) return Results.NotFound(new { error = "Vault not configured" });
+    var result = share.ExportSelfContainedHtml(id);
+    if (!result.Success || string.IsNullOrEmpty(result.Html) || string.IsNullOrEmpty(result.FileName))
+        return Results.BadRequest(new { success = false, error = result.Error ?? "Export failed" });
+
+    var bytes = System.Text.Encoding.UTF8.GetBytes(result.Html);
+    return Results.File(bytes, "text/html; charset=utf-8", result.FileName);
 });
 
 app.MapGet("/api/notes/{id:guid}/history/{snapshotId}", (Guid id, string snapshotId, INoteHistoryService history, IVaultPathGuard paths) =>

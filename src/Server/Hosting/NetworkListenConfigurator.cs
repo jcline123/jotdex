@@ -3,6 +3,7 @@ using System.Security.Cryptography.X509Certificates;
 using System.Text.Json;
 using Jotdex.Core.Configuration;
 using Jotdex.Infrastructure.Config;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 
 namespace Jotdex.Server.Hosting;
@@ -12,9 +13,14 @@ public static class NetworkListenConfigurator
 {
     public static void Apply(WebApplicationBuilder builder)
     {
-        if (!string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ASPNETCORE_URLS")))
-            return;
-        if (!string.IsNullOrWhiteSpace(builder.Configuration["urls"]))
+        // launchSettings applicationUrl injects ASPNETCORE_URLS under `dotnet run`, which used to
+        // permanently override saved LAN settings. Prefer network.json whenever it exists.
+        // Set JOTDEX_FORCE_URLS=1 to keep an explicit ASPNETCORE_URLS override.
+        var forceUrls = string.Equals(
+            Environment.GetEnvironmentVariable("JOTDEX_FORCE_URLS"),
+            "1",
+            StringComparison.OrdinalIgnoreCase);
+        if (forceUrls && !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("ASPNETCORE_URLS")))
             return;
 
         try
@@ -22,24 +28,30 @@ public static class NetworkListenConfigurator
             var opts = builder.Configuration.GetSection(JotdexOptions.SectionName).Get<JotdexOptions>() ?? new JotdexOptions();
             var dataRoot = ResolveDataRoot(builder, opts);
             var path = Path.Combine(dataRoot, "config", "network.json");
-            var settings = new NetworkSettings();
-            if (File.Exists(path))
+
+            // No saved settings yet — leave launchSettings / defaults alone.
+            if (!File.Exists(path))
+                return;
+
+            var json = File.ReadAllText(path);
+            var settings = JsonSerializer.Deserialize<NetworkSettings>(json, new JsonSerializerOptions
             {
-                var json = File.ReadAllText(path);
-                settings = JsonSerializer.Deserialize<NetworkSettings>(json, new JsonSerializerOptions
-                {
-                    PropertyNameCaseInsensitive = true
-                }) ?? settings;
-            }
+                PropertyNameCaseInsensitive = true
+            }) ?? new NetworkSettings();
 
             var host = settings.ListenHost;
             var port = settings.Port is >= 1 and <= 65535 ? settings.Port : 5180;
             var pfx = settings.HttpsPfxPath?.Trim();
             var useHttps = !string.IsNullOrWhiteSpace(pfx) && File.Exists(pfx);
 
+            // Clear launchSettings-injected URLs so UseUrls / Kestrel Listen win.
+            Environment.SetEnvironmentVariable("ASPNETCORE_URLS", null);
+            builder.WebHost.UseSetting(WebHostDefaults.ServerUrlsKey, null);
+
             if (!useHttps)
             {
                 builder.WebHost.UseUrls(settings.ToHttpUrl());
+                Console.WriteLine($"Jotdex: HTTP listening on {settings.ToHttpUrl()} (from network.json)");
                 return;
             }
 

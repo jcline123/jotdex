@@ -413,20 +413,87 @@ public sealed class NoteCommandService : INoteCommandService
             return $"{stamp}_screenshot{ext}";
         }
 
+        // Normalize odd whitespace (NBSP / narrow NBSP from macOS screenshots, etc.)
+        // then strip Windows-invalid + URL-significant characters that break markdown image srcs.
         var invalid = Path.GetInvalidFileNameChars();
         var sb = new StringBuilder();
         foreach (var ch in name.Trim())
-            sb.Append(Array.IndexOf(invalid, ch) >= 0 ? '-' : ch);
-        var cleaned = sb.ToString().Trim().TrimEnd('.', ' ');
+        {
+            if (char.IsWhiteSpace(ch))
+            {
+                sb.Append(' ');
+                continue;
+            }
+            if (Array.IndexOf(invalid, ch) >= 0 || ch is '?' or '#' or '&' or '%' or '<' or '>' or '"' or '|' or '*' or ':' or '/' or '\\')
+                sb.Append('-');
+            else if (ch < 32 || ch == 127)
+                sb.Append('-');
+            else
+                sb.Append(ch);
+        }
+        var cleaned = CollapseDashes(sb.ToString().Replace("  ", " ", StringComparison.Ordinal));
+        while (cleaned.Contains("  ", StringComparison.Ordinal))
+            cleaned = cleaned.Replace("  ", " ", StringComparison.Ordinal);
+        cleaned = cleaned.Trim().TrimEnd('.', ' ', '-');
         if (string.IsNullOrWhiteSpace(cleaned)) cleaned = "file.bin";
         if (cleaned.Length > 80)
         {
             var ext = Path.GetExtension(cleaned);
             var stemLen = Math.Min(60, Math.Max(1, cleaned.Length - ext.Length));
-            cleaned = cleaned[..stemLen].TrimEnd() + ext;
+            cleaned = cleaned[..stemLen].TrimEnd('.', ' ', '-') + ext;
         }
 
         return $"{stamp}_{cleaned}";
+    }
+
+    private static string CollapseDashes(string value)
+    {
+        var sb = new StringBuilder(value.Length);
+        var prevDash = false;
+        foreach (var ch in value)
+        {
+            if (ch == '-')
+            {
+                if (prevDash) continue;
+                prevDash = true;
+                sb.Append(ch);
+            }
+            else
+            {
+                prevDash = false;
+                sb.Append(ch);
+            }
+        }
+        return sb.ToString();
+    }
+
+    /// <summary>Encode for markdown image/link targets without turning ?/# into a query/fragment.</summary>
+    private static string EncodeSpaces(string value)
+    {
+        var sb = new StringBuilder(value.Length + 8);
+        foreach (var ch in value)
+        {
+            if (char.IsWhiteSpace(ch))
+            {
+                sb.Append("%20");
+                continue;
+            }
+            sb.Append(ch switch
+            {
+                '?' => "%3F",
+                '#' => "%23",
+                '&' => "%26",
+                '%' => "%25",
+                '[' => "%5B",
+                ']' => "%5D",
+                '(' => "%28",
+                ')' => "%29",
+                '"' => "%22",
+                '\'' => "%27",
+                _ => ch.ToString()
+            });
+        }
+        return sb.ToString();
     }
 
     private static string? ExtFromContentType(string? ct) => ct?.ToLowerInvariant() switch
@@ -456,8 +523,6 @@ public sealed class NoteCommandService : INoteCommandService
             ".txt" => "text/plain",
             _ => "application/octet-stream"
         };
-
-    private static string EncodeSpaces(string value) => value.Replace(" ", "%20", StringComparison.Ordinal);
 
     public static void AtomicWrite(string absolutePath, string content)
     {
