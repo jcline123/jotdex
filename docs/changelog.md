@@ -7,6 +7,14 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 
 ---
 
+## 2026-08-07 — Guided Windows setup (`Setup.cmd`)
+
+**Manual README steps were solid but long for first-time users**
+- Added `Setup.cmd` + `scripts\Setup-Jotdex.ps1`: check/install Git, .NET 10 SDK, Node via winget (asks first), create vault, build portable app, optional start + Startup shortcut.
+- No random EXE downloads; does not change global execution policy or disable security tools. README leads with this; manual steps remain.
+
+---
+
 ## 2026-08-07 — Mobile navigation (desktop unchanged) (`4bf3186`)
 
 **Phone layout was unusable**

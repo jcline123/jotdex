@@ -2,6 +2,18 @@
 
 How to install or move Jotdex onto a Windows machine. Keep the **vault** (your Markdown files) separate from the app.
 
+## Guided setup (recommended)
+
+From a clone or extracted ZIP of this repo:
+
+```powershell
+.\Setup.cmd
+```
+
+That runs `scripts\Setup-Jotdex.ps1`: checks Git / .NET 10 SDK / Node, offers **winget** installs (with confirmation), creates your vault folder, builds `artifacts\win-x64`, and can start the app + Startup shortcut. Details and flags are in [README.md](README.md).
+
+Manual steps below are the same process, done by hand.
+
 ## What you need
 
 - Windows 10/11 x64

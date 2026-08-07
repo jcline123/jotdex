@@ -41,9 +41,48 @@ You own the files. You can copy the vault, back it up, open notes in other Markd
 
 ---
 
-## Easiest way to run it (recommended)
+## Easiest way (guided setup — recommended)
 
-This builds a portable folder you can copy and run.
+One script walks you through tools, vault folder, build, and first launch.  
+It **asks before installing anything**. Optional installs use **winget** (Windows Package Manager) — not random downloads. It does **not** change your antivirus or global PowerShell policy.
+
+### Option A — You already have Git
+
+```powershell
+cd $HOME\Downloads
+git clone https://github.com/jcline123/jotdex.git
+cd jotdex
+.\Setup.cmd
+```
+
+### Option B — No Git yet
+
+1. Download the repo ZIP from GitHub: [jcline123/jotdex](https://github.com/jcline123/jotdex) → **Code → Download ZIP**.
+2. Extract it (e.g. to Downloads).
+3. Double-click **`Setup.cmd`** inside the extracted folder  
+   (or in PowerShell: `cd` into that folder and run `.\Setup.cmd`).
+
+The wizard will:
+
+1. Check for **Git**, **.NET 10 SDK**, and **Node.js LTS**
+2. Offer to install anything missing via **winget** (you confirm each one)
+3. Ask where your **vault** should live (default `C:\JotdexVault`)
+4. Build the portable app under `artifacts\win-x64\`
+5. Optionally start Jotdex and add a **Startup** shortcut
+
+Then open [http://127.0.0.1:5180](http://127.0.0.1:5180) and finish any remaining first-run screens (admin password if asked).
+
+**Advanced / silent-ish flags** (PowerShell):
+
+```powershell
+.\scripts\Setup-Jotdex.ps1 -VaultPath "C:\JotdexVault" -Start -AddStartupShortcut
+```
+
+---
+
+## Manual setup (same result, step by step)
+
+Use this if you prefer clicking through installs yourself, or if the guided script cannot use winget on your PC.
 
 ### Step 1 — Get the code
 
