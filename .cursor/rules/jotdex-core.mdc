@@ -1,0 +1,16 @@
+---
+description: Jotdex non-negotiable architecture and safety rules
+alwaysApply: true
+---
+
+# Jotdex core rules
+
+- **Files are the product.** Note text and attachments live as ordinary vault files. SQLite is index/app state only and must be rebuildable from the vault.
+- **Never** store note bodies only in a database. **Never** base64-embed normal images in Markdown.
+- **Never** mutate Joshua's original OneNote/Markdown export. Offline migration copies into a staging vault.
+- **Never** put the live authoritative vault inside an iCloud-synced folder. iCloud is read-only mirror/backup only.
+- **Never** silently drop unsupported Markdown, raw HTML, front matter, or unknown blocks. Preserve or force source mode with a clear warning.
+- **Never** add cloud telemetry or require Docker/Linux/IIS/Node/.NET runtime on the production target (self-contained win-x64).
+- One writable server per vault. Validate all paths stay inside the configured vault.
+- Editing features require autosave (Saved only after atomic server write) and per-note history/rollback outside the vault.
+- HTML fidelity snapshots belong in `NoteName.assets/` as sanitized files; Markdown remains canonical.

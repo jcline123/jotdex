@@ -1,0 +1,29 @@
+---
+description: Multi-agent checklist and STATUS protocol for Jotdex
+alwaysApply: true
+---
+
+# Jotdex workflow
+
+- Progress source of truth: `CHECKLIST.md` (stable IDs like `M4-07`).
+- Session state: `STATUS.md` (in progress, risks, exact build/run commands).
+- Before coding: read STATUS + next unchecked items for the **active milestone only**.
+- After finishing an item: mark `- [x]` in CHECKLIST and update STATUS.
+- Do not start a later milestone until the previous milestone gate checkbox is done, unless Joshua explicitly overrides.
+- Prefer small coherent slices. Record consequential choices in `docs/decisions/`.
+- Do not invent a second tracker outside CHECKLIST/STATUS.
+
+## Autonomous run and audit (Joshua preference)
+
+Do **not** ask Joshua to start the server or run routine checks. Agents must:
+
+1. Start/restart the server themselves when needed for verification.
+2. Use Development env + SampleVault unless testing otherwise:
+   ```powershell
+   $env:ASPNETCORE_ENVIRONMENT="Development"
+   cd src\Server
+   dotnet run --urls http://127.0.0.1:5180 --no-launch-profile
+   ```
+3. After changes: build frontend if UI changed, `dotnet test`, hit `/api/health` and relevant APIs, spot-check the feature path when possible.
+4. Diagnose connection errors (`ERR_CONNECTION_REFUSED`, etc.) by checking the port and logs before asking Joshua.
+5. Keep the server running in the background during milestone verification; restart cleanly if the port is stuck.

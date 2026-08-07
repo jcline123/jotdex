@@ -1,0 +1,97 @@
+# Jotdex vault format
+
+The vault is the product. Jotdex is a replaceable UI over these files.
+
+## Root
+
+```text
+JotdexVault/
+├── .notes-vault.json
+├── Personal/
+└── Technical/
+```
+
+Suggested live path on this host: `C:\JotdexVault` or `D:\JotdexVault` (**local disk**, not iCloud).
+
+### `.notes-vault.json`
+
+```json
+{
+  "id": "uuid",
+  "formatVersion": 1,
+  "name": "Jotdex Vault",
+  "created": "2026-08-06T00:00:00Z"
+}
+```
+
+## OneNote → filesystem mapping
+
+| OneNote | Filesystem |
+|---|---|
+| Notebook | Top-level folder |
+| Section group | Folder |
+| Section | Folder |
+| Page | `Title.md` |
+| Images / attachments | Sibling `Title.assets\` |
+| Subpage | Front matter `parent_id`, `subpage_order` |
+
+## Note file
+
+UTF-8 Markdown with optional YAML front matter:
+
+```markdown
+---
+id: 6e1df781-8b61-4d49-919c-48ab469fbc11
+title: OPNsense IPsec VPN
+created: 2025-03-27T09:15:00Z
+modified: 2026-08-06T14:10:00Z
+tags:
+  - networking
+  - vpn
+source: onenote
+parent_id: null
+subpage_order: null
+---
+
+# OPNsense IPsec VPN
+
+Body…
+```
+
+Rules:
+
+- Front matter optional for hand-written notes; assign `id` on first app-managed save.
+- Preserve unknown front-matter keys.
+- Display title order: front-matter `title` → first H1 → filename.
+- Preserve `created` when present; app may update `modified`.
+- No BOM unless an imported file requires preservation.
+
+## Attachments
+
+```text
+OPNsense IPsec VPN.md
+OPNsense IPsec VPN.assets/
+  ├── 2026-08-06_141522_firewall-error.png
+  └── clipped-page.html
+```
+
+Relative Markdown links only. **Never** base64-embed normal images.
+
+Screenshot auto-name: `yyyy-MM-dd_HHmmss_descriptor.ext`.
+
+## HTML sidecars (Markdown-plus-assets)
+
+For complex webpage/OneNote fidelity:
+
+1. Best-effort Markdown in the note body.
+2. Sanitized HTML snapshot in `.assets/` (e.g. `clipped-page.html`).
+3. Embed as expandable section or attachment link.
+4. File remains usable in any browser without Jotdex.
+
+## Windows filenames
+
+Sanitize invalid chars `< > : " / \ | ? *`, reserved names (`CON`, `PRN`, …), trailing dots/spaces. Keep full title in front matter. Collisions get a visible suffix — never silent overwrite.
+
+## Internal links
+
+Prefer relative Markdown links. Unresolved `[[wikilinks]]` are preserved, not deleted.

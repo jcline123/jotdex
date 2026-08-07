@@ -1,0 +1,19 @@
+##/
+.vs/
+*.user
+*.suo
+bin/
+obj/
+artifacts/
+**/node_modules/
+src/Server/wwwroot/
+src/Server/data/
+src/Web/dist/
+*.log
+.DS_Store
+data/
+.env
+.env.*
+
+# Personal migration runs (paths + note titles)
+docs/import-format/migration-report-*

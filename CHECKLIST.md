@@ -1,0 +1,166 @@
+# Jotdex CHECKLIST
+
+Mark items `- [x]` when done. IDs are stable for chat (“done M1-04”).
+
+**Active milestone:** V1 complete — polish / ops as needed
+
+---
+
+## S0 — Project agent setup
+
+- [x] `S0-01` AGENTS.md
+- [x] `S0-02` `.cursor/rules/jotdex-core.mdc`
+- [x] `S0-03` `.cursor/rules/jotdex-workflow.mdc`
+- [x] `S0-04` STATUS.md
+- [x] `S0-05` CHECKLIST.md with all IDs
+- [x] `S0-06` Copy brief to `docs/brief/`
+- [x] `S0-07` `docs/vault-format.md`
+- [x] `S0-08` `docs/portability.md`
+- [x] `S0-09` `docs/architecture/overview.md`
+- [x] `S0-10` ADR 0001 stack + layout
+- [x] `S0-11` ADR 0002 no in-app importer
+- [x] `S0-12` ADR 0003 history + autosave
+- [x] `S0-13` ADR 0004 markdown-plus-assets
+- [x] `S0-14` ADR 0005 iCloud mirror not live vault
+- [x] `S0-15` Threat model stub
+- [x] `S0-16` Dir skeleton `src/` `tests/` `tools/` `scripts/`
+- [x] `S0-17` .NET 10 SDK verified/installed (10.0.302)
+- [x] `S0-18` Node LTS verified/installed (v24.13.0)
+- [x] `S0-19` STATUS tooling + workspace reminder complete
+
+---
+
+## M0 — Vault format and fixtures
+
+- [x] `M0-01` Folder/note/assets naming rules
+- [x] `M0-02` `.notes-vault.json` schema
+- [x] `M0-03` Front matter + `parent_id` subpage rules + preserve unknown
+- [x] `M0-04` Windows filename sanitization + collisions
+- [x] `M0-05` HTML sidecar naming + embed convention documented
+- [x] `M0-06` ≥15 RoundTripFixtures (16 notes)
+- [x] `M0-07` `tools/SampleVault/` matching Personal/Technical tree
+- [x] `M0-08` `docs/data-safety-tests.md`
+- [x] `M0-09` Threat model expanded
+- [x] `M0-10` Gate: M0 complete in STATUS
+
+---
+
+## M1 — Windows host and application shell
+
+- [x] `M1-01` Create .NET solution: Server, Core, Infrastructure
+- [x] `M1-02` Scaffold React+TS+Vite in `src/Web`
+- [x] `M1-03` Serve built SPA from ASP.NET Core
+- [x] `M1-04` `GET /api/health`
+- [x] `M1-05` Config: vault path + data-root (local disk / portable)
+- [x] `M1-06` Structured logging with redaction
+- [x] `M1-07` `scripts/publish-win-x64.ps1`
+- [x] `M1-08` Service install/uninstall script stubs
+- [x] `M1-09` Smoke tests: host starts; health OK; SPA served
+- [x] `M1-10` `THIRD_PARTY_NOTICES.md` stub + pin versions
+- [x] `M1-11` Gate: STATUS exit report
+
+---
+
+## M2 — Read-only vault engine
+
+- [x] `M2-01` Recursive discovery of notes + folders
+- [x] `M2-02` Front-matter parse; preserve unknown keys; derive title/id
+- [x] `M2-03` APIs: tree, folder notes, get note (by id)
+- [x] `M2-04` Path containment + reject junction/symlink escape
+- [x] `M2-05` Markdig render + attachment serving allowlist
+- [x] `M2-06` DOMPurify (or equivalent) on client for HTML
+- [x] `M2-07` FileSystemWatcher debounce + startup/periodic full rescan
+- [x] `M2-08` Three-pane read-only UI shell
+- [x] `M2-09` Inline/expandable HTML sidecar display
+- [x] `M2-10` Integration tests: traversal blocked; sample vault renders
+- [x] `M2-11` Gate: open SampleVault read-only in browser
+
+---
+
+## M3 — Search
+
+- [x] `M3-01` SQLite startup FTS5+trigram capability probe
+- [x] `M3-02` Metadata + word FTS + trigram FTS schema
+- [x] `M3-03` Index extract: title, path, tags, headings, body, code, attachment names/alt
+- [x] `M3-04` Incremental index + full rebuild w/ progress
+- [x] `M3-05` Smart search + exact/literal mode
+- [x] `M3-06` Filters: folder, tag, title, in:code, has:attachment, modified
+- [x] `M3-07` Results UI + Ctrl+K / Ctrl+P
+- [x] `M3-08` Prove delete index.db + rebuild equivalent
+- [x] `M3-09` Document OCR as future (not V1)
+- [x] `M3-10` Gate: technical strings findable on SampleVault
+
+---
+
+## M4 — Safe editing, autosave, history/rollback
+
+- [x] `M4-01` Atomic save
+- [x] `M4-02` ETag/hash optimistic concurrency + conflict UX
+- [x] `M4-03` Note create + delete (trash); rename/move/duplicate
+- [x] `M4-04` Folder create/rename/move/delete
+- [x] `M4-05` Assets dir move + relative link rewrite
+- [x] `M4-06` Trash outside vault
+- [x] `M4-07` Autosave debounce 800–1200ms; status chip
+- [x] `M4-08` Saved badge only after server confirms atomic write
+- [x] `M4-09` Ctrl/Cmd+S immediate save
+- [x] `M4-10` History snapshot on content-changing save; dedupe by hash
+- [x] `M4-11` History under AppData `history\{noteId}\`; retention 50 or 30d
+- [x] `M4-12` APIs: list / get / restore history
+- [x] `M4-13` UI: history panel + Restore (diff/save-as-copy later)
+- [x] `M4-14` Restore is undoable (pre-restore snapshot)
+- [x] `M4-15` External disk change detection + conflict workflow
+- [x] `M4-16` Tests: save, conflict, history
+- [x] `M4-17` Gate: accidental edit recoverable; notes valid outside app
+
+---
+
+## M5 — Rich editor + paste
+
+- [x] `M5-01` Tiptap + Markdown pipeline; visual-first UX
+- [x] `M5-02` Toolbar: headings, marks, lists/tasks, tables, links, callouts, HR
+- [x] `M5-03` Source mode + force-source when unsafe
+- [x] `M5-04` Code: language, highlight, copy, paste-as-code, no smart quotes
+- [x] `M5-05` Undo/redo, find-in-note, resizable images
+- [x] `M5-06` Smart paste Ctrl+V + remote image download (SSRF-safe)
+- [x] `M5-07` Plain paste Ctrl+Shift+V
+- [x] `M5-08` Visible paste menu (keep / match / plain / code / preserve-page)
+- [x] `M5-09` Preserve-page: Markdown + sanitized clipped-page.html + embed
+- [x] `M5-10` Screenshot/drop auto-filename into `.assets`
+- [x] `M5-11` Non-image attachments + size limit
+- [x] `M5-12` CSP + sanitizer; round-trip fixtures green
+- [x] `M5-13` Gate: edit without content loss
+
+---
+
+## M6 — Auth and packaging
+
+- [x] `M6-01` First-run: vault path (local disk), admin user, bind/port
+- [x] `M6-02` Cookie auth, idle timeout, lockout, password change
+- [x] `M6-03` Default bind 127.0.0.1; LAN opt-in; HTTPS/PFX (Kestrel loads PFX on restart)
+- [x] `M6-04` Portable ZIP + service install docs
+- [x] `M6-05` Upgrade/backup: vault separate from exe *(documented in packaging.md / portability.md)*
+- [x] `M6-06` Gate: unauthenticated cannot read notes/attachments
+
+---
+
+## M7 — Static export and hardening
+
+- [x] `M7-01` Static HTML export
+- [x] `M7-02` Backup bundle docs + in-app ZIP (`POST /api/admin/backup`)
+- [x] `M7-03` Scheduled read-only vault mirror → iCloud (copy, not live)
+- [x] `M7-04` Integrity scan
+- [x] `M7-05` Maintenance page
+- [x] `M7-06` Security suite *(CSP, SSRF, sanitizer, auth gate, path guard — expand later)*
+- [x] `M7-07` Gate: static site + restore + mirror documented
+
+---
+
+## OPS — Offline vault migration
+
+- [x] `OPS-01` Joshua provides OneNote MD export path (do not mutate source)
+- [x] `OPS-02` Inventory → `docs/import-format/export-inventory.md`
+- [x] `OPS-03` Migration tool/procedure under `tools/MigrateExport/`
+- [x] `OPS-04` Dry-run staging vault; validate links/assets
+- [x] `OPS-05` Produce real vault; set path; reindex
+- [x] `OPS-06` Spot-check; original export unchanged
+- [x] `OPS-07` Document migration for future hosts
