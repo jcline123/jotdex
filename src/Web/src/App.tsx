@@ -214,6 +214,8 @@ function App() {
   const [browseEntries, setBrowseEntries] = useState<BrowseEntry[]>([])
   const [bindMode, setBindMode] = useState<'loopback' | 'lan'>('loopback')
   const [listenPort, setListenPort] = useState(5180)
+  const [httpsSelfSigned, setHttpsSelfSigned] = useState(true)
+  const [httpsPort, setHttpsPort] = useState(5181)
   const [httpsPfxPath, setHttpsPfxPath] = useState('')
   const [httpsPfxPassword, setHttpsPfxPassword] = useState('')
   const [httpsPasswordConfigured, setHttpsPasswordConfigured] = useState(false)
@@ -710,6 +712,9 @@ function App() {
       const n = await fetch('/api/settings/network').then((r) => r.json())
       if (n.bindMode === 'lan' || n.bindMode === 'loopback') setBindMode(n.bindMode)
       if (typeof n.port === 'number') setListenPort(n.port)
+      setHttpsSelfSigned(!!n.httpsSelfSigned)
+      if (typeof n.httpsPort === 'number') setHttpsPort(n.httpsPort)
+      else if (typeof n.port === 'number') setHttpsPort(n.port + 1)
       setHttpsPfxPath(n.httpsPfxPath ?? '')
       setHttpsPasswordConfigured(!!n.httpsPasswordConfigured)
       setHttpsPfxPassword('')
@@ -742,6 +747,8 @@ function App() {
     const body: Record<string, unknown> = {
       bindMode,
       port: listenPort,
+      httpsSelfSigned,
+      httpsPort: httpsSelfSigned || httpsPfxPath.trim() ? httpsPort : 0,
       httpsPfxPath: httpsPfxPath.trim() || null,
     }
     // Only send password when the user typed one (omit keeps existing)
@@ -758,8 +765,12 @@ function App() {
     }
     setHttpsPfxPassword('')
     setHttpsPasswordConfigured(!!data.httpsEnabled)
+    if (typeof data.httpsPort === 'number') setHttpsPort(data.httpsPort)
     setRestartNeeded(true)
-    setNetworkHint(`Saved ${data.listenUrl}. Restart the server for bind/port/HTTPS changes to take effect.`)
+    const httpsHint = data.httpsUrl
+      ? ` HTTP ${data.httpUrl || data.listenUrl}; HTTPS ${data.httpsUrl} (self-signed — click past the browser warning).`
+      : ` ${data.listenUrl}.`
+    setNetworkHint(`Saved.${httpsHint} Restart the server to apply.`)
   }
 
   async function restartServer() {
@@ -1403,7 +1414,9 @@ function App() {
             </div>
 
             <h2 className="settings-section">Network</h2>
-            <p className="lede">Default is this PC only. LAN access is opt-in. Optional PFX enables HTTPS (restart required).</p>
+            <p className="lede">
+              Default is this PC only. LAN access is opt-in. Enable self-signed HTTPS to use https:// as well as http:// (browser will warn — that is expected). Restart required after changes.
+            </p>
             <label className="field">
               Binding
               <select value={bindMode} onChange={(e) => setBindMode(e.target.value as 'loopback' | 'lan')}>
@@ -1412,21 +1425,49 @@ function App() {
               </select>
             </label>
             <label className="field">
-              Port
+              HTTP port
               <input
                 type="number"
                 min={1}
                 max={65535}
                 value={listenPort}
-                onChange={(e) => setListenPort(Number(e.target.value) || 5180)}
+                onChange={(e) => {
+                  const p = Number(e.target.value) || 5180
+                  setListenPort(p)
+                  if (!httpsPfxPath && httpsPort === listenPort + 1) setHttpsPort(p + 1)
+                }}
               />
             </label>
+            <label className="field checkbox-row">
+              <input
+                type="checkbox"
+                checked={httpsSelfSigned}
+                onChange={(e) => setHttpsSelfSigned(e.target.checked)}
+              />
+              Also listen on HTTPS (self-signed certificate)
+            </label>
+            {(httpsSelfSigned || !!httpsPfxPath.trim()) && (
+              <label className="field">
+                HTTPS port
+                <input
+                  type="number"
+                  min={1}
+                  max={65535}
+                  value={httpsPort}
+                  onChange={(e) => setHttpsPort(Number(e.target.value) || listenPort + 1)}
+                />
+              </label>
+            )}
+            <p className="muted">
+              With HTTPS on, open both e.g. http://127.0.0.1:{listenPort} and https://127.0.0.1:
+              {httpsSelfSigned || httpsPfxPath.trim() ? httpsPort : listenPort + 1}. Click through the certificate warning for HTTPS.
+            </p>
             <label className="field">
-              HTTPS certificate (PFX path)
+              Custom HTTPS certificate (optional PFX path)
               <input
                 value={httpsPfxPath}
                 onChange={(e) => setHttpsPfxPath(e.target.value)}
-                placeholder="C:\certs\jotdex.pfx"
+                placeholder="Leave blank to use the built-in self-signed cert"
               />
             </label>
             <label className="field">
@@ -1440,8 +1481,8 @@ function App() {
               />
             </label>
             <p className="muted">Prefer env var JOTDEX_HTTPS_PFX_PASSWORD over storing the password in config.</p>
-            {bindMode === 'lan' && (
-              <p className="warn">LAN without HTTPS exposes the app in cleartext on your network. Prefer a PFX or VPN.</p>
+            {bindMode === 'lan' && !httpsSelfSigned && !httpsPfxPath.trim() && (
+              <p className="warn">LAN without HTTPS exposes the app in cleartext on your network. Prefer enabling self-signed HTTPS or a PFX.</p>
             )}
             <div className="modal-actions">
               <button type="button" className="primary" onClick={() => void saveNetworkSettings()}>

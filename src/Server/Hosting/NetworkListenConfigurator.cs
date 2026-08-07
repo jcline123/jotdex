@@ -40,9 +40,12 @@ public static class NetworkListenConfigurator
             }) ?? new NetworkSettings();
 
             var host = settings.ListenHost;
-            var port = settings.Port is >= 1 and <= 65535 ? settings.Port : 5180;
+            var httpPort = settings.Port is >= 1 and <= 65535 ? settings.Port : 5180;
+            settings.Port = httpPort;
+
             var pfx = settings.HttpsPfxPath?.Trim();
-            var useHttps = !string.IsNullOrWhiteSpace(pfx) && File.Exists(pfx);
+            var hasCustomPfx = !string.IsNullOrWhiteSpace(pfx) && File.Exists(pfx);
+            var useHttps = settings.HttpsSelfSigned || hasCustomPfx;
 
             // Clear launchSettings-injected URLs so UseUrls / Kestrel Listen win.
             Environment.SetEnvironmentVariable("ASPNETCORE_URLS", null);
@@ -55,32 +58,58 @@ public static class NetworkListenConfigurator
                 return;
             }
 
-            var password = ResolvePfxPassword(settings);
-            X509Certificate2 cert;
-            try
+            X509Certificate2? cert = null;
+            if (hasCustomPfx)
             {
-                cert = string.IsNullOrEmpty(password)
-                    ? X509CertificateLoader.LoadPkcs12FromFile(pfx!, null)
-                    : X509CertificateLoader.LoadPkcs12FromFile(pfx!, password);
+                var password = ResolvePfxPassword(settings);
+                try
+                {
+                    cert = string.IsNullOrEmpty(password)
+                        ? X509CertificateLoader.LoadPkcs12FromFile(pfx!, null)
+                        : X509CertificateLoader.LoadPkcs12FromFile(pfx!, password);
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine($"Jotdex: failed to load HTTPS PFX ({ex.Message}); trying self-signed if enabled.");
+                }
             }
-            catch (Exception ex)
+
+            if (cert is null && settings.HttpsSelfSigned)
             {
-                Console.Error.WriteLine($"Jotdex: failed to load HTTPS PFX ({ex.Message}); falling back to HTTP.");
+                try
+                {
+                    cert = SelfSignedHttpsCertificate.GetOrCreate(dataRoot);
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine($"Jotdex: failed to create self-signed HTTPS cert ({ex.Message}); HTTP only.");
+                }
+            }
+
+            if (cert is null)
+            {
                 builder.WebHost.UseUrls(settings.ToHttpUrl());
+                Console.WriteLine($"Jotdex: HTTP listening on {settings.ToHttpUrl()} (HTTPS unavailable)");
                 return;
             }
 
+            var httpsPort = settings.EffectiveHttpsPort;
             var ip = IPAddress.Parse(host);
             builder.WebHost.ConfigureKestrel(kestrel =>
             {
-                kestrel.Listen(ip, port, lo =>
+                kestrel.Listen(ip, httpPort, lo =>
+                {
+                    lo.Protocols = HttpProtocols.Http1;
+                });
+                kestrel.Listen(ip, httpsPort, lo =>
                 {
                     lo.Protocols = HttpProtocols.Http1AndHttp2;
                     lo.UseHttps(cert);
                 });
             });
 
-            Console.WriteLine($"Jotdex: HTTPS listening on https://{host}:{port}");
+            Console.WriteLine($"Jotdex: HTTP  {settings.ToHttpUrl()}");
+            Console.WriteLine($"Jotdex: HTTPS https://{host}:{httpsPort} (self-signed — browser warning is expected)");
         }
         catch
         {

@@ -145,6 +145,8 @@ public static class AuthEndpointExtensions
             {
                 bindMode = s.BindMode,
                 port = s.Port,
+                httpsSelfSigned = s.HttpsSelfSigned,
+                httpsPort = s.EffectiveHttpsPort,
                 httpsPfxPath = s.HttpsPfxPath,
                 httpsEnabled = s.HttpsEnabled,
                 httpsPasswordConfigured = !string.IsNullOrEmpty(s.HttpsPfxPassword)
@@ -152,7 +154,9 @@ public static class AuthEndpointExtensions
                 listenHost = s.ListenHost,
                 isLan = s.IsLan,
                 listenUrl = s.ToListenUrl(),
-                restartRequiredHint = "Changing bind, port, or HTTPS certificate requires a server restart."
+                httpUrl = s.ToHttpUrl(),
+                httpsUrl = s.ToHttpsUrl(),
+                restartRequiredHint = "Changing bind, port, or HTTPS requires a server restart."
             });
         });
 
@@ -167,6 +171,8 @@ public static class AuthEndpointExtensions
             {
                 BindMode = body.BindMode ?? "loopback",
                 Port = body.Port ?? 5180,
+                HttpsSelfSigned = body.HttpsSelfSigned ?? false,
+                HttpsPort = body.HttpsPort ?? 0,
                 HttpsPfxPath = body.HttpsPfxPath,
                 HttpsPfxPassword = body.HttpsPfxPassword
             }, updatePassword);
@@ -179,11 +185,15 @@ public static class AuthEndpointExtensions
                 success = true,
                 bindMode = settings.BindMode,
                 port = settings.Port,
+                httpsSelfSigned = settings.HttpsSelfSigned,
+                httpsPort = settings.EffectiveHttpsPort,
                 httpsPfxPath = settings.HttpsPfxPath,
                 httpsEnabled = settings.HttpsEnabled,
                 listenHost = settings.ListenHost,
                 isLan = settings.IsLan,
                 listenUrl = settings.ToListenUrl(),
+                httpUrl = settings.ToHttpUrl(),
+                httpsUrl = settings.ToHttpsUrl(),
                 restartRequired = true
             });
         });
@@ -318,6 +328,8 @@ public static class AuthEndpointExtensions
     {
         public string? BindMode { get; set; }
         public int? Port { get; set; }
+        public bool? HttpsSelfSigned { get; set; }
+        public int? HttpsPort { get; set; }
         public string? HttpsPfxPath { get; set; }
         /// <summary>Omit to keep existing; empty string clears; value sets.</summary>
         public string? HttpsPfxPassword { get; set; }

@@ -12,7 +12,13 @@ public sealed class NetworkSettings
 
     public int Port { get; set; } = 5180;
 
-    /// <summary>Optional absolute path to a PFX for HTTPS (restart required).</summary>
+    /// <summary>Also listen for HTTPS with an auto-generated self-signed certificate (browser warning expected).</summary>
+    public bool HttpsSelfSigned { get; set; }
+
+    /// <summary>HTTPS listen port. When null/0, defaults to <see cref="Port"/> + 1.</summary>
+    public int HttpsPort { get; set; }
+
+    /// <summary>Optional absolute path to a custom PFX (used instead of the self-signed cert when set).</summary>
     public string? HttpsPfxPath { get; set; }
 
     /// <summary>Optional PFX password. Prefer env JOTDEX_HTTPS_PFX_PASSWORD. Never return via API.</summary>
@@ -23,11 +29,27 @@ public sealed class NetworkSettings
 
     public bool IsLan => string.Equals(BindMode, "lan", StringComparison.OrdinalIgnoreCase);
 
-    public bool HttpsEnabled => !string.IsNullOrWhiteSpace(HttpsPfxPath);
+    public bool HttpsEnabled =>
+        HttpsSelfSigned || !string.IsNullOrWhiteSpace(HttpsPfxPath);
+
+    public int EffectiveHttpsPort
+    {
+        get
+        {
+            if (HttpsPort is >= 1 and <= 65535 && HttpsPort != Port)
+                return HttpsPort;
+            var next = Port >= 65535 ? 5181 : Port + 1;
+            return next;
+        }
+    }
 
     public string ToHttpUrl() => $"http://{ListenHost}:{Port}";
 
-    public string ToListenUrl() => HttpsEnabled ? $"https://{ListenHost}:{Port}" : ToHttpUrl();
+    public string ToHttpsUrl() =>
+        HttpsEnabled ? $"https://{ListenHost}:{EffectiveHttpsPort}" : "";
+
+    /// <summary>Primary URL for reconnect after restart (HTTP so the browser does not hit the cert warning).</summary>
+    public string ToListenUrl() => ToHttpUrl();
 }
 
 public interface INetworkSettingsService
@@ -73,6 +95,13 @@ public sealed class NetworkSettingsService : INetworkSettingsService
         if (mode is not ("loopback" or "lan"))
             return (false, "BindMode must be 'loopback' or 'lan'.", null);
 
+        var httpsPort = incoming.HttpsPort;
+        if (httpsPort is not 0 and (< 1 or > 65535))
+            return (false, "HTTPS port must be between 1 and 65535.", null);
+
+        if (httpsPort == incoming.Port)
+            return (false, "HTTPS port must differ from the HTTP port.", null);
+
         if (!string.IsNullOrWhiteSpace(incoming.HttpsPfxPath) && !File.Exists(incoming.HttpsPfxPath))
             return (false, "HTTPS certificate file not found.", null);
 
@@ -82,6 +111,8 @@ public sealed class NetworkSettingsService : INetworkSettingsService
             {
                 BindMode = mode,
                 Port = incoming.Port,
+                HttpsSelfSigned = incoming.HttpsSelfSigned,
+                HttpsPort = httpsPort is >= 1 and <= 65535 ? httpsPort : 0,
                 HttpsPfxPath = string.IsNullOrWhiteSpace(incoming.HttpsPfxPath) ? null : incoming.HttpsPfxPath.Trim(),
                 HttpsPfxPassword = updatePassword
                     ? (string.IsNullOrEmpty(incoming.HttpsPfxPassword) ? null : incoming.HttpsPfxPassword)
@@ -92,7 +123,7 @@ public sealed class NetworkSettingsService : INetworkSettingsService
             _current = next;
 
             if (next.IsLan && !next.HttpsEnabled)
-                _logger.LogWarning("LAN binding enabled without HTTPS — credentials may travel in cleartext; prefer a PFX or VPN");
+                _logger.LogWarning("LAN binding enabled without HTTPS — credentials may travel in cleartext; prefer HTTPS or VPN");
 
             return (true, null, Clone(next));
         }
@@ -130,6 +161,8 @@ public sealed class NetworkSettingsService : INetworkSettingsService
     {
         BindMode = s.BindMode,
         Port = s.Port,
+        HttpsSelfSigned = s.HttpsSelfSigned,
+        HttpsPort = s.HttpsPort,
         HttpsPfxPath = s.HttpsPfxPath,
         HttpsPfxPassword = s.HttpsPfxPassword
     };

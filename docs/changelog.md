@@ -7,7 +7,14 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 
 ---
 
-## 2026-08-07 — Obsidian-style editor loop + search keys (`c02bb3e`)
+## 2026-08-07 — Dual HTTP + self-signed HTTPS
+
+**Wanted https:// without making a certificate**
+- Settings → Network: **Also listen on HTTPS (self-signed)**. HTTP stays on the main port; HTTPS uses port+1 (configurable).
+- App auto-creates `config/jotdex-self-signed.pfx` under the data root. Browser warning is expected — click through.
+- Optional custom PFX still supported (used instead of the self-signed cert when set).
+
+---
 
 **Search needed arrow keys**
 - Search dropdown: ↑/↓ move highlight, Enter opens note, Escape closes (also works from the search box).
