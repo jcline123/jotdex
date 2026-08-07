@@ -19,7 +19,18 @@ import { Markdown } from 'tiptap-markdown'
 import { TextStyle } from '@tiptap/extension-text-style'
 import { Color } from '@tiptap/extension-color'
 import { CodeBlockView } from './CodeBlockView'
+import { ImageView } from './ImageView'
 import { applyHeadingToSelection } from './headingSelection'
+import { Callout, type CalloutType } from './callout'
+import { HeadingFold } from './headingFold'
+import { WikiLinkSuggest, type WikiSuggestState } from './wikiLinkSuggest'
+import { relativeMdPath } from './paths'
+import {
+  cleanPasteHtml,
+  dataUrlToFile,
+  extractHttpImageUrls,
+  rewriteDataImages,
+} from './pasteHtml'
 
 const lowlight = createLowlight(common)
 lowlight.register('powershell', powershell)
@@ -50,6 +61,15 @@ const CodeBlockBox = CodeBlockLowlight.extend({
   },
 }).configure({ lowlight, defaultLanguage: 'plaintext' })
 
+const ImageBox = Image.extend({
+  addNodeView() {
+    return ReactNodeViewRenderer(ImageView)
+  },
+}).configure({
+  allowBase64: true,
+  inline: false,
+  HTMLAttributes: { class: 'note-image-img' },
+})
 const TEXT_COLORS = [
   { label: 'Default', value: '' },
   { label: 'Red', value: '#b42318' },
@@ -71,12 +91,22 @@ export type PasteMode = 'smart' | 'plain' | 'code' | 'keep' | 'preserve'
 
 type AttachmentInfo = { id: string; fileName: string; contentType: string }
 
+export type NoteCatalogItem = {
+  id: string
+  title: string
+  relativePath: string
+  folderPath: string
+}
+
 type Props = {
   noteId: string
   noteStem: string
+  noteRelativePath: string
+  noteCatalog?: NoteCatalogItem[]
   markdown: string
   /** Bumps when parent applies an external markdown reload (open note / conflict / preserve-page). */
   contentEpoch?: number
+  jumpHeading?: { text: string; nonce: number } | null
   onChange: (markdown: string) => void
   attachments?: AttachmentInfo[]
   editable?: boolean
@@ -201,11 +231,31 @@ async function uploadFile(noteId: string, file: File): Promise<UploadResult> {
   return (await res.json()) as UploadResult
 }
 
+function replaceImageSrc(editor: Editor, fromSrc: string, toSrc: string, alt?: string) {
+  const { state } = editor
+  let tr = state.tr
+  let changed = false
+  state.doc.descendants((node, pos) => {
+    if (node.type.name !== 'image') return
+    if (node.attrs.src !== fromSrc) return
+    tr = tr.setNodeMarkup(pos, undefined, {
+      ...node.attrs,
+      src: toSrc,
+      alt: alt || node.attrs.alt || 'image',
+    })
+    changed = true
+  })
+  if (changed) editor.view.dispatch(tr)
+}
+
 export function NoteEditor({
   noteId,
   noteStem,
+  noteRelativePath,
+  noteCatalog = [],
   markdown,
   contentEpoch = 0,
+  jumpHeading = null,
   onChange,
   attachments = [],
   editable = true,
@@ -218,9 +268,20 @@ export function NoteEditor({
   const [findOpen, setFindOpen] = useState(false)
   const [findQuery, setFindQuery] = useState('')
   const [findStatus, setFindStatus] = useState('')
+  const [wikiSuggest, setWikiSuggest] = useState<WikiSuggestState>(null)
+  const [wikiIndex, setWikiIndex] = useState(0)
   const findInputRef = useRef<HTMLInputElement>(null)
   const findOpenRef = useRef(false)
   findOpenRef.current = findOpen
+  const wikiOnChangeRef = useRef<(s: WikiSuggestState) => void>(() => {})
+  wikiOnChangeRef.current = (s) => {
+    setWikiSuggest(s)
+    setWikiIndex(0)
+  }
+  const notePathRef = useRef(noteRelativePath)
+  const catalogRef = useRef(noteCatalog)
+  notePathRef.current = noteRelativePath
+  catalogRef.current = noteCatalog
   const apiToMd = useRef(new Map<string, string>())
   const editorRef = useRef<Editor | null>(null)
   const readyRef = useRef(false)
@@ -254,7 +315,13 @@ export function NoteEditor({
       if (result.attachmentId) {
         apiToMd.current.set(`/api/attachments/${result.attachmentId}`, result.markdownPath)
       }
-      if (result.note) onNoteMeta?.(result.note)
+      // Attachments only — note.markdown on the upload response is pre-edit disk state.
+      if (result.note) {
+        onNoteMeta?.({
+          etag: result.note.etag,
+          attachments: result.note.attachments,
+        })
+      }
 
       const ed = editorRef.current
       if (!ed) return
@@ -310,6 +377,103 @@ export function NoteEditor({
   const preserveRef = useRef(preservePage)
   preserveRef.current = preservePage
 
+  const pasteRich = async (html: string, mode: 'smart' | 'keep') => {
+    const ed = editorRef.current
+    if (!ed) return
+
+    setUploadStatus(mode === 'keep' ? 'Pasting HTML…' : 'Pasting…')
+    try {
+      const cleaned = cleanPasteHtml(html, { keepMore: mode === 'keep' })
+      if (!cleaned) {
+        setUploadStatus(null)
+        return
+      }
+
+      const { html: markedHtml, items } = rewriteDataImages(cleaned)
+      const remoteUrls = extractHttpImageUrls(markedHtml).filter((u) => !u.includes('paste.invalid'))
+
+      ed.chain().focus().insertContent(markedHtml).run()
+
+      let lastMeta: UploadResult['note'] | undefined
+      let imported = 0
+      let failed = 0
+
+      for (const item of items) {
+        try {
+          const file = dataUrlToFile(item.mime, item.bytesBase64, item.fileName)
+          const result = await uploadFile(noteIdRef.current, file)
+          if (!result.success || !result.attachmentId) {
+            failed++
+            continue
+          }
+          if (result.markdownPath) {
+            apiToMd.current.set(`/api/attachments/${result.attachmentId}`, result.markdownPath)
+          }
+          replaceImageSrc(ed, item.marker, `/api/attachments/${result.attachmentId}`, result.fileName)
+          lastMeta = result.note ?? lastMeta
+          imported++
+        } catch {
+          failed++
+        }
+      }
+
+      for (const url of remoteUrls.slice(0, 20)) {
+        try {
+          const res = await fetch(`/api/notes/${noteIdRef.current}/import-image`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url }),
+          })
+          const data = (await res.json()) as {
+            success?: boolean
+            attachmentId?: string
+            markdownPath?: string
+            fileName?: string
+            note?: UploadResult['note']
+            error?: string
+          }
+          if (!res.ok || !data.success || !data.attachmentId) {
+            failed++
+            continue
+          }
+          if (data.markdownPath) {
+            apiToMd.current.set(`/api/attachments/${data.attachmentId}`, data.markdownPath)
+          }
+          replaceImageSrc(ed, url, `/api/attachments/${data.attachmentId}`, data.fileName)
+          lastMeta = data.note ?? lastMeta
+          imported++
+        } catch {
+          failed++
+        }
+      }
+
+      emitMarkdown(ed)
+      // Attachment APIs return disk markdown *before* this paste is saved — never push
+      // that body into the parent or the editor will reload and the paste vanishes.
+      if (lastMeta) {
+        onNoteMeta?.({
+          etag: lastMeta.etag,
+          attachments: lastMeta.attachments,
+        })
+      }
+
+      if (imported > 0 || failed > 0) {
+        const parts = []
+        if (imported) parts.push(`${imported} image${imported === 1 ? '' : 's'} saved`)
+        if (failed) parts.push(`${failed} failed`)
+        setUploadStatus(parts.join(' · ') || 'Pasted')
+      } else {
+        setUploadStatus('Pasted')
+      }
+      window.setTimeout(() => setUploadStatus(null), 1800)
+    } catch (e) {
+      onError?.(e instanceof Error ? e.message : 'Paste failed')
+      setUploadStatus(null)
+    }
+  }
+  const pasteRichRef = useRef(pasteRich)
+  pasteRichRef.current = pasteRich
+
   const runFind = (reverse = false) => {
     const ed = editorRef.current
     if (!ed || !findQuery.trim()) return
@@ -323,13 +487,38 @@ export function NoteEditor({
     setFindStatus('')
   }
 
+  const wikiSuggestRef = useRef(wikiSuggest)
+  const wikiIndexRef = useRef(wikiIndex)
+  wikiSuggestRef.current = wikiSuggest
+  wikiIndexRef.current = wikiIndex
+  const applyWikiLinkRef = useRef<(item: NoteCatalogItem) => void>(() => {})
+
+  const applyWikiLink = (item: NoteCatalogItem) => {
+    const ed = editorRef.current
+    const suggest = wikiSuggestRef.current
+    if (!ed || !suggest) return
+    const href = relativeMdPath(notePathRef.current, item.relativePath)
+    ed.chain()
+      .focus()
+      .deleteRange({ from: suggest.from, to: suggest.to })
+      .insertContent(`[${item.title}](${href})`)
+      .run()
+    setWikiSuggest(null)
+  }
+  applyWikiLinkRef.current = applyWikiLink
+
   const editor = useEditor({
     extensions: [
       StarterKit.configure({ codeBlock: false }),
       CodeBlockBox,
       Link.configure({ openOnClick: false, autolink: true }),
-      Image.configure({ allowBase64: false }),
-      Placeholder.configure({ placeholder: 'Start writing…' }),
+      ImageBox,
+      Callout,
+      HeadingFold,
+      WikiLinkSuggest.configure({
+        onChange: (s) => wikiOnChangeRef.current(s),
+      }),
+      Placeholder.configure({ placeholder: 'Start writing… Type [[ to link a note' }),
       TaskList,
       TaskItem.configure({ nested: true }),
       Table.configure({ resizable: true }),
@@ -341,7 +530,8 @@ export function NoteEditor({
       Markdown.configure({
         // Allow <span style="color/font-size"> so color & size round-trip in the vault.
         html: true,
-        transformPastedText: true,
+        // We handle rich paste ourselves so formatting/images aren't stripped by MD transform.
+        transformPastedText: false,
         transformCopiedText: true,
       }),
     ],
@@ -399,7 +589,14 @@ export function NoteEditor({
           }
         }
 
-        // smart / keep: let TipTap handle HTML→doc; images already handled
+        // smart / keep: rich HTML paste with structure + images
+        const html = clipboard.getData('text/html')
+        if (html && html.length > 20 && (mode === 'smart' || mode === 'keep')) {
+          event.preventDefault()
+          void pasteRichRef.current(html, mode)
+          return true
+        }
+
         return false
       },
       handleDrop: (_view, event) => {
@@ -438,6 +635,31 @@ export function NoteEditor({
         return true
       },
       handleKeyDown: (_view, event) => {
+        const suggest = wikiSuggestRef.current
+        if (suggest?.active) {
+          const filtered = filterCatalog(catalogRef.current, suggest.query).slice(0, 12)
+          if (event.key === 'ArrowDown' && filtered.length) {
+            event.preventDefault()
+            setWikiIndex((i) => (i + 1) % filtered.length)
+            return true
+          }
+          if (event.key === 'ArrowUp' && filtered.length) {
+            event.preventDefault()
+            setWikiIndex((i) => (i - 1 + filtered.length) % filtered.length)
+            return true
+          }
+          if (event.key === 'Enter' && filtered.length) {
+            event.preventDefault()
+            const pick = filtered[wikiIndexRef.current] ?? filtered[0]
+            if (pick) applyWikiLinkRef.current(pick)
+            return true
+          }
+          if (event.key === 'Escape') {
+            event.preventDefault()
+            setWikiSuggest(null)
+            return true
+          }
+        }
         if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'f') {
           event.preventDefault()
           setFindOpen(true)
@@ -465,6 +687,29 @@ export function NoteEditor({
   useEffect(() => {
     editorRef.current = editor
   }, [editor])
+
+  useEffect(() => {
+    if (!editor || !jumpHeading?.text) return
+    const target = jumpHeading.text.trim().toLowerCase()
+    let from = -1
+    let to = -1
+    editor.state.doc.descendants((node, pos) => {
+      if (from >= 0 || node.type.name !== 'heading') return
+      if (node.textContent.trim().toLowerCase() === target) {
+        from = pos + 1
+        to = pos + node.nodeSize - 1
+      }
+    })
+    if (from < 0) return
+    editor.chain().focus().setTextSelection({ from, to }).run()
+    try {
+      const dom = editor.view.domAtPos(from)
+      const el = (dom.node as HTMLElement).parentElement ?? (dom.node as HTMLElement)
+      el?.scrollIntoView?.({ block: 'center', behavior: 'smooth' })
+    } catch {
+      /* ignore */
+    }
+  }, [jumpHeading, editor])
 
   // Only reload editor document on external content changes (note open / conflict / preserve-page),
   // or when attachments arrive so local image paths can be rewritten to /api/attachments/{id}.
@@ -618,6 +863,28 @@ export function NoteEditor({
         >
           Link
         </button>
+        <label className="toolbar-select" title="Insert a callout block">
+          <span className="sr-only">Callout</span>
+          <select
+            aria-label="Insert callout"
+            defaultValue=""
+            onChange={(e) => {
+              const v = e.target.value as CalloutType | ''
+              e.target.value = ''
+              if (!v) return
+              editor.chain().focus().setCallout(v).run()
+            }}
+          >
+            <option value="" disabled>
+              Callout
+            </option>
+            <option value="note">Note</option>
+            <option value="tip">Tip</option>
+            <option value="info">Info</option>
+            <option value="warning">Warning</option>
+            <option value="danger">Danger</option>
+          </select>
+        </label>
         <button type="button" onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}>
           Table
         </button>
@@ -672,14 +939,14 @@ export function NoteEditor({
             onClick={() => setPasteMode(id)}
             title={
               id === 'smart'
-                ? 'Ctrl+V smart paste (default)'
+                ? 'Paste with headings, lists, links, and images (downloads pictures into the note)'
                 : id === 'plain'
                   ? 'Strip formatting (also Ctrl+Shift+V)'
                   : id === 'code'
                     ? 'Insert clipboard as a code block'
                     : id === 'preserve'
                       ? 'Save sanitized HTML sidecar and link it in the note'
-                      : 'Prefer keeping HTML structure when possible'
+                      : 'Keep more HTML styles; still downloads images into the note'
             }
           >
             {label}
@@ -717,7 +984,42 @@ export function NoteEditor({
       )}
 
       {uploadStatus && <div className="upload-status">{uploadStatus}</div>}
-      <EditorContent editor={editor} />
+      <div className="editor-stage">
+        {wikiSuggest?.active && (
+          <div className="wiki-suggest" role="listbox" aria-label="Link to note">
+            {filterCatalog(noteCatalog, wikiSuggest.query)
+              .slice(0, 12)
+              .map((item, i) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  role="option"
+                  aria-selected={i === wikiIndex}
+                  className={i === wikiIndex ? 'on' : ''}
+                  onMouseDown={(e) => {
+                    e.preventDefault()
+                    applyWikiLink(item)
+                  }}
+                >
+                  <span className="note-title">{item.title}</span>
+                  <span className="note-path">{item.folderPath || '/'}</span>
+                </button>
+              ))}
+            {filterCatalog(noteCatalog, wikiSuggest.query).length === 0 && (
+              <div className="wiki-suggest-empty">No matching notes — keep typing or finish with ]]</div>
+            )}
+          </div>
+        )}
+        <EditorContent editor={editor} />
+      </div>
     </div>
+  )
+}
+
+function filterCatalog(catalog: NoteCatalogItem[], query: string): NoteCatalogItem[] {
+  const q = query.trim().toLowerCase()
+  if (!q) return catalog.slice(0, 40)
+  return catalog.filter(
+    (n) => n.title.toLowerCase().includes(q) || n.relativePath.toLowerCase().includes(q),
   )
 }

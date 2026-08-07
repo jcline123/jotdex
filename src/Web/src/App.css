@@ -137,7 +137,8 @@ button {
   display: block;
 }
 
-.search-dropdown button:hover {
+.search-dropdown button:hover,
+.search-dropdown button.active {
   background: var(--accent-soft);
 }
 
@@ -421,6 +422,216 @@ button {
   text-overflow: ellipsis;
   white-space: nowrap;
   max-width: 36rem;
+}
+
+.outline-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.outline-item,
+.backlink-item {
+  width: 100%;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15rem;
+  padding: 0.35rem 0.25rem;
+}
+
+.template-wrap {
+  position: relative;
+  display: inline-flex;
+  gap: 0.15rem;
+}
+
+.template-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 0.35rem);
+  z-index: 20;
+  min-width: 14rem;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.4);
+  padding: 0.35rem;
+}
+
+.template-menu button {
+  width: 100%;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  padding: 0.55rem 0.65rem;
+  border-radius: 8px;
+}
+
+.template-menu button:hover {
+  background: var(--accent-soft);
+}
+
+.template-menu span {
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.quick-open-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  justify-content: center;
+  padding-top: min(18vh, 8rem);
+}
+
+.quick-open {
+  width: min(36rem, calc(100vw - 2rem));
+  max-height: min(70vh, 28rem);
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+}
+
+.quick-open-input {
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 1.05rem;
+  padding: 0.85rem 1rem;
+  outline: none;
+}
+
+.quick-open-list {
+  list-style: none;
+  margin: 0;
+  padding: 0.35rem 0;
+  overflow: auto;
+}
+
+.quick-open-list button {
+  width: 100%;
+  text-align: left;
+  padding: 0.55rem 1rem;
+  display: block;
+}
+
+.quick-open-list button:hover,
+.quick-open-list button.active {
+  background: var(--accent-soft);
+}
+
+.quick-open-list .empty {
+  padding: 0.85rem 1rem;
+  color: var(--muted);
+}
+
+.editor-stage {
+  position: relative;
+}
+
+.wiki-suggest {
+  position: absolute;
+  z-index: 15;
+  left: 0.5rem;
+  top: 0.35rem;
+  min-width: 16rem;
+  max-width: min(28rem, 90%);
+  max-height: 14rem;
+  overflow: auto;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.4);
+  padding: 0.25rem;
+}
+
+.wiki-suggest button {
+  width: 100%;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  padding: 0.45rem 0.55rem;
+  border-radius: 8px;
+}
+
+.wiki-suggest button.on,
+.wiki-suggest button:hover {
+  background: var(--accent-soft);
+}
+
+.wiki-suggest-empty {
+  padding: 0.55rem 0.65rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.tiptap-editor .foldable-heading {
+  position: relative;
+  padding-left: 1.35rem;
+}
+
+.tiptap-editor .foldable-heading::before {
+  content: '▾';
+  position: absolute;
+  left: 0;
+  top: 0.15em;
+  width: 1.1rem;
+  font-size: 0.75em;
+  color: var(--muted);
+  cursor: pointer;
+  user-select: none;
+}
+
+.tiptap-editor .foldable-heading.is-folded::before {
+  content: '▸';
+}
+
+.tiptap-editor .heading-fold-hidden {
+  display: none !important;
+}
+
+.tiptap-editor blockquote.callout {
+  border-left: 3px solid var(--accent, #3b82f6);
+  background: rgba(59, 130, 246, 0.08);
+  margin: 0.75rem 0;
+  padding: 0.65rem 0.85rem;
+  border-radius: 0 8px 8px 0;
+}
+
+.tiptap-editor blockquote.callout-tip {
+  border-left-color: #027a48;
+  background: rgba(2, 122, 72, 0.1);
+}
+
+.tiptap-editor blockquote.callout-warning {
+  border-left-color: #b54708;
+  background: rgba(181, 71, 8, 0.12);
+}
+
+.tiptap-editor blockquote.callout-info {
+  border-left-color: #175cd3;
+  background: rgba(23, 92, 211, 0.1);
+}
+
+.tiptap-editor blockquote.callout-danger {
+  border-left-color: #b42318;
+  background: rgba(180, 35, 24, 0.12);
+}
+
+.tiptap-editor blockquote.callout-note {
+  border-left-color: #667085;
+  background: rgba(102, 112, 133, 0.1);
 }
 
 .log-view {
@@ -790,6 +1001,94 @@ button {
 .tiptap-editor img {
   max-width: 100%;
   border-radius: 6px;
+}
+
+.note-image {
+  margin: 0.65rem 0;
+  display: block;
+}
+
+.note-image-frame {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  vertical-align: top;
+}
+
+.note-image.is-selected .note-image-frame {
+  outline: 2px solid var(--accent, #3b82f6);
+  outline-offset: 3px;
+  border-radius: 8px;
+}
+
+.note-image img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+}
+
+.note-image-actions {
+  position: absolute;
+  top: 0.4rem;
+  right: 0.4rem;
+  display: flex;
+  gap: 0.35rem;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+  z-index: 2;
+}
+
+.note-image:hover .note-image-actions,
+.note-image.is-selected .note-image-actions,
+.note-image.is-broken .note-image-actions {
+  opacity: 1;
+}
+
+.note-image-remove {
+  border: 1px solid rgba(0, 0, 0, 0.35);
+  background: rgba(20, 24, 33, 0.92);
+  color: #f3f4f6;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.28rem 0.55rem;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.note-image-remove:hover {
+  background: #b42318;
+  border-color: #b42318;
+}
+
+.note-image-broken {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.2rem;
+  min-width: 12rem;
+  max-width: 100%;
+  padding: 0.85rem 1rem;
+  border: 1px dashed var(--border, #4b5563);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--muted, #9ca3af);
+}
+
+.note-image-broken-icon {
+  font-size: 1.25rem;
+  line-height: 1;
+  opacity: 0.7;
+}
+
+.note-image-broken-label {
+  color: var(--text, #e5e7eb);
+  font-size: 0.85rem;
+  word-break: break-all;
+}
+
+.note-image-broken-hint {
+  font-size: 0.75rem;
 }
 
 .tiptap-editor table {

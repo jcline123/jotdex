@@ -22,6 +22,20 @@ public sealed class LocalizeImagesResult
 public interface IImageLocalizer
 {
     Task<LocalizeImagesResult> LocalizeAsync(Guid noteId, IReadOnlyList<string>? urls, string? expectedETag, CancellationToken ct = default);
+    Task<RemoteImageImportResult> ImportOneAsync(Guid noteId, string url, CancellationToken ct = default);
+}
+
+public sealed class RemoteImageImportResult
+{
+    public required bool Success { get; init; }
+    public string? Error { get; init; }
+    public string? SourceUrl { get; init; }
+    public string? AttachmentId { get; init; }
+    public string? MarkdownPath { get; init; }
+    public string? FileName { get; init; }
+    public NoteDetail? Note { get; init; }
+    [JsonPropertyName("etag")]
+    public string? ETag { get; init; }
 }
 
 public sealed partial class ImageLocalizer : IImageLocalizer
@@ -41,6 +55,38 @@ public sealed partial class ImageLocalizer : IImageLocalizer
         _notes = notes;
         _http = http;
         _logger = logger;
+    }
+
+    public async Task<RemoteImageImportResult> ImportOneAsync(Guid noteId, string url, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(url) || !url.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+            return new RemoteImageImportResult { Success = false, Error = "URL must be http(s)", SourceUrl = url };
+
+        var note = _vault.GetNote(noteId);
+        if (note is null)
+            return new RemoteImageImportResult { Success = false, Error = "Note not found", SourceUrl = url };
+
+        var fetch = await _http.FetchImageAsync(url.Trim(), ct);
+        if (!fetch.Success || fetch.Bytes is null)
+            return new RemoteImageImportResult { Success = false, Error = fetch.Error ?? "Download failed", SourceUrl = url };
+
+        var ext = ExtForContentType(fetch.ContentType);
+        var name = $"paste-{DateTime.Now:yyyy-MM-dd_HHmmss}-{Guid.NewGuid().ToString("N")[..6]}{ext}";
+        await using var ms = new MemoryStream(fetch.Bytes);
+        var uploaded = _notes.AddAttachment(noteId, ms, name, fetch.ContentType);
+        if (!uploaded.Success)
+            return new RemoteImageImportResult { Success = false, Error = uploaded.Error ?? "Attach failed", SourceUrl = url };
+
+        return new RemoteImageImportResult
+        {
+            Success = true,
+            SourceUrl = url,
+            AttachmentId = uploaded.AttachmentId,
+            MarkdownPath = uploaded.MarkdownPath,
+            FileName = uploaded.FileName,
+            Note = uploaded.Note,
+            ETag = uploaded.Note?.ETag
+        };
     }
 
     public async Task<LocalizeImagesResult> LocalizeAsync(

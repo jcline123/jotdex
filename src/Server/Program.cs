@@ -43,6 +43,7 @@ builder.Services.AddSingleton<IIntegrityScanService, IntegrityScanService>();
 builder.Services.AddSingleton<IMaintenanceService, MaintenanceService>();
 builder.Services.AddSingleton<IBackupBundleService, BackupBundleService>();
 builder.Services.AddSingleton<IVaultMirrorService, VaultMirrorService>();
+builder.Services.AddSingleton<INoteLinkService, NoteLinkService>();
 builder.Services.AddHostedService<VaultMirrorHostedService>();
 builder.Services.AddSingleton<IVaultService, VaultService>();
 builder.Services.AddHostedService<VaultBootstrapHostedService>();
@@ -145,11 +146,24 @@ app.MapGet("/api/notes", (IVaultService vault, IVaultPathGuard paths, string? fo
     return Results.Json(vault.ListNotes(folder));
 });
 
+app.MapGet("/api/notes/index", (INoteLinkService links, IVaultPathGuard paths) =>
+{
+    if (!paths.IsConfigured) return Results.NotFound(new { error = "Vault not configured" });
+    return Results.Json(new { notes = links.GetIndex() });
+});
+
 app.MapGet("/api/notes/{id:guid}", (Guid id, IVaultService vault, IVaultPathGuard paths) =>
 {
     if (!paths.IsConfigured) return Results.NotFound(new { error = "Vault not configured" });
     var note = vault.GetNote(id);
     return note is null ? Results.NotFound() : Results.Json(note);
+});
+
+app.MapGet("/api/notes/{id:guid}/backlinks", (Guid id, INoteLinkService links, IVaultService vault, IVaultPathGuard paths) =>
+{
+    if (!paths.IsConfigured) return Results.NotFound(new { error = "Vault not configured" });
+    if (vault.GetNote(id) is null) return Results.NotFound();
+    return Results.Json(new { links = links.GetBacklinks(id) });
 });
 
 app.MapGet("/api/attachments/{attachmentId}", (string attachmentId, IVaultService vault, IVaultPathGuard paths, HttpResponse response) =>
@@ -436,6 +450,16 @@ app.MapPost("/api/notes/{id:guid}/localize-images", async (Guid id, HttpRequest 
     return result.Success ? Results.Json(result) : Results.BadRequest(result);
 });
 
+app.MapPost("/api/notes/{id:guid}/import-image", async (Guid id, HttpRequest request, IImageLocalizer localizer, IVaultPathGuard paths, CancellationToken ct) =>
+{
+    if (!paths.IsConfigured) return Results.NotFound(new { error = "Vault not configured" });
+    var body = await request.ReadFromJsonAsync<ImportImageBody>(cancellationToken: ct);
+    if (body is null || string.IsNullOrWhiteSpace(body.Url))
+        return Results.BadRequest(new { success = false, error = "url required" });
+    var result = await localizer.ImportOneAsync(id, body.Url, ct);
+    return result.Success ? Results.Json(result) : Results.BadRequest(result);
+});
+
 app.MapPost("/api/notes/{id:guid}/preserve-page", async (Guid id, HttpRequest request, IPreservePageService preserve, IVaultPathGuard paths) =>
 {
     if (!paths.IsConfigured) return Results.NotFound(new { error = "Vault not configured" });
@@ -539,6 +563,11 @@ internal sealed class LocalizeImagesBody
 {
     public List<string>? Urls { get; set; }
     public string? ETag { get; set; }
+}
+
+internal sealed class ImportImageBody
+{
+    public string? Url { get; set; }
 }
 
 internal sealed class PreservePageBody

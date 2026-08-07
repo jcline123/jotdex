@@ -7,6 +7,34 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 
 ---
 
+## 2026-08-07 — Obsidian-style editor loop + search keys
+
+**Search needed arrow keys**
+- Search dropdown: ↑/↓ move highlight, Enter opens note, Escape closes (also works from the search box).
+
+**Features people use daily in Obsidian**
+- `[[` wikilink autocomplete → inserts a relative markdown link.
+- **Backlinks** panel (notes that link here).
+- **Quick open** with Ctrl+O (title filter, arrow keys + Enter).
+- **Outline** of headings with jump-to.
+- **Callouts** (Note / Tip / Info / Warning / Danger) from the toolbar.
+- **Templates** menu next to New note (Meeting, How-to, Incident, Daily, Blank).
+- Click the ▾/▸ gutter on a heading to fold/unfold its section.
+
+---
+
+**Broken screenshots were hard to delete**
+- Images are a TipTap node view with hover/selected **Remove**, a clear broken-state card (filename + hint), and Delete/Backspace once selected — no Source mode required.
+
+**Website paste lost structure and pictures**
+- Smart / Keep HTML paste now cleans clipboard HTML (headings, lists, tables, links, limited styles) instead of letting markdown transform strip it.
+- Inline `data:` images upload into `.assets`; remote `http(s)` images are fetched via `POST /api/notes/{id}/import-image` and rewritten to local attachment URLs (SSRF-safe client, max 20 per paste).
+
+**Paste vanished after image-heavy articles (e.g. UniFi blog)**
+- Importing pasted images returned the note’s *old* disk markdown; the parent applied it and reloaded the editor, wiping the paste. Meta updates from upload/import now pass attachments + etag only, not markdown.
+
+---
+
 ## 2026-08-07 — History detail, editor color/size, autostart, file logs
 
 **History was timestamps only**

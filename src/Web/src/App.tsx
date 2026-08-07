@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import DOMPurify from 'dompurify'
 import './App.css'
-import { NoteEditor } from './NoteEditor'
+import { NoteEditor, type NoteCatalogItem } from './NoteEditor'
 import { joinFrontMatter, sameMarkdown, splitFrontMatter } from './frontMatter'
 import { looksUnsafeForVisual } from './unsafeMarkdown'
 import { FirstRunWizard, LoginScreen } from './AuthScreens'
+import { extractOutline } from './outline'
+import { NOTE_TEMPLATES, type NoteTemplate } from './templates'
 
 function countRemoteImages(markdown: string): number {
   const re = /!\[[^\]]*\]\((https?:\/\/[^)\s]+)\)/gi
@@ -183,7 +185,27 @@ function App() {
   const [hits, setHits] = useState<SearchHit[]>([])
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchMeta, setSearchMeta] = useState('')
+  const [searchIndex, setSearchIndex] = useState(0)
   const searchRef = useRef<HTMLInputElement>(null)
+  const searchWrapRef = useRef<HTMLDivElement>(null)
+  const searchIndexRef = useRef(0)
+  searchIndexRef.current = searchIndex
+  const hitsRef = useRef(hits)
+  hitsRef.current = hits
+
+  const [quickOpen, setQuickOpen] = useState(false)
+  const [quickQuery, setQuickQuery] = useState('')
+  const [quickIndex, setQuickIndex] = useState(0)
+  const [noteCatalog, setNoteCatalog] = useState<NoteCatalogItem[]>([])
+  const quickInputRef = useRef<HTMLInputElement>(null)
+
+  const [outlineOpen, setOutlineOpen] = useState(false)
+  const [backlinksOpen, setBacklinksOpen] = useState(false)
+  const [backlinks, setBacklinks] = useState<
+    { noteId: string; title: string; relativePath: string; folderPath: string; context?: string }[]
+  >([])
+  const [jumpHeading, setJumpHeading] = useState<{ text: string; nonce: number } | null>(null)
+  const [templateMenu, setTemplateMenu] = useState(false)
 
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [vaultPathInput, setVaultPathInput] = useState('')
@@ -234,6 +256,14 @@ function App() {
     }
     const t = (await fetch('/api/tree', { credentials: 'same-origin' }).then((r) => r.json())) as FolderNode
     setTree(t)
+    try {
+      const idx = (await fetch('/api/notes/index', { credentials: 'same-origin' }).then((r) => r.json())) as {
+        notes: NoteCatalogItem[]
+      }
+      setNoteCatalog(idx.notes ?? [])
+    } catch {
+      /* index optional */
+    }
   }, [])
 
   useEffect(() => {
@@ -302,6 +332,7 @@ function App() {
     if (!query.trim()) {
       setHits([])
       setSearchMeta('')
+      setSearchIndex(0)
       return
     }
     const handle = window.setTimeout(() => {
@@ -309,6 +340,7 @@ function App() {
         .then((r) => r.json())
         .then((data: { mode: string; hits: SearchHit[]; warning?: string }) => {
           setHits(data.hits)
+          setSearchIndex(0)
           setSearchMeta(`${data.mode} · ${data.hits.length} results${data.warning ? ` · ${data.warning}` : ''}`)
           setSearchOpen(true)
         })
@@ -316,6 +348,18 @@ function App() {
     }, 160)
     return () => window.clearTimeout(handle)
   }, [query])
+
+  useEffect(() => {
+    if (!searchOpen) return
+    const onPointerDown = (e: MouseEvent | PointerEvent) => {
+      const wrap = searchWrapRef.current
+      if (!wrap) return
+      if (e.target instanceof Node && wrap.contains(e.target)) return
+      setSearchOpen(false)
+    }
+    document.addEventListener('pointerdown', onPointerDown, true)
+    return () => document.removeEventListener('pointerdown', onPointerDown, true)
+  }, [searchOpen])
 
   const saveNote = useCallback(
     async (bodyMarkdown: string, currentEtag: string, force = false, retry = 0) => {
@@ -462,24 +506,107 @@ function App() {
   useEffect(() => {
     setHistoryOpen(false)
     setHistory([])
+    setOutlineOpen(false)
+    setBacklinksOpen(false)
+    setBacklinks([])
   }, [selectedId])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null
+      const typing =
+        target &&
+        (target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.isContentEditable)
+
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'o') {
+        e.preventDefault()
+        setQuickOpen(true)
+        setQuickQuery('')
+        setQuickIndex(0)
+        window.setTimeout(() => quickInputRef.current?.focus(), 0)
+        return
+      }
+
       if ((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'p')) {
         e.preventDefault()
         searchRef.current?.focus()
         setSearchOpen(true)
+        return
       }
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
         e.preventDefault()
         if (saveTimer.current) window.clearTimeout(saveTimer.current)
         void saveNote(draftRef.current, etagRef.current)
+        return
+      }
+
+      if (quickOpen) {
+        const filtered = filterQuick(noteCatalog, quickQuery)
+        if (e.key === 'Escape') {
+          e.preventDefault()
+          setQuickOpen(false)
+          return
+        }
+        if (e.key === 'ArrowDown' && filtered.length) {
+          e.preventDefault()
+          setQuickIndex((i) => (i + 1) % filtered.length)
+          return
+        }
+        if (e.key === 'ArrowUp' && filtered.length) {
+          e.preventDefault()
+          setQuickIndex((i) => (i - 1 + filtered.length) % filtered.length)
+          return
+        }
+        if (e.key === 'Enter' && filtered.length) {
+          e.preventDefault()
+          const pick = filtered[quickIndex] ?? filtered[0]
+          if (pick) {
+            setSelectedId(pick.id)
+            setQuickOpen(false)
+          }
+          return
+        }
+      }
+
+      if (searchOpen && query.trim() && document.activeElement === searchRef.current) {
+        const list = hitsRef.current
+        if (e.key === 'ArrowDown' && list.length) {
+          e.preventDefault()
+          setSearchIndex((i) => Math.min(i + 1, list.length - 1))
+          return
+        }
+        if (e.key === 'ArrowUp' && list.length) {
+          e.preventDefault()
+          setSearchIndex((i) => Math.max(i - 1, 0))
+          return
+        }
+        if (e.key === 'Enter' && list.length) {
+          e.preventDefault()
+          const pick = list[searchIndexRef.current] ?? list[0]
+          if (pick) {
+            setSelectedId(pick.noteId)
+            setQuery('')
+            setSearchOpen(false)
+          }
+          return
+        }
+        if (e.key === 'Escape') {
+          e.preventDefault()
+          setSearchOpen(false)
+          return
+        }
+      }
+
+      if (e.key === 'Escape' && !typing) {
+        setSearchOpen(false)
+        setTemplateMenu(false)
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [draft, etag, saveNote])
+  }, [draft, etag, saveNote, quickOpen, quickQuery, quickIndex, noteCatalog, searchOpen, query])
 
   async function toggleHistory() {
     if (!selectedId) return
@@ -487,9 +614,32 @@ function App() {
       setHistoryOpen(false)
       return
     }
+    setOutlineOpen(false)
+    setBacklinksOpen(false)
     const rows = await fetch(`/api/notes/${selectedId}/history`).then((r) => r.json())
     setHistory(rows)
     setHistoryOpen(true)
+  }
+
+  async function toggleBacklinks() {
+    if (!selectedId) return
+    if (backlinksOpen) {
+      setBacklinksOpen(false)
+      return
+    }
+    setHistoryOpen(false)
+    setOutlineOpen(false)
+    const data = (await fetch(`/api/notes/${selectedId}/backlinks`).then((r) => r.json())) as {
+      links: { noteId: string; title: string; relativePath: string; folderPath: string; context?: string }[]
+    }
+    setBacklinks(data.links ?? [])
+    setBacklinksOpen(true)
+  }
+
+  function toggleOutline() {
+    setHistoryOpen(false)
+    setBacklinksOpen(false)
+    setOutlineOpen((o) => !o)
   }
 
   async function restoreSnapshot(snapshotId: string) {
@@ -817,19 +967,21 @@ function App() {
     await loadVault()
   }
 
-  async function createNote() {
-    const title = window.prompt('New note title', 'Untitled')
+  async function createNote(template?: NoteTemplate) {
+    const title = window.prompt('New note title', template?.id === 'daily' ? new Date().toISOString().slice(0, 10) : 'Untitled')
     if (!title?.trim()) return
+    const markdown = template ? template.body(title.trim()) : undefined
     const res = await fetch('/api/notes', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title: title.trim(), folder }),
+      body: JSON.stringify({ title: title.trim(), folder, markdown }),
     })
     const data = await res.json()
     if (!res.ok) {
       setError(data.error ?? 'Could not create note')
       return
     }
+    setTemplateMenu(false)
     await loadVault()
     setSelectedId(data.id)
   }
@@ -1096,24 +1248,60 @@ function App() {
             <span className="vault-pill">{vault.name} · {vault.noteCount}</span>
           )}
         </div>
-        <div className="search-wrap">
+        <div className="search-wrap" ref={searchWrapRef}>
           <input
             ref={searchRef}
             className="search-input"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onFocus={() => query.trim() && setSearchOpen(true)}
+            onBlur={() => {
+              // Fallback when focus leaves search (click-outside handler covers most cases)
+              window.setTimeout(() => {
+                const wrap = searchWrapRef.current
+                if (wrap?.contains(document.activeElement)) return
+                setSearchOpen(false)
+              }, 0)
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'ArrowDown' && hits.length) {
+                e.preventDefault()
+                setSearchOpen(true)
+                setSearchIndex((i) => Math.min(i + 1, hits.length - 1))
+              } else if (e.key === 'ArrowUp' && hits.length) {
+                e.preventDefault()
+                setSearchIndex((i) => Math.max(i - 1, 0))
+              } else if (e.key === 'Enter' && hits.length && searchOpen) {
+                e.preventDefault()
+                const pick = hits[searchIndex] ?? hits[0]
+                if (pick) {
+                  setSelectedId(pick.noteId)
+                  setQuery('')
+                  setSearchOpen(false)
+                }
+              } else if (e.key === 'Escape') {
+                setSearchOpen(false)
+              }
+            }}
             placeholder="Search titles and note text…  (Ctrl+K)"
             aria-label="Search notes"
+            aria-autocomplete="list"
+            aria-controls="search-results"
+            aria-activedescendant={hits[searchIndex] ? `search-hit-${hits[searchIndex].noteId}` : undefined}
           />
           {searchOpen && query.trim() && (
-            <div className="search-dropdown">
-              <div className="search-meta">{searchMeta || 'Searching…'}</div>
+            <div className="search-dropdown" id="search-results" role="listbox">
+              <div className="search-meta">{searchMeta || 'Searching…'} · ↑↓ Enter</div>
               <ul>
-                {hits.map((h) => (
+                {hits.map((h, i) => (
                   <li key={h.noteId}>
                     <button
                       type="button"
+                      id={`search-hit-${h.noteId}`}
+                      role="option"
+                      aria-selected={i === searchIndex}
+                      className={i === searchIndex ? 'active' : ''}
+                      onMouseEnter={() => setSearchIndex(i)}
                       onClick={() => {
                         setSelectedId(h.noteId)
                         setQuery('')
@@ -1510,9 +1698,34 @@ function App() {
           <div className="pane-head">
             <h2>{folder || 'All notes'}</h2>
             <div className="pane-tools">
-              <button type="button" className="ghost" onClick={() => void createNote()}>
-                New note
-              </button>
+              <div className="template-wrap">
+                <button type="button" className="ghost" onClick={() => void createNote()}>
+                  New note
+                </button>
+                <button
+                  type="button"
+                  className={`ghost${templateMenu ? ' on' : ''}`}
+                  title="New note from template"
+                  onClick={() => setTemplateMenu((o) => !o)}
+                >
+                  ▾
+                </button>
+                {templateMenu && (
+                  <div className="template-menu" role="menu">
+                    {NOTE_TEMPLATES.map((t) => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        role="menuitem"
+                        onClick={() => void createNote(t)}
+                      >
+                        <strong>{t.name}</strong>
+                        <span>{t.description}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
           </div>
           <ul className="note-list">
@@ -1581,6 +1794,22 @@ function App() {
                   </button>
                   <button
                     type="button"
+                    className={`ghost${outlineOpen ? ' on' : ''}`}
+                    onClick={() => toggleOutline()}
+                    title="Headings in this note"
+                  >
+                    Outline
+                  </button>
+                  <button
+                    type="button"
+                    className={`ghost${backlinksOpen ? ' on' : ''}`}
+                    onClick={() => void toggleBacklinks()}
+                    title="Notes that link here"
+                  >
+                    Backlinks
+                  </button>
+                  <button
+                    type="button"
                     className={`ghost${historyOpen ? ' on' : ''}`}
                     onClick={() => void toggleHistory()}
                   >
@@ -1624,8 +1853,11 @@ function App() {
                   key={note.id}
                   noteId={note.id}
                   noteStem={note.relativePath.replace(/^.*\//, '').replace(/\.md$/i, '')}
+                  noteRelativePath={note.relativePath}
+                  noteCatalog={noteCatalog}
                   markdown={draft}
                   contentEpoch={editorEpoch}
+                  jumpHeading={jumpHeading}
                   attachments={note.attachments}
                   onChange={setDraft}
                   onError={(msg) => setError(msg)}
@@ -1659,6 +1891,52 @@ function App() {
                   }}
                 />
               )}
+              {outlineOpen && (
+                <div className="history-panel">
+                  <h3>Outline</h3>
+                  {extractOutline(draft).length === 0 ? (
+                    <p className="muted">No headings in this note yet. Use H1–H3 in the toolbar.</p>
+                  ) : (
+                    <ul className="outline-list">
+                      {extractOutline(draft).map((item, i) => (
+                        <li key={`${item.level}-${item.text}-${i}`} style={{ paddingLeft: `${(item.level - 1) * 0.75}rem` }}>
+                          <button
+                            type="button"
+                            className="ghost outline-item"
+                            onClick={() => setJumpHeading({ text: item.text, nonce: Date.now() })}
+                          >
+                            {item.text}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+              {backlinksOpen && (
+                <div className="history-panel">
+                  <h3>Backlinks</h3>
+                  {backlinks.length === 0 ? (
+                    <p className="muted">No other notes link here yet. Link with [[Note title]] or a markdown link.</p>
+                  ) : (
+                    <ul>
+                      {backlinks.map((b) => (
+                        <li key={b.noteId}>
+                          <button
+                            type="button"
+                            className="ghost backlink-item"
+                            onClick={() => setSelectedId(b.noteId)}
+                          >
+                            <span className="note-title">{b.title}</span>
+                            <span className="note-path">{b.folderPath || '/'}</span>
+                            {b.context && <span className="history-preview">{b.context}</span>}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
               {historyOpen && (
                 <div className="history-panel">
                   <h3>History</h3>
@@ -1686,7 +1964,67 @@ function App() {
           )}
         </section>
       </div>
+
+      {quickOpen && (
+        <div
+          className="quick-open-backdrop"
+          role="presentation"
+          onClick={() => setQuickOpen(false)}
+        >
+          <div
+            className="quick-open"
+            role="dialog"
+            aria-label="Quick open note"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <input
+              ref={quickInputRef}
+              className="quick-open-input"
+              value={quickQuery}
+              onChange={(e) => {
+                setQuickQuery(e.target.value)
+                setQuickIndex(0)
+              }}
+              placeholder="Jump to note… (Ctrl+O)"
+              aria-label="Filter notes by title"
+            />
+            <ul className="quick-open-list" role="listbox">
+              {filterQuick(noteCatalog, quickQuery)
+                .slice(0, 40)
+                .map((n, i) => (
+                  <li key={n.id}>
+                    <button
+                      type="button"
+                      role="option"
+                      aria-selected={i === quickIndex}
+                      className={i === quickIndex ? 'active' : ''}
+                      onMouseEnter={() => setQuickIndex(i)}
+                      onClick={() => {
+                        setSelectedId(n.id)
+                        setQuickOpen(false)
+                      }}
+                    >
+                      <span className="note-title">{n.title}</span>
+                      <span className="note-path">{n.folderPath || '/'}</span>
+                    </button>
+                  </li>
+                ))}
+              {filterQuick(noteCatalog, quickQuery).length === 0 && (
+                <li className="empty">No notes match</li>
+              )}
+            </ul>
+          </div>
+        </div>
+      )}
     </div>
+  )
+}
+
+function filterQuick(catalog: NoteCatalogItem[], query: string): NoteCatalogItem[] {
+  const q = query.trim().toLowerCase()
+  if (!q) return catalog
+  return catalog.filter(
+    (n) => n.title.toLowerCase().includes(q) || n.relativePath.toLowerCase().includes(q),
   )
 }
 
