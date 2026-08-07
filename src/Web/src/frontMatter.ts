@@ -19,3 +19,17 @@ export function joinFrontMatter(frontMatter: string, body: string): string {
   const b = body.replace(/^\r?\n/, '')
   return `${frontMatter}\n\n${b}`
 }
+
+/** Compare docs ignoring TipTap/Markdown cosmetic differences (newlines, trailing space). */
+export function normalizeMarkdown(markdown: string): string {
+  return markdown
+    .replace(/\r\n/g, '\n')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/^\n+/, '')
+    .replace(/\n+$/, '\n')
+}
+
+export function sameMarkdown(a: string, b: string): boolean {
+  return normalizeMarkdown(a) === normalizeMarkdown(b)
+}

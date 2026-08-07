@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json.Serialization;
 using Jotdex.Core.Vault;
 using Jotdex.Infrastructure.Html;
 using Jotdex.Infrastructure.Vault;
@@ -15,6 +16,7 @@ public sealed class PreservePageResult
     public string? MarkdownSnippet { get; init; }
     public string? AttachmentId { get; init; }
     public NoteDetail? Note { get; init; }
+    [JsonPropertyName("etag")]
     public string? ETag { get; init; }
 }
 

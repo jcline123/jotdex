@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace Jotdex.Core.Vault;
 
 public sealed class VaultInfo
@@ -36,6 +38,8 @@ public sealed class NoteDetail
     public required string FolderPath { get; init; }
     public required string Markdown { get; init; }
     public required string Html { get; init; }
+    // Default camelCase turns "ETag" into "eTag"; the SPA reads "etag".
+    [JsonPropertyName("etag")]
     public required string ETag { get; init; }
     public IReadOnlyList<string> Tags { get; init; } = [];
     public DateTimeOffset? Modified { get; init; }

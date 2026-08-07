@@ -39,6 +39,8 @@ type Props = {
   noteId: string
   noteStem: string
   markdown: string
+  /** Bumps when parent applies an external markdown reload (open note / conflict / preserve-page). */
+  contentEpoch?: number
   onChange: (markdown: string) => void
   attachments?: AttachmentInfo[]
   editable?: boolean
@@ -142,6 +144,7 @@ export function NoteEditor({
   noteId,
   noteStem,
   markdown,
+  contentEpoch = 0,
   onChange,
   attachments = [],
   editable = true,
@@ -160,6 +163,8 @@ export function NoteEditor({
   const apiToMd = useRef(new Map<string, string>())
   const editorRef = useRef<Editor | null>(null)
   const readyRef = useRef(false)
+  const lastEmittedRef = useRef(markdown)
+  const appliedEpochRef = useRef(contentEpoch)
   const pasteModeRef = useRef<PasteMode>('smart')
   const attachmentsRef = useRef(attachments)
   const stemRef = useRef(noteStem)
@@ -170,7 +175,9 @@ export function NoteEditor({
   pasteModeRef.current = pasteMode
 
   const emitMarkdown = (ed: Editor) => {
-    onChange(toVaultMarkdown(ed, attachmentsRef.current, apiToMd.current, stemRef.current))
+    const md = toVaultMarkdown(ed, attachmentsRef.current, apiToMd.current, stemRef.current)
+    lastEmittedRef.current = md
+    onChange(md)
   }
 
   const handleUpload = async (file: File) => {
@@ -370,18 +377,23 @@ export function NoteEditor({
     editorRef.current = editor
   }, [editor])
 
+  // Only reload editor document on external content changes (note open / conflict / preserve-page).
+  // Do NOT reset on our own onChange echoes — that blocked typing and broke autosave.
   useEffect(() => {
     if (!editor) return
+    const epochChanged = appliedEpochRef.current !== contentEpoch
+    const external = epochChanged || markdown !== lastEmittedRef.current
+    if (!external) return
+
+    appliedEpochRef.current = contentEpoch
     readyRef.current = false
     const display = markdownForEditor(markdown, attachments)
-    const currentVault = toVaultMarkdown(editor, attachments, apiToMd.current, noteStem)
-    if (currentVault.trim() !== markdown.trim()) {
-      editor.commands.setContent(display, { emitUpdate: false })
-    }
+    editor.commands.setContent(display, { emitUpdate: false })
+    lastEmittedRef.current = markdown
     window.setTimeout(() => {
       readyRef.current = true
     }, 0)
-  }, [markdown, attachments, noteStem, editor])
+  }, [markdown, attachments, contentEpoch, editor])
 
   useEffect(() => {
     if (!editor) return

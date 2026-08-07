@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using Jotdex.Core.Vault;
 using Jotdex.Infrastructure.Net;
@@ -13,6 +14,7 @@ public sealed class LocalizeImagesResult
     public int Localized { get; init; }
     public IReadOnlyList<string> Failed { get; init; } = [];
     public NoteDetail? Note { get; init; }
+    [JsonPropertyName("etag")]
     public string? ETag { get; init; }
     public string? Markdown { get; init; }
 }

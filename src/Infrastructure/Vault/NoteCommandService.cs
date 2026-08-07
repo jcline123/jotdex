@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using Jotdex.Core.Configuration;
 using Jotdex.Core.Vault;
@@ -12,6 +13,8 @@ namespace Jotdex.Infrastructure.Vault;
 public sealed class NoteSaveResult
 {
     public required bool Success { get; init; }
+    // Default camelCase turns "ETag" into "eTag"; the SPA reads "etag".
+    [JsonPropertyName("etag")]
     public required string ETag { get; init; }
     public string? Error { get; init; }
     public bool Conflict { get; init; }
@@ -83,8 +86,21 @@ public sealed class NoteCommandService : INoteCommandService
         if (existing is null)
             return Fail("Note not found");
 
-        if (!force && !string.Equals(existing.ETag, expectedETag, StringComparison.OrdinalIgnoreCase))
+        // Empty expected ETag = client has no baseline (first save, older client) — skip the check.
+        if (!force && !string.IsNullOrEmpty(expectedETag) &&
+            !string.Equals(existing.ETag, expectedETag, StringComparison.OrdinalIgnoreCase))
         {
+            // TipTap/editor may resubmit with a stale ETag but identical document — not a real conflict.
+            if (SameDocument(existing.Markdown, markdown))
+            {
+                return new NoteSaveResult
+                {
+                    Success = true,
+                    ETag = existing.ETag,
+                    Note = existing
+                };
+            }
+
             return new NoteSaveResult
             {
                 Success = false,
@@ -96,7 +112,7 @@ public sealed class NoteCommandService : INoteCommandService
         }
 
         // Open→close / identical buffer: do not rewrite the file or snapshot.
-        if (string.Equals(existing.Markdown, markdown, StringComparison.Ordinal))
+        if (SameDocument(existing.Markdown, markdown))
         {
             return new NoteSaveResult
             {
@@ -509,6 +525,15 @@ public sealed class NoteCommandService : INoteCommandService
         ETag = "",
         Error = error
     };
+
+    private static bool SameDocument(string a, string b) =>
+        string.Equals(NormalizeDoc(a), NormalizeDoc(b), StringComparison.Ordinal);
+
+    private static string NormalizeDoc(string content) =>
+        content
+            .Replace("\r\n", "\n", StringComparison.Ordinal)
+            .Replace("\r", "\n", StringComparison.Ordinal)
+            .TrimEnd();
 
     private static string Hash(string content) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(content))).ToLowerInvariant();

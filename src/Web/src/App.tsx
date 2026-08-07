@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import DOMPurify from 'dompurify'
 import './App.css'
 import { NoteEditor } from './NoteEditor'
-import { joinFrontMatter, splitFrontMatter } from './frontMatter'
+import { joinFrontMatter, sameMarkdown, splitFrontMatter } from './frontMatter'
 import { looksUnsafeForVisual } from './unsafeMarkdown'
 import { FirstRunWizard, LoginScreen } from './AuthScreens'
 
@@ -125,7 +125,9 @@ function App() {
   const frontMatterRef = useRef('')
   const baselineRef = useRef('')
   const savingRef = useRef(false)
-  const suppressAutosaveUntil = useRef(0)
+  const saveStatusRef = useRef<'saved' | 'editing' | 'saving' | 'conflict' | 'error'>('saved')
+  const [editorEpoch, setEditorEpoch] = useState(0)
+  saveStatusRef.current = saveStatus
 
   const [query, setQuery] = useState('')
   const [hits, setHits] = useState<SearchHit[]>([])
@@ -218,8 +220,9 @@ function App() {
         etagRef.current = n.etag
         draftRef.current = split.body
         frontMatterRef.current = split.frontMatter
-        baselineRef.current = n.markdown
-        suppressAutosaveUntil.current = Date.now() + 1500
+        // Baseline must equal what the autosave effect computes (join of split parts),
+        // so opening a note never looks like an unsaved edit.
+        baselineRef.current = joinFrontMatter(split.frontMatter, split.body)
         const unsafe = looksUnsafeForVisual(split.body)
         if (unsafe.unsafe) {
           setShowSource(true)
@@ -229,6 +232,7 @@ function App() {
           setSourceForced(null)
         }
         setSaveStatus('saved')
+        setEditorEpoch((e) => e + 1)
         setSearchOpen(false)
         setConflictDisk(null)
         setError(null)
@@ -258,39 +262,69 @@ function App() {
   const saveNote = useCallback(
     async (bodyMarkdown: string, currentEtag: string, force = false, retry = 0) => {
       if (!selectedId) return
-      if (savingRef.current && !force) return
+      if (savingRef.current && !force) {
+        // A save is in flight — re-check once it should be done, don't stack saves
+        if (saveTimer.current) window.clearTimeout(saveTimer.current)
+        saveTimer.current = window.setTimeout(() => {
+          const pending = joinFrontMatter(frontMatterRef.current, draftRef.current)
+          if (sameMarkdown(pending, baselineRef.current)) {
+            baselineRef.current = pending
+            setSaveStatus('saved')
+            return
+          }
+          void saveNote(draftRef.current, etagRef.current, false, 0)
+        }, 800)
+        return
+      }
       savingRef.current = true
       setSaveStatus('saving')
+      // Always use the latest known ETag — callers may pass a stale value
+      const etagToSend = etagRef.current || currentEtag
       const markdown = joinFrontMatter(frontMatterRef.current, bodyMarkdown)
       try {
         const res = await fetch(`/api/notes/${selectedId}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ markdown, etag: currentEtag, force }),
+          body: JSON.stringify({ markdown, etag: etagToSend, force }),
         })
         const data = await res.json()
         if (res.status === 409 || data.conflict) {
-          const diskMarkdown = data.note?.markdown as string | undefined
+          const diskMarkdown = (data.note?.markdown as string | undefined) ?? ''
           const diskEtag = (data.etag as string) || data.note?.etag
 
-          // Same bytes already on disk (won a race) — adopt quietly
-          if (diskMarkdown === markdown || diskMarkdown === baselineRef.current) {
+          // Same document (exact or cosmetic TipTap differences) — adopt quietly
+          if (
+            sameMarkdown(diskMarkdown, markdown) ||
+            sameMarkdown(diskMarkdown, baselineRef.current)
+          ) {
             if (diskEtag) {
               setEtag(diskEtag)
               etagRef.current = diskEtag
             }
-            if (data.note) setNote({ ...data.note, markdown: diskMarkdown ?? markdown })
-            baselineRef.current = diskMarkdown ?? markdown
+            baselineRef.current = diskMarkdown || markdown
+            if (data.note) setNote({ ...data.note, markdown: diskMarkdown || markdown })
             setSaveStatus('saved')
             setConflictDisk(null)
             setError(null)
+
+            // If the editor has moved on, save again with the fresh ETag — but only
+            // if we actually got one, and never more than a few times (no hot loops).
+            const latest = joinFrontMatter(frontMatterRef.current, draftRef.current)
+            if (!sameMarkdown(latest, baselineRef.current) && diskEtag && retry < 3) {
+              savingRef.current = false
+              return await saveNote(draftRef.current, diskEtag, false, retry + 1)
+            }
             return
           }
 
-          // Overlapping autosave with stale ETag: retry once with fresh ETag
-          if (!force && retry < 1 && diskEtag) {
+          // Stale ETag from overlapping autosave — retry with disk ETag (last-write-wins)
+          if (!force && retry < 3 && diskEtag) {
+            if (diskEtag) {
+              setEtag(diskEtag)
+              etagRef.current = diskEtag
+            }
             savingRef.current = false
-            return await saveNote(bodyMarkdown, diskEtag, false, retry + 1)
+            return await saveNote(draftRef.current, diskEtag, false, retry + 1)
           }
 
           setSaveStatus('conflict')
@@ -309,12 +343,17 @@ function App() {
         baselineRef.current = markdown
         if (data.note) {
           setNote({ ...data.note, markdown })
-          // Keep editor draft as what we saved (TipTap form); don't reset to server
-          // re-parse which can fight the editor serialization.
         }
         setSaveStatus('saved')
         setConflictDisk(null)
         setError(null)
+
+        // If the user typed something meaningfully different while we saved,
+        // let the normal debounce pick it up — do not chain rapid saves here.
+        const latest = joinFrontMatter(frontMatterRef.current, draftRef.current)
+        if (sameMarkdown(latest, markdown) && latest !== markdown) {
+          baselineRef.current = latest
+        }
       } finally {
         savingRef.current = false
       }
@@ -325,32 +364,42 @@ function App() {
   useEffect(() => {
     draftRef.current = draft
     frontMatterRef.current = frontMatter
-    etagRef.current = etag
-  }, [draft, frontMatter, etag])
+    // Do not sync etag → etagRef here. A draft keystroke can re-run this with stale
+    // etag state and wipe the ETag from a save that just finished (false conflicts).
+  }, [draft, frontMatter])
 
   useEffect(() => {
     if (!note) return
-    if (saveStatus === 'conflict') return
+    if (saveStatusRef.current === 'conflict') return
+
     const full = joinFrontMatter(frontMatter, draft)
 
-    // After open / reload: absorb TipTap re-serialization without writing
-    if (Date.now() < suppressAutosaveUntil.current) {
+    // Identical (or cosmetically identical) to what's on disk — nothing to save.
+    // Adopt the editor's exact bytes as baseline so future compares are cheap.
+    if (sameMarkdown(full, baselineRef.current)) {
       baselineRef.current = full
+      if (saveStatusRef.current === 'editing') setSaveStatus('saved')
       return
     }
 
-    if (full === baselineRef.current) return
-    if (savingRef.current) return
-
-    setSaveStatus('editing')
+    // Real edit: single debounced save. While typing, the timer keeps resetting,
+    // so the chip stays on "editing" and one save fires after the pause.
+    if (saveStatusRef.current !== 'saving') setSaveStatus('editing')
     if (saveTimer.current) window.clearTimeout(saveTimer.current)
     saveTimer.current = window.setTimeout(() => {
+      if (saveStatusRef.current === 'conflict') return
+      const pending = joinFrontMatter(frontMatterRef.current, draftRef.current)
+      if (sameMarkdown(pending, baselineRef.current)) {
+        baselineRef.current = pending
+        setSaveStatus('saved')
+        return
+      }
       void saveNote(draftRef.current, etagRef.current)
-    }, 1200)
+    }, 1000)
     return () => {
       if (saveTimer.current) window.clearTimeout(saveTimer.current)
     }
-  }, [draft, note, frontMatter, saveNote, saveStatus])
+  }, [draft, note, frontMatter, saveNote])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -710,8 +759,8 @@ function App() {
     etagRef.current = conflictDisk.etag
     draftRef.current = split.body
     frontMatterRef.current = split.frontMatter
-    baselineRef.current = conflictDisk.markdown
-    suppressAutosaveUntil.current = Date.now() + 1500
+    baselineRef.current = joinFrontMatter(split.frontMatter, split.body)
+    setEditorEpoch((e) => e + 1)
     setSaveStatus('saved')
     setConflictDisk(null)
     setError(null)
@@ -742,12 +791,11 @@ function App() {
       setDraft(split.body)
       draftRef.current = split.body
       frontMatterRef.current = split.frontMatter
-      baselineRef.current = data.note.markdown
+      baselineRef.current = joinFrontMatter(split.frontMatter, split.body)
       if (data.etag) {
         setEtag(data.etag)
         etagRef.current = data.etag
       }
-      suppressAutosaveUntil.current = Date.now() + 1500
     }
     setLocalizeStatus(`Localized ${data.localized} image(s)`)
     window.setTimeout(() => setLocalizeStatus(null), 2500)
@@ -1304,6 +1352,7 @@ function App() {
                   noteId={note.id}
                   noteStem={note.relativePath.replace(/^.*\//, '').replace(/\.md$/i, '')}
                   markdown={draft}
+                  contentEpoch={editorEpoch}
                   attachments={note.attachments}
                   onChange={setDraft}
                   onError={(msg) => setError(msg)}
@@ -1315,8 +1364,8 @@ function App() {
                       setDraft(split.body)
                       draftRef.current = split.body
                       frontMatterRef.current = split.frontMatter
-                      baselineRef.current = n.markdown
-                      suppressAutosaveUntil.current = Date.now() + 1500
+                      baselineRef.current = joinFrontMatter(split.frontMatter, split.body)
+                      setEditorEpoch((e) => e + 1)
                     }
                     if (n.etag) {
                       setEtag(n.etag)
