@@ -7,6 +7,15 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 
 ---
 
+## 2026-08-07 — Fewer false “Dense raw HTML” source opens
+
+**OneNote-style notes opened in Source for no good reason**
+- Example: `3C Camera` is mostly a bullet list wrapped in harmless `<span style=…>` from the OneNote export.
+- The old rule treated any 12+ HTML tags as unsafe. TipTap already preserves spans/lists/tables.
+- Now only risky tags (div/font/media/etc.) force Source; span/formatting noise stays Visual.
+
+---
+
 ## 2026-08-07 — Dual HTTP + self-signed HTTPS (`69d988c`)
 
 **Wanted https:// without making a certificate**
