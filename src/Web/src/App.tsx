@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import DOMPurify from 'dompurify'
 import './App.css'
@@ -15,6 +15,7 @@ import {
   NETWORK_SITES_END,
   type NoteTemplate,
 } from './templates'
+import { copyJotdexAiPrompt } from './jotdexAiPrompt'
 
 function countRemoteImages(markdown: string): number {
   const re = /!\[[^\]]*\]\((https?:\/\/[^)\s]+)\)/gi
@@ -186,8 +187,10 @@ function App() {
   const baselineRef = useRef('')
   const savingRef = useRef(false)
   const saveStatusRef = useRef<'saved' | 'editing' | 'saving' | 'conflict' | 'error'>('saved')
+  const selectedIdRef = useRef<string | null>(null)
   const [editorEpoch, setEditorEpoch] = useState(0)
   saveStatusRef.current = saveStatus
+  selectedIdRef.current = selectedId
 
   const [query, setQuery] = useState('')
   const [hits, setHits] = useState<SearchHit[]>([])
@@ -217,6 +220,21 @@ function App() {
   const [templateMenuPos, setTemplateMenuPos] = useState<{ top: number; left: number } | null>(null)
   const templateBtnRef = useRef<HTMLButtonElement>(null)
   const [mobilePane, setMobilePane] = useState<'folders' | 'notes' | 'editor'>('notes')
+  const popoutNoteId = useMemo(() => {
+    try {
+      return new URLSearchParams(window.location.search).get('popout')
+    } catch {
+      return null
+    }
+  }, [])
+  const [popoutChromeAutoHide, setPopoutChromeAutoHide] = useState(() => {
+    try {
+      return localStorage.getItem('jotdex.popoutChromeAutoHide') !== '0'
+    } catch {
+      return true
+    }
+  })
+  const [aiPromptHint, setAiPromptHint] = useState<string | null>(null)
 
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [vaultPathInput, setVaultPathInput] = useState('')
@@ -516,6 +534,44 @@ function App() {
     }
   }, [draft, note, frontMatter, saveNote])
 
+  // Flush pending edits when the window/tab closes or hides (pop-out and main).
+  // keepalive lets the PUT finish after the window is gone (Chrome + Safari).
+  useEffect(() => {
+    const flushPendingSave = () => {
+      if (saveTimer.current) {
+        window.clearTimeout(saveTimer.current)
+        saveTimer.current = null
+      }
+      const id = selectedIdRef.current
+      if (!id) return
+      if (saveStatusRef.current === 'conflict') return
+      const pending = joinFrontMatter(frontMatterRef.current, draftRef.current)
+      if (sameMarkdown(pending, baselineRef.current)) return
+      const etagToSend = etagRef.current
+      try {
+        void fetch(`/api/notes/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ markdown: pending, etag: etagToSend, force: false }),
+          credentials: 'same-origin',
+          keepalive: true,
+        })
+        baselineRef.current = pending
+      } catch {
+        /* best-effort on unload */
+      }
+    }
+    const onHide = () => {
+      if (document.visibilityState === 'hidden') flushPendingSave()
+    }
+    window.addEventListener('pagehide', flushPendingSave)
+    document.addEventListener('visibilitychange', onHide)
+    return () => {
+      window.removeEventListener('pagehide', flushPendingSave)
+      document.removeEventListener('visibilitychange', onHide)
+    }
+  }, [])
+
   useEffect(() => {
     if (!templateMenu) return
     const place = () => {
@@ -553,6 +609,14 @@ function App() {
     setBacklinksOpen(false)
     setBacklinks([])
   }, [selectedId])
+
+  useEffect(() => {
+    if (!popoutNoteId) return
+    setSelectedId(popoutNoteId)
+    document.documentElement.classList.add('popout-mode')
+    document.title = 'Jotdex note'
+    return () => document.documentElement.classList.remove('popout-mode')
+  }, [popoutNoteId])
 
   useEffect(() => {
     if (!selectedId) return
@@ -1234,6 +1298,44 @@ function App() {
     window.setTimeout(() => setLocalizeStatus(null), 2500)
   }
 
+  const openPopout = useCallback((noteId: string) => {
+    // Flush any pending debounce before opening another editor on the same note.
+    if (saveTimer.current) {
+      window.clearTimeout(saveTimer.current)
+      saveTimer.current = null
+    }
+    const pending = joinFrontMatter(frontMatterRef.current, draftRef.current)
+    if (selectedIdRef.current === noteId && !sameMarkdown(pending, baselineRef.current)) {
+      void saveNote(draftRef.current, etagRef.current)
+    }
+
+    const url = new URL(window.location.href)
+    url.searchParams.set('popout', noteId)
+    url.hash = ''
+    // popup=yes works in Chromium; Safari may ignore chrome flags but still opens a window.
+    const features = 'popup=yes,width=440,height=620,resizable=yes,scrollbars=yes'
+    const win = window.open(url.toString(), `jotdex-note-${noteId}`, features)
+    if (!win) {
+      setError('Pop-out blocked — allow pop-ups for this site in Chrome/Safari, then try again.')
+    } else {
+      try {
+        win.focus()
+      } catch {
+        /* ignore */
+      }
+    }
+  }, [saveNote])
+
+  const copyAiPrompt = useCallback(async () => {
+    try {
+      await copyJotdexAiPrompt()
+      setAiPromptHint('AI note prompt copied — paste it into ChatGPT, Claude, etc.')
+      window.setTimeout(() => setAiPromptHint(null), 3500)
+    } catch {
+      setError('Could not copy to clipboard')
+    }
+  }, [])
+
   if (auth && auth.setupRequired) {
     return (
       <FirstRunWizard
@@ -1320,6 +1422,132 @@ function App() {
       </>
     )
   }
+
+  if (popoutNoteId) {
+    return (
+      <div className={`app popout-app${popoutChromeAutoHide ? ' chrome-autohide' : ''}`}>
+        {error && saveStatus !== 'conflict' && <p className="err">{error}</p>}
+        {aiPromptHint && <p className="upload-status">{aiPromptHint}</p>}
+        {saveStatus === 'conflict' && (
+          <div className="conflict-banner">
+            <p>{error ?? 'This note changed on disk.'}</p>
+            <div className="modal-actions">
+              <button type="button" className="primary" onClick={reloadFromDisk}>
+                Reload from disk
+              </button>
+              <button type="button" className="ghost" onClick={overwriteDisk}>
+                Overwrite disk
+              </button>
+              <button type="button" className="ghost" onClick={() => { setSaveStatus('editing'); setError(null) }}>
+                Keep editing
+              </button>
+            </div>
+          </div>
+        )}
+        {!note && <p className="muted">Loading note…</p>}
+        {note && (
+          <div className="popout-body">
+            <header className="popout-bar">
+              <div className="popout-bar-main">
+                <p className="brand">Jotdex</p>
+                <h1 title={note.relativePath}>{note.title}</h1>
+              </div>
+              <div className="popout-bar-actions">
+                <span className={`save-chip ${saveStatus}`} title={saveStatus}>
+                  {saveStatus === 'saved' ? 'ok' : saveStatus === 'editing' ? '…' : saveStatus === 'saving' ? '…' : saveStatus}
+                </span>
+                <button
+                  type="button"
+                  className="ghost"
+                  title={showSource ? 'Switch to visual editor' : 'Edit Markdown source'}
+                  onClick={() => {
+                    setShowSource((s) => {
+                      if (s) setSourceForced(null)
+                      return !s
+                    })
+                  }}
+                >
+                  {showSource ? 'Visual' : 'Source'}
+                </button>
+                <button
+                  type="button"
+                  className={`ghost${popoutChromeAutoHide ? ' on' : ''}`}
+                  title="Auto-hide formatting tools until hover, or keep them pinned"
+                  onClick={() => {
+                    setPopoutChromeAutoHide((v) => {
+                      const next = !v
+                      try {
+                        localStorage.setItem('jotdex.popoutChromeAutoHide', next ? '1' : '0')
+                      } catch {
+                        /* ignore */
+                      }
+                      return next
+                    })
+                  }}
+                >
+                  {popoutChromeAutoHide ? 'Auto' : 'Pin'}
+                </button>
+              </div>
+            </header>
+            {sourceForced && showSource && (
+              <div className="source-banner">
+                <p>{sourceForced}</p>
+                <button type="button" className="ghost" onClick={() => { setSourceForced(null); setShowSource(false) }}>
+                  Try visual anyway
+                </button>
+              </div>
+            )}
+            {showSource ? (
+              <textarea className="source-editor" value={draft} onChange={(e) => setDraft(e.target.value)} spellCheck={false} />
+            ) : (
+              <NoteEditor
+                key={note.id}
+                noteId={note.id}
+                noteStem={note.relativePath.replace(/^.*\//, '').replace(/\.md$/i, '')}
+                noteRelativePath={note.relativePath}
+                noteCatalog={noteCatalog}
+                markdown={draft}
+                contentEpoch={editorEpoch}
+                jumpHeading={jumpHeading}
+                attachments={note.attachments}
+                onChange={setDraft}
+                onError={(msg) => setError(msg)}
+                getEtag={() => etagRef.current}
+                onNoteMeta={(n) => {
+                  if (n.markdown) {
+                    const split = splitFrontMatter(n.markdown)
+                    setFrontMatter(split.frontMatter)
+                    setDraft(split.body)
+                    draftRef.current = split.body
+                    frontMatterRef.current = split.frontMatter
+                    baselineRef.current = joinFrontMatter(split.frontMatter, split.body)
+                    setEditorEpoch((e) => e + 1)
+                  }
+                  if (n.etag) {
+                    setEtag(n.etag)
+                    etagRef.current = n.etag
+                  }
+                  if (n.attachments || n.markdown) {
+                    setNote((prev) =>
+                      prev
+                        ? {
+                            ...prev,
+                            attachments: n.attachments ?? prev.attachments,
+                            etag: n.etag ?? prev.etag,
+                            markdown: n.markdown ?? prev.markdown,
+                          }
+                        : prev,
+                    )
+                  }
+                }}
+              />
+            )}
+          </div>
+        )}
+      </div>
+    )
+  }
+
   return (
     <div className="app">
       <header className="topbar">
@@ -1422,6 +1650,14 @@ function App() {
           <button
             type="button"
             className="ghost"
+            title="Copy a prompt that teaches ChatGPT/Claude/etc. how to format Markdown for Jotdex"
+            onClick={() => void copyAiPrompt()}
+          >
+            AI prompt
+          </button>
+          <button
+            type="button"
+            className="ghost"
             onClick={() => {
               setSettingsOpen(true)
               setNetworkHint(null)
@@ -1431,9 +1667,6 @@ function App() {
             }}
           >
             Settings
-          </button>
-          <button type="button" className="ghost" onClick={() => void fetch('/api/admin/rescan', { method: 'POST' }).then(loadVault)}>
-            Rescan
           </button>
           {auth && !auth.developmentBypass && auth.authenticated && (
             <button
@@ -1451,6 +1684,8 @@ function App() {
           )}
         </div>
       </header>
+
+      {aiPromptHint && <p className="ai-prompt-toast">{aiPromptHint}</p>}
 
       {settingsOpen && (
         <div className="modal-backdrop" onClick={() => setSettingsOpen(false)} role="presentation">
@@ -1668,10 +1903,31 @@ function App() {
 
             <h2 className="settings-section">Maintenance</h2>
             <p className="lede">
-              Diagnostics, integrity scan, trash cleanup, backup ZIP, and full-vault static HTML export. To share one note,
-              open it and use Share HTML.
+              Rescan reloads the note list from disk (use after adding/editing .md files outside Jotdex). Reindex rebuilds
+              search only. Also: diagnostics, integrity, trash, backup ZIP, and full-vault static HTML export. To share one
+              note, open it and use Share HTML.
             </p>
             <div className="modal-actions">
+              <button
+                type="button"
+                className="ghost"
+                title="Reload folders and notes from the vault folder on disk"
+                onClick={() => {
+                  void (async () => {
+                    setNetworkHint('Rescanning vault…')
+                    const res = await fetch('/api/admin/rescan', { method: 'POST' })
+                    if (!res.ok) {
+                      setError('Rescan failed')
+                      setNetworkHint(null)
+                      return
+                    }
+                    await loadVault()
+                    setNetworkHint('Vault rescanned — note list refreshed from disk.')
+                  })()
+                }}
+              >
+                Rescan vault
+              </button>
               <button
                 type="button"
                 className="ghost"
@@ -1925,6 +2181,14 @@ function App() {
                     }}
                   >
                     {showSource ? 'Visual' : 'Source'}
+                  </button>
+                  <button
+                    type="button"
+                    className="ghost"
+                    onClick={() => openPopout(note.id)}
+                    title="Open this note in a small floating window for side-by-side editing"
+                  >
+                    Pop out
                   </button>
                   <button type="button" className="ghost" onClick={() => void renameNote()}>
                     Rename

@@ -7,6 +7,45 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 
 ---
 
+## 2026-08-07 — AI prompt clipboard fallback + denser pop-out chrome
+
+**AI prompt failed to copy on LAN http://; pop-out header ate note space**
+- Clipboard copy falls back when `navigator.clipboard` is blocked (non-HTTPS).
+- Pop-out header compacted; AI prompt removed from pop-out (stays on main top bar). Rule added so the AI prompt stays complete when formatting features change.
+
+---
+
+## 2026-08-07 — Pop-out auto-hide tools + Copy AI prompt
+
+**Wanted denser pop-outs and a reusable AI formatting cheat-sheet**
+- Pop-out: **Tools: auto/pinned** toggle (default auto) collapses the formatting bar until hover/focus.
+- **AI prompt** (top bar + pop-out) copies a clipboard prompt teaching ChatGPT/Claude/etc. Jotdex Markdown (code boxes, callouts, tables, tasks, links).
+
+---
+
+## 2026-08-07 — Fix pop-out window scrolling
+
+**Pop-out note window could not scroll**
+- Constrained the pop-out layout so the note body scrolls under a fixed toolbar (overflow was trapped by `overflow: hidden` on the page).
+
+---
+
+## 2026-08-07 — Sticky formatting toolbar while scrolling
+
+**Had to scroll back to the top of a long note to reach Bold/H1/etc.**
+- Formatting toolbar (and paste modes) stay sticky at the top of the note pane while scrolling in the main window.
+
+---
+
+## 2026-08-07 — Note toolbar wrap, Pop out, Rescan in Settings
+
+**MacBook note actions were clipped; Rescan felt out of place on the main bar**
+- Note action buttons wrap with the pane width (container queries) so Share HTML stays reachable.
+- Added **Pop out** for a compact editable floating window (Chrome/Safari browser popup). Closing flushes pending autosave via `keepalive` PUT.
+- Moved **Rescan vault** under Settings → Maintenance (reloads folders/notes from disk).
+
+---
+
 ## 2026-08-07 — Safari search result clicks (`47f99e2`)
 
 **On Mac Safari, search showed hits but clicking a result did nothing (localhost/Chrome fine)**

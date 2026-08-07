@@ -741,6 +741,8 @@ export function NoteEditor({
 
   return (
     <div className="rich-editor">
+      <div className="editor-chrome">
+      <div className="editor-chrome-inner">
       <div className="editor-toolbar" role="toolbar" aria-label="Formatting">
         <button
           type="button"
@@ -984,6 +986,8 @@ export function NoteEditor({
       )}
 
       {uploadStatus && <div className="upload-status">{uploadStatus}</div>}
+      </div>
+      </div>
       <div className="editor-stage">
         {wikiSuggest?.active && (
           <div className="wiki-suggest" role="listbox" aria-label="Link to note">

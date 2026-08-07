@@ -35,6 +35,7 @@
 - Path containment: reject `..`, junctions, ADS escapes.
 - Editing requires **autosave** + **per-note history/rollback**.
 - HTML allowed only as sanitized sidecars in `.assets` (Markdown-plus-assets).
+- When changing editor/Markdown formatting features, update [`src/Web/src/jotdexAiPrompt.ts`](src/Web/src/jotdexAiPrompt.ts) in the same change (Copy AI prompt must list all supported formats).
 
 ## Agent protocol
 

@@ -1,0 +1,15 @@
+---
+description: Keep the Copy AI prompt in sync with all Jotdex Markdown formatting features
+alwaysApply: true
+---
+
+# AI format prompt must stay complete
+
+Whenever you add, remove, or change a Markdown / editor formatting feature that users can put in a note (toolbar controls, TipTap extensions, callouts, code boxes, tasks, tables, wikilinks, HTML spans for color/size, paste behaviors that affect stored Markdown, etc.):
+
+1. Update [`src/Web/src/jotdexAiPrompt.ts`](src/Web/src/jotdexAiPrompt.ts) in the **same change**.
+2. The prompt must document **every** formatting feature Jotdex supports for pasted/authored notes — not a subset.
+3. Prefer describing the **on-disk Markdown/HTML** form (what survives save), not only toolbar button names.
+4. Mention the update briefly in `docs/changelog.md` when the prompt content changes for a real feature add.
+
+Do not ship a new formatting option without refreshing this prompt.

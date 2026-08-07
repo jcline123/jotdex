@@ -83,6 +83,15 @@ button {
   color: var(--muted);
 }
 
+.ai-prompt-toast {
+  margin: 0;
+  padding: 0.45rem 1.1rem;
+  font-size: 0.85rem;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-bottom: 1px solid var(--border);
+}
+
 .search-wrap {
   position: relative;
   max-width: 48rem;
@@ -214,6 +223,8 @@ button {
 .pane.right {
   border-right: none;
   padding: 1.25rem 1.5rem 2rem;
+  container-type: inline-size;
+  container-name: note-pane;
 }
 
 .pane.left,
@@ -330,21 +341,48 @@ button {
 .note-head {
   display: flex;
   justify-content: space-between;
-  gap: 1rem;
+  gap: 0.75rem 1rem;
   align-items: flex-start;
   margin-bottom: 0.85rem;
+  flex-wrap: wrap;
+}
+
+.note-head-main {
+  min-width: min(100%, 12rem);
+  flex: 1 1 12rem;
 }
 
 .note-head h1 {
   margin: 0;
-  font-size: 1.65rem;
+  font-size: clamp(1.15rem, 2.2vw, 1.65rem);
   line-height: 1.2;
+  overflow-wrap: anywhere;
 }
 
 .actions {
   display: flex;
-  gap: 0.4rem;
+  flex-wrap: wrap;
+  gap: 0.35rem;
   align-items: center;
+  justify-content: flex-end;
+  flex: 1 1 14rem;
+  max-width: 100%;
+}
+
+.actions > button,
+.actions > .save-chip {
+  flex: 0 1 auto;
+}
+
+@container note-pane (max-width: 34rem) {
+  .note-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .actions {
+    justify-content: flex-start;
+  }
 }
 
 .tags {
@@ -954,6 +992,24 @@ button {
   flex: 1;
 }
 
+.editor-chrome {
+  position: sticky;
+  top: 0;
+  z-index: 8;
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  margin: 0 -0.15rem;
+  padding: 0.15rem 0.15rem 0.5rem;
+  background: linear-gradient(180deg, var(--bg) 70%, color-mix(in srgb, var(--bg) 88%, transparent));
+}
+
+.editor-chrome-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
 .editor-toolbar {
   display: flex;
   flex-wrap: wrap;
@@ -1396,6 +1452,12 @@ button {
     padding: 0.85rem 0.85rem 1.25rem;
   }
 
+  .editor-chrome {
+    top: 0;
+    /* Sit below the sticky app topbar when the pane scrolls on small screens */
+    background: linear-gradient(180deg, var(--bg) 75%, color-mix(in srgb, var(--bg) 90%, transparent));
+  }
+
   .mobile-pane-title {
     display: block;
     margin: 0;
@@ -1478,16 +1540,16 @@ button {
 
   .note-head .actions {
     display: flex;
-    flex-wrap: nowrap;
-    overflow-x: auto;
+    flex-wrap: wrap;
+    overflow: visible;
     gap: 0.35rem;
-    padding-bottom: 0.25rem;
-    -webkit-overflow-scrolling: touch;
+    padding-bottom: 0;
+    justify-content: flex-start;
   }
 
   .note-head .actions > button,
   .note-head .actions > .save-chip {
-    flex: 0 0 auto;
+    flex: 0 1 auto;
     white-space: nowrap;
     min-height: 2.4rem;
     padding: 0.4rem 0.65rem;
@@ -1535,4 +1597,175 @@ button {
     flex-direction: column;
     align-items: stretch;
   }
+}
+
+/* Compact floating note window (?popout=id) */
+html.popout-mode,
+html.popout-mode body,
+html.popout-mode #root {
+  height: 100%;
+  max-height: 100dvh;
+  overflow: hidden;
+  margin: 0;
+}
+
+.popout-app {
+  height: 100dvh;
+  max-height: 100dvh;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0.4rem 0.5rem 0.5rem;
+  box-sizing: border-box;
+  background:
+    radial-gradient(ellipse 120% 80% at 10% -10%, rgba(90, 140, 180, 0.18), transparent 50%),
+    var(--bg);
+}
+
+.popout-bar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem 0.5rem;
+  flex-wrap: nowrap;
+  margin-bottom: 0.35rem;
+  padding-bottom: 0.3rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.popout-bar-main {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.popout-bar-main .brand {
+  display: none;
+}
+
+.popout-bar-main h1 {
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 600;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.popout-bar-actions {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 0.2rem;
+  align-items: center;
+  flex: 0 0 auto;
+}
+
+.popout-bar-actions .ghost {
+  padding: 0.12rem 0.4rem;
+  font-size: 0.7rem;
+  line-height: 1.2;
+  border-radius: 5px;
+  min-height: 0;
+}
+
+.popout-bar-actions .save-chip {
+  font-size: 0.58rem;
+  padding: 0.1rem 0.28rem;
+  letter-spacing: 0.04em;
+}
+
+.popout-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.popout-app .rich-editor {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Keep formatting chrome fixed; scroll the note body underneath */
+.popout-app .editor-chrome {
+  position: relative;
+  top: auto;
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 0 0 0.45rem;
+  background: transparent;
+}
+
+.popout-app .editor-stage {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.popout-app .tiptap-editor {
+  min-height: unset;
+  height: auto;
+  overflow: visible;
+}
+
+.popout-app .source-editor {
+  flex: 1 1 auto;
+  min-height: 0;
+  height: auto;
+  resize: none;
+  overflow: auto;
+}
+
+/* Auto-hide formatting tools in pop-out until hover / focus */
+.popout-app.chrome-autohide .editor-chrome {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-elevated);
+  padding: 0.2rem 0.35rem 0.25rem;
+  margin: 0 0 0.45rem;
+}
+
+.popout-app.chrome-autohide .editor-chrome::before {
+  content: 'Formatting — hover to expand';
+  display: block;
+  font-size: 0.72rem;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+  padding: 0.2rem 0.25rem;
+}
+
+.popout-app.chrome-autohide .editor-chrome-inner {
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
+  transition: max-height 0.2s ease, opacity 0.15s ease;
+}
+
+.popout-app.chrome-autohide .editor-chrome:hover::before,
+.popout-app.chrome-autohide .editor-chrome:focus-within::before {
+  display: none;
+}
+
+.popout-app.chrome-autohide .editor-chrome:hover .editor-chrome-inner,
+.popout-app.chrome-autohide .editor-chrome:focus-within .editor-chrome-inner {
+  max-height: 18rem;
+  opacity: 1;
+  overflow: auto;
+  pointer-events: auto;
+  padding-bottom: 0.2rem;
+}
+
+.popout-app.chrome-autohide .editor-chrome:hover .editor-toolbar,
+.popout-app.chrome-autohide .editor-chrome:focus-within .editor-toolbar {
+  border-color: transparent;
+  background: transparent;
+  padding: 0.25rem;
 }
