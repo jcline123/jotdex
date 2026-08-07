@@ -7,7 +7,7 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 
 ---
 
-## 2026-08-07 — Guided Windows setup (`Setup.cmd`)
+## 2026-08-07 — Guided Windows setup (`4cfcd19`)
 
 **Manual README steps were solid but long for first-time users**
 - Added `Setup.cmd` + `scripts\Setup-Jotdex.ps1`: check/install Git, .NET 10 SDK, Node via winget (asks first), create vault, build portable app, optional start + Startup shortcut.
