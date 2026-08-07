@@ -7,7 +7,7 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 
 ---
 
-## 2026-08-07 — Dual HTTP + self-signed HTTPS
+## 2026-08-07 — Dual HTTP + self-signed HTTPS (`69d988c`)
 
 **Wanted https:// without making a certificate**
 - Settings → Network: **Also listen on HTTPS (self-signed)**. HTTP stays on the main port; HTTPS uses port+1 (configurable).
