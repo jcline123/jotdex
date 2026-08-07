@@ -7,7 +7,7 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 
 ---
 
-## 2026-08-07 — AI prompt clipboard fallback + denser pop-out chrome
+## 2026-08-07 — AI prompt clipboard fallback + denser pop-out chrome (`f4931c9`)
 
 **AI prompt failed to copy on LAN http://; pop-out header ate note space**
 - Clipboard copy falls back when `navigator.clipboard` is blocked (non-HTTPS).
