@@ -7,6 +7,14 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 
 ---
 
+## 2026-08-07 — Mobile navigation (desktop unchanged)
+
+**Phone layout was unusable**
+- Narrow screens now show one pane at a time with a bottom **Folders / Notes / Note** bar, a ← Notes back control, and larger touch targets.
+- Toolbars/actions scroll horizontally instead of crushing the layout. Desktop three-column UI is unchanged above 900px.
+
+---
+
 ## 2026-08-07 — IT note templates (network multi-site + more) (`228aaea`)
 
 **Needed a real network doc template for client replacements**

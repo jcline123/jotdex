@@ -216,6 +216,7 @@ function App() {
   const [templateMenu, setTemplateMenu] = useState(false)
   const [templateMenuPos, setTemplateMenuPos] = useState<{ top: number; left: number } | null>(null)
   const templateBtnRef = useRef<HTMLButtonElement>(null)
+  const [mobilePane, setMobilePane] = useState<'folders' | 'notes' | 'editor'>('notes')
 
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [vaultPathInput, setVaultPathInput] = useState('')
@@ -551,6 +552,12 @@ function App() {
     setOutlineOpen(false)
     setBacklinksOpen(false)
     setBacklinks([])
+  }, [selectedId])
+
+  useEffect(() => {
+    if (!selectedId) return
+    if (typeof window === 'undefined') return
+    if (window.matchMedia('(max-width: 900px)').matches) setMobilePane('editor')
   }, [selectedId])
 
   useEffect(() => {
@@ -1765,8 +1772,9 @@ function App() {
         </div>
       )}
 
-      <div className="body">
+      <div className={`body mobile-${mobilePane}`}>
         <aside className="pane left">
+          <div className="mobile-pane-title">Folders</div>
           <div className="pane-tools">
             <button type="button" className="ghost" onClick={() => void createFolder()}>
               New folder
@@ -1791,6 +1799,7 @@ function App() {
               onSelect={(p) => {
                 setFolder(p)
                 setSelectedId(null)
+                setMobilePane('notes')
               }}
             />
           )}
@@ -1843,7 +1852,14 @@ function App() {
           <ul className="note-list">
             {notes.map((n) => (
               <li key={n.id}>
-                <button type="button" className={selectedId === n.id ? 'active' : ''} onClick={() => setSelectedId(n.id)}>
+                <button
+                  type="button"
+                  className={selectedId === n.id ? 'active' : ''}
+                  onClick={() => {
+                    setSelectedId(n.id)
+                    setMobilePane('editor')
+                  }}
+                >
                   <span className="note-title">{n.title}</span>
                   <span className="note-path">{n.folderPath || '/'}</span>
                 </button>
@@ -1874,7 +1890,14 @@ function App() {
           {note && (
             <>
               <div className="note-head">
-                <div>
+                <div className="note-head-main">
+                  <button
+                    type="button"
+                    className="ghost mobile-only mobile-back"
+                    onClick={() => setMobilePane('notes')}
+                  >
+                    ← Notes
+                  </button>
                   <h1>{note.title}</h1>
                   <p className="note-path">{note.relativePath}</p>
                 </div>
@@ -2086,6 +2109,31 @@ function App() {
           )}
         </section>
       </div>
+
+      <nav className="mobile-tabbar" aria-label="Mobile navigation">
+        <button
+          type="button"
+          className={mobilePane === 'folders' ? 'on' : ''}
+          onClick={() => setMobilePane('folders')}
+        >
+          Folders
+        </button>
+        <button
+          type="button"
+          className={mobilePane === 'notes' ? 'on' : ''}
+          onClick={() => setMobilePane('notes')}
+        >
+          Notes
+        </button>
+        <button
+          type="button"
+          className={mobilePane === 'editor' ? 'on' : ''}
+          disabled={!selectedId}
+          onClick={() => selectedId && setMobilePane('editor')}
+        >
+          Note
+        </button>
+      </nav>
 
       {quickOpen && (
         <div

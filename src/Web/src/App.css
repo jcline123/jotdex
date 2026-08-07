@@ -1323,19 +1323,216 @@ button {
   border: 0;
 }
 
+.mobile-only,
+.mobile-pane-title,
+.mobile-tabbar {
+  display: none;
+}
+
 @media (max-width: 900px) {
-  .topbar {
-    grid-template-columns: 1fr;
+  .app {
+    height: 100dvh;
+    min-height: 100dvh;
+    padding-bottom: calc(3.5rem + env(safe-area-inset-bottom, 0px));
   }
+
+  .topbar {
+    grid-template-columns: 1fr auto;
+    gap: 0.65rem;
+    padding: 0.65rem 0.75rem;
+    align-items: start;
+  }
+
+  .topbar-brand {
+    grid-column: 1 / -1;
+    flex-direction: row;
+    align-items: baseline;
+    gap: 0.5rem;
+  }
+
+  .search-wrap {
+    grid-column: 1 / -1;
+    max-width: none;
+    justify-self: stretch;
+  }
+
+  .topbar-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .search-input {
+    font-size: 16px; /* avoid iOS zoom on focus */
+    padding: 0.75rem 0.85rem;
+  }
+
   .body {
     grid-template-columns: 1fr;
+    min-height: 0;
+    flex: 1;
   }
-  .pane {
+
+  .body > .pane {
+    display: none;
     border-right: none;
-    border-bottom: 1px solid var(--border);
-    max-height: 30vh;
-  }
-  .pane.right {
+    border-bottom: none;
     max-height: none;
+    height: 100%;
+    min-height: 0;
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .body.mobile-folders > .pane.left,
+  .body.mobile-notes > .pane.middle,
+  .body.mobile-editor > .pane.right {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .body.mobile-editor > .pane.right {
+    display: block;
+    padding: 0.85rem 0.85rem 1.25rem;
+  }
+
+  .mobile-pane-title {
+    display: block;
+    margin: 0;
+    padding: 0.75rem 0.85rem 0.35rem;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+  }
+
+  .mobile-only {
+    display: inline-flex !important;
+  }
+
+  .mobile-back {
+    margin-bottom: 0.35rem;
+    min-height: 2.5rem;
+    padding: 0.35rem 0.55rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+  }
+
+  .mobile-tabbar {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 60;
+    gap: 0.25rem;
+    padding: 0.35rem 0.45rem calc(0.35rem + env(safe-area-inset-bottom, 0px));
+    background: var(--bg-elevated);
+    border-top: 1px solid var(--border);
+    box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.35);
+  }
+
+  .mobile-tabbar button {
+    text-align: center;
+    min-height: 2.75rem;
+    padding: 0.45rem 0.35rem;
+    border-radius: 10px;
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: var(--muted);
+  }
+
+  .mobile-tabbar button.on {
+    background: var(--accent-soft);
+    color: var(--text);
+  }
+
+  .mobile-tabbar button:disabled {
+    opacity: 0.35;
+  }
+
+  .pane.middle .pane-head {
+    flex-wrap: wrap;
+  }
+
+  .pane-tools {
+    flex-wrap: wrap;
+  }
+
+  .tree-item,
+  .note-list button {
+    min-height: 2.75rem;
+    padding: 0.65rem 0.85rem;
+  }
+
+  .note-head {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.65rem;
+  }
+
+  .note-head h1 {
+    font-size: 1.25rem;
+  }
+
+  .note-head .actions {
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    gap: 0.35rem;
+    padding-bottom: 0.25rem;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .note-head .actions > button,
+  .note-head .actions > .save-chip {
+    flex: 0 0 auto;
+    white-space: nowrap;
+    min-height: 2.4rem;
+    padding: 0.4rem 0.65rem;
+  }
+
+  .editor-toolbar,
+  .paste-modes {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    max-width: 100%;
+  }
+
+  .editor-toolbar button,
+  .paste-modes button,
+  .toolbar-select select {
+    flex: 0 0 auto;
+    min-height: 2.4rem;
+  }
+
+  .tiptap-editor,
+  .source-editor {
+    font-size: 1rem;
+    min-height: 50vh;
+  }
+
+  .modal {
+    width: calc(100vw - 1rem);
+    max-width: none;
+    max-height: calc(100dvh - 1rem);
+    margin: 0.5rem;
+    border-radius: 12px;
+  }
+
+  .modal-backdrop {
+    align-items: flex-start;
+    padding: 0;
+  }
+
+  .quick-open {
+    width: calc(100vw - 1rem);
+  }
+
+  .history-panel li {
+    flex-direction: column;
+    align-items: stretch;
   }
 }
