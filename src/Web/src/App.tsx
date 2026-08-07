@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import DOMPurify from 'dompurify'
 import './App.css'
 import { NoteEditor, type NoteCatalogItem } from './NoteEditor'
@@ -6,7 +7,14 @@ import { joinFrontMatter, sameMarkdown, splitFrontMatter } from './frontMatter'
 import { looksUnsafeForVisual } from './unsafeMarkdown'
 import { FirstRunWizard, LoginScreen } from './AuthScreens'
 import { extractOutline } from './outline'
-import { NOTE_TEMPLATES, type NoteTemplate } from './templates'
+import {
+  NOTE_TEMPLATES,
+  isNetworkDoc,
+  networkSiteMarkdown,
+  nextNetworkSiteNumber,
+  NETWORK_SITES_END,
+  type NoteTemplate,
+} from './templates'
 
 function countRemoteImages(markdown: string): number {
   const re = /!\[[^\]]*\]\((https?:\/\/[^)\s]+)\)/gi
@@ -206,6 +214,8 @@ function App() {
   >([])
   const [jumpHeading, setJumpHeading] = useState<{ text: string; nonce: number } | null>(null)
   const [templateMenu, setTemplateMenu] = useState(false)
+  const [templateMenuPos, setTemplateMenuPos] = useState<{ top: number; left: number } | null>(null)
+  const templateBtnRef = useRef<HTMLButtonElement>(null)
 
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [vaultPathInput, setVaultPathInput] = useState('')
@@ -506,6 +516,36 @@ function App() {
   }, [draft, note, frontMatter, saveNote])
 
   useEffect(() => {
+    if (!templateMenu) return
+    const place = () => {
+      const btn = templateBtnRef.current
+      if (!btn) return
+      const r = btn.getBoundingClientRect()
+      const menuWidth = 288
+      const pad = 8
+      let left = r.left
+      left = Math.min(left, window.innerWidth - menuWidth - pad)
+      left = Math.max(pad, left)
+      setTemplateMenuPos({ top: r.bottom + 6, left })
+    }
+    place()
+    const onPointerDown = (e: PointerEvent) => {
+      const t = e.target as Node
+      if (templateBtnRef.current?.contains(t)) return
+      if ((e.target as HTMLElement)?.closest?.('.template-menu')) return
+      setTemplateMenu(false)
+    }
+    window.addEventListener('resize', place)
+    window.addEventListener('scroll', place, true)
+    document.addEventListener('pointerdown', onPointerDown, true)
+    return () => {
+      window.removeEventListener('resize', place)
+      window.removeEventListener('scroll', place, true)
+      document.removeEventListener('pointerdown', onPointerDown, true)
+    }
+  }, [templateMenu])
+
+  useEffect(() => {
     setHistoryOpen(false)
     setHistory([])
     setOutlineOpen(false)
@@ -642,6 +682,23 @@ function App() {
     setHistoryOpen(false)
     setBacklinksOpen(false)
     setOutlineOpen((o) => !o)
+  }
+
+  function addNetworkSite() {
+    const n = nextNetworkSiteNumber(draft)
+    const label = window.prompt(`Name for site ${n}`, `Site ${n}`)
+    if (label === null) return
+    const block = networkSiteMarkdown(n, label.trim() || `Site ${n}`)
+    let next = draft
+    if (next.includes(NETWORK_SITES_END)) {
+      next = next.replace(NETWORK_SITES_END, `${block}\n${NETWORK_SITES_END}`)
+    } else {
+      next = `${next.trimEnd()}\n\n${block}`
+    }
+    setDraft(next)
+    draftRef.current = next
+    setEditorEpoch((e) => e + 1)
+    setSaveStatus('editing')
   }
 
   async function restoreSnapshot(snapshotId: string) {
@@ -979,7 +1036,11 @@ function App() {
   }
 
   async function createNote(template?: NoteTemplate) {
-    const title = window.prompt('New note title', template?.id === 'daily' ? new Date().toISOString().slice(0, 10) : 'Untitled')
+    const suggested =
+      typeof template?.defaultTitle === 'function'
+        ? template.defaultTitle(new Date().toISOString().slice(0, 10))
+        : (template?.defaultTitle ?? (template?.id === 'daily' ? new Date().toISOString().slice(0, 10) : 'Untitled'))
+    const title = window.prompt('New note title', suggested)
     if (!title?.trim()) return
     const markdown = template ? template.body(title.trim()) : undefined
     const res = await fetch('/api/notes', {
@@ -1744,28 +1805,38 @@ function App() {
                   New note
                 </button>
                 <button
+                  ref={templateBtnRef}
                   type="button"
                   className={`ghost${templateMenu ? ' on' : ''}`}
                   title="New note from template"
+                  aria-expanded={templateMenu}
+                  aria-haspopup="menu"
                   onClick={() => setTemplateMenu((o) => !o)}
                 >
                   ▾
                 </button>
-                {templateMenu && (
-                  <div className="template-menu" role="menu">
-                    {NOTE_TEMPLATES.map((t) => (
-                      <button
-                        key={t.id}
-                        type="button"
-                        role="menuitem"
-                        onClick={() => void createNote(t)}
-                      >
-                        <strong>{t.name}</strong>
-                        <span>{t.description}</span>
-                      </button>
-                    ))}
-                  </div>
-                )}
+                {templateMenu &&
+                  templateMenuPos &&
+                  createPortal(
+                    <div
+                      className="template-menu"
+                      role="menu"
+                      style={{ top: templateMenuPos.top, left: templateMenuPos.left }}
+                    >
+                      {NOTE_TEMPLATES.map((t) => (
+                        <button
+                          key={t.id}
+                          type="button"
+                          role="menuitem"
+                          onClick={() => void createNote(t)}
+                        >
+                          <strong>{t.name}</strong>
+                          <span>{t.description}</span>
+                        </button>
+                      ))}
+                    </div>,
+                    document.body,
+                  )}
               </div>
             </div>
           </div>
@@ -1841,6 +1912,16 @@ function App() {
                   >
                     Outline
                   </button>
+                  {isNetworkDoc(draft) && (
+                    <button
+                      type="button"
+                      className="ghost"
+                      onClick={() => addNetworkSite()}
+                      title="Insert another site section with blank network tables"
+                    >
+                      Add site
+                    </button>
+                  )}
                   <button
                     type="button"
                     className={`ghost${backlinksOpen ? ' on' : ''}`}

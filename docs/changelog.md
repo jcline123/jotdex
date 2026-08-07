@@ -7,6 +7,17 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 
 ---
 
+## 2026-08-07 — IT note templates (network multi-site + more)
+
+**Needed a real network doc template for client replacements**
+- **Client network** template is table-heavy (WAN, LAN gateways, VLANs, static routes, DNS/DHCP, static hosts, NAT, VPN) with **one site by default**.
+- On those notes, **Add site** inserts another full site table block (prompts for the site name).
+- Template dropdown was clipped by the middle pane; fixed stacking/overflow so the menu stays visible.
+
+Also: Server build, Client overview, Cutover, Firewall/VPN, M365, Backup/DR, Install, Runbook, Vendor/circuit.
+
+---
+
 ## 2026-08-07 — Fewer false “Dense raw HTML” source opens (`82650a1`)
 
 **OneNote-style notes opened in Source for no good reason**
