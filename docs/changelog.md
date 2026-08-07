@@ -7,7 +7,7 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 
 ---
 
-## 2026-08-07 — Fewer false “Dense raw HTML” source opens
+## 2026-08-07 — Fewer false “Dense raw HTML” source opens (`82650a1`)
 
 **OneNote-style notes opened in Source for no good reason**
 - Example: `3C Camera` is mostly a bullet list wrapped in harmless `<span style=…>` from the OneNote export.
