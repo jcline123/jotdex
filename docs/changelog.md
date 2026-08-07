@@ -7,7 +7,7 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 
 ---
 
-## 2026-08-07 — Safari search result clicks
+## 2026-08-07 — Safari search result clicks (`47f99e2`)
 
 **On Mac Safari, search showed hits but clicking a result did nothing (localhost/Chrome fine)**
 - Input `blur` closed/unmounted the dropdown before the result `click` fired. Prevent blur with `mousedown` `preventDefault` on hits, soften blur dismiss, and switch to the editor pane when picking a result.
