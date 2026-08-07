@@ -7,7 +7,7 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 
 ---
 
-## 2026-08-07 — IT note templates (network multi-site + more)
+## 2026-08-07 — IT note templates (network multi-site + more) (`228aaea`)
 
 **Needed a real network doc template for client replacements**
 - **Client network** template is table-heavy (WAN, LAN gateways, VLANs, static routes, DNS/DHCP, static hosts, NAT, VPN) with **one site by default**.
