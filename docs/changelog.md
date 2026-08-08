@@ -7,6 +7,21 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 
 ---
 
+## 2026-08-08 — Updates tab + Update-Jotdex.ps1; settings tabs
+
+**Settings got crowded, and there was no guided way to pull a new build from GitHub**
+- Settings is tabbed (Vault, Network, Security, Notifications, Backup, Updates, Advanced).
+- Updates checks GitHub Releases; `Update-Jotdex.ps1` backs up the program to `C:\JotdexBackupHold`, applies the release zip, verifies health, and can roll back. Publish also writes `artifacts\jotdex-win-x64.zip` for Release uploads.
+
+---
+
+## 2026-08-08 — Move-to-another-PC kit
+
+**Moving PCs meant hunting vault + AppData + a separate portable build with unclear restore steps**
+- Settings → Move to another PC creates `jotdex-move-*.zip` (vault, auth/config/history, portable app when available, `Restore-Jotdex.ps1`). Dev fallback: `scripts/create-move-kit.ps1`.
+
+---
+
 ## 2026-08-08 — Home landing instead of auto-opening a note
 
 **Unlock used to dump you into a random first note; first impression should orient, not surprise**

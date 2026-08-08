@@ -211,7 +211,7 @@ Do **not** expose this port to the public internet without extra protection (VPN
 | App settings, search index, history | `%LOCALAPPDATA%\Jotdex` or `data\` next to the portable exe |
 | Cloud copy (optional) | Wherever you set under **Settings → Cloud backup mirror** |
 
-Moving to a new PC: copy the **vault** folder, install/run Jotdex, point Settings at that folder, Rescan.
+Moving to a new PC: **Settings → Move to another PC → Create move kit (ZIP)**, copy the ZIP, unzip on the new machine, run `Restore-Jotdex.ps1`. Details: [docs/backup.md](docs/backup.md).
 
 ---
 
@@ -239,6 +239,9 @@ Details: [docs/import-format/onenote-md-exporter.md](docs/import-format/onenote-
 | [SETUP.md](SETUP.md) | Fuller install / portable / service notes |
 | [docs/changelog.md](docs/changelog.md) | Why recent fixes were made |
 | [docs/portability.md](docs/portability.md) | Moving vaults safely |
+| [docs/backup.md](docs/backup.md) | Move kit + backup ZIP |
+| [docs/upgrading.md](docs/upgrading.md) | Check for updates + Update-Jotdex.ps1 |
+| [docs/portability.md](docs/portability.md) | Vault move / AppData |
 | [docs/vault-mirror.md](docs/vault-mirror.md) | Cloud backup mirror |
 | [AGENTS.md](AGENTS.md) | For contributors / AI agents |
 

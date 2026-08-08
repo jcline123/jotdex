@@ -307,6 +307,7 @@ public static class AuthEndpointExtensions
 
     private static bool IsAnonymousApi(string path) =>
         path.StartsWith("/api/health", StringComparison.OrdinalIgnoreCase) ||
+        path.StartsWith("/api/updates/check", StringComparison.OrdinalIgnoreCase) ||
         path.StartsWith("/api/auth/", StringComparison.OrdinalIgnoreCase);
 
     private sealed class SetupBody

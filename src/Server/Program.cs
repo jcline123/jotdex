@@ -42,6 +42,9 @@ builder.Services.AddSingleton<INoteShareExportService, NoteShareExportService>()
 builder.Services.AddSingleton<IIntegrityScanService, IntegrityScanService>();
 builder.Services.AddSingleton<IMaintenanceService, MaintenanceService>();
 builder.Services.AddSingleton<IBackupBundleService, BackupBundleService>();
+builder.Services.AddSingleton<IMoveKitService, MoveKitService>();
+builder.Services.AddSingleton<IUpdateCheckService, UpdateCheckService>();
+builder.Services.AddHttpClient("github");
 builder.Services.AddSingleton<IVaultMirrorService, VaultMirrorService>();
 builder.Services.AddSingleton<INoteLinkService, NoteLinkService>();
 builder.Services.AddHostedService<VaultMirrorHostedService>();
@@ -281,6 +284,20 @@ app.MapPost("/api/admin/backup", async (HttpRequest request, IBackupBundleServic
     var includeHistory = !string.Equals(request.Query["includeHistory"], "false", StringComparison.OrdinalIgnoreCase);
     var result = await backup.CreateAsync(includeAuth, includeHistory, ct);
     return result.Success ? Results.Json(result) : Results.BadRequest(result);
+});
+
+app.MapPost("/api/admin/move-kit", async (HttpRequest request, IMoveKitService moveKit, CancellationToken ct) =>
+{
+    var includeAuth = !string.Equals(request.Query["includeAuth"], "false", StringComparison.OrdinalIgnoreCase);
+    var includeHistory = !string.Equals(request.Query["includeHistory"], "false", StringComparison.OrdinalIgnoreCase);
+    var result = await moveKit.CreateAsync(includeAuth, includeHistory, ct);
+    return result.Success ? Results.Json(result) : Results.BadRequest(result);
+});
+
+app.MapGet("/api/updates/check", async (IUpdateCheckService updates, CancellationToken ct) =>
+{
+    var result = await updates.CheckAsync(ct);
+    return result.Success ? Results.Json(result) : Results.Json(result, statusCode: StatusCodes.Status502BadGateway);
 });
 
 app.MapPost("/api/admin/restart", (Jotdex.Server.Hosting.IServerRestartService restart) =>

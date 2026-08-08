@@ -11,6 +11,9 @@
 - Auth, search, TipTap editor, static export, backup ZIP, integrity scan
 - **Share HTML** on a note (self-contained); full-vault HTML export under Settings
 - **Home landing** in the note pane on unlock (recents, new notes, todos) — click brand to return
+- **Move kit** in Settings packages vault + app data + portable app for a guided restore on a new PC
+- **Updates** tab: Check for updates (GitHub Releases) + `Update-Jotdex.ps1` (backup to `C:\JotdexBackupHold`, apply, verify, rollback)
+- Settings organized into tabs (Vault, Network, Security, Notifications, Backup, Updates, Advanced)
 - **Todos** rail/tab backed by vault-root `Todos.md` (done items disappear with 30s undo; browser reminders while tab is open)
 - Desktop: collapsible Folders / Notes / Todos columns for more editor space
 

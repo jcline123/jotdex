@@ -1,6 +1,10 @@
 # Portability
 
-## Move the vault to another PC
+## Easiest move (another PC)
+
+Use **Settings → Backup → Create move kit (ZIP)**. That package includes your vault, app data, the portable program (when available), and `Restore-Jotdex.ps1`. Full steps: [backup.md](backup.md).
+
+## Move the vault only
 
 1. Stop Jotdex.
 2. Copy the entire vault folder (all `.md` and `.assets`).
@@ -17,12 +21,12 @@ Notes travel with the vault. Search index is rebuilt.
 |---|---|---|
 | Notes + assets | Vault | Copied |
 | Search index | AppData `indexes\` | Rebuild |
-| Note history snapshots | AppData `history\` | Optional backup |
+| Note history snapshots | AppData `history\` | Optional / included in move kit |
 | Trash | AppData `trash\` | Optional |
-| Auth / sessions | AppData `auth\` | Recreate or copy carefully |
+| Auth / sessions | AppData `auth\` | Recreate or copy carefully / included in move kit |
 | Logs | AppData `logs\` | Skip |
 
-Backup bundles may optionally include `history\` and `auth\`.
+Move-kit and backup ZIPs may include `history\` and `auth\`.
 
 ## AppData locations
 
@@ -51,7 +55,7 @@ Away from home: secure remote to web UI, browse iCloud mirror, or open static HT
 
 ## Automatic cloud mirror (in-app)
 
-Keep the **live** vault on local disk (e.g. `C:\JotdexVault`). In **Settings → Cloud backup mirror**, set a destination under iCloud/OneDrive/Dropbox and enable automatic copy.
+Keep the **live** vault on local disk (e.g. `C:\JotdexVault`). In **Settings → Backup → Cloud backup mirror**, set a destination under iCloud/OneDrive/Dropbox and enable automatic copy.
 
 - One-way only (live → cloud). The app never writes notes into the mirror as the live vault.
 - Uses Windows `robocopy /MIR` so the destination matches the vault.

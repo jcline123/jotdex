@@ -36,6 +36,8 @@
 - Editing requires **autosave** + **per-note history/rollback**.
 - HTML allowed only as sanitized sidecars in `.assets` (Markdown-plus-assets).
 - When changing editor/Markdown formatting features, update [`src/Web/src/jotdexAiPrompt.ts`](src/Web/src/jotdexAiPrompt.ts) in the same change (Copy AI prompt must list all supported formats).
+- When adding/changing app-data folders, config, or install layout, update first-run setup + move-kit + Update-Jotdex scripts/docs in the same change (see `.cursor/rules/jotdex-install-move-kit.mdc`).
+- Portable upgrades: [`docs/upgrading.md`](docs/upgrading.md) — Settings → Updates + `Update-Jotdex.ps1`.
 
 ## Agent protocol
 

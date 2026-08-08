@@ -283,6 +283,23 @@ function App() {
   const [secBusy, setSecBusy] = useState(false)
 
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [settingsTab, setSettingsTab] = useState<
+    'vault' | 'network' | 'security' | 'notifications' | 'backup' | 'updates' | 'advanced'
+  >('vault')
+  const [updateInfo, setUpdateInfo] = useState<{
+    success?: boolean
+    error?: string
+    currentVersion?: string
+    latestTag?: string
+    updateAvailable?: boolean
+    notes?: string
+    htmlUrl?: string
+    downloadName?: string
+    installPath?: string
+    updateScriptPath?: string
+    backupHoldPath?: string
+  } | null>(null)
+  const [updateBusy, setUpdateBusy] = useState(false)
   const [vaultPathInput, setVaultPathInput] = useState('')
   const [browsePath, setBrowsePath] = useState('')
   const [browseParent, setBrowseParent] = useState<string | null>(null)
@@ -1805,7 +1822,9 @@ function App() {
             className="ghost"
             onClick={() => {
               setSettingsOpen(true)
+              setSettingsTab('vault')
               setNetworkHint(null)
+              setUpdateInfo(null)
               setNotifyPerm(getNotificationPermission())
               setNotifyHint(null)
               void openBrowse(vaultPathInput || undefined)
@@ -1836,8 +1855,39 @@ function App() {
 
       {settingsOpen && (
         <div className="modal-backdrop" onClick={() => setSettingsOpen(false)} role="presentation">
-          <div className="modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Settings">
-            <h2>Vault location</h2>
+          <div className="modal settings-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Settings">
+            <div className="settings-modal-head">
+              <h2>Settings</h2>
+              <button type="button" className="ghost" onClick={() => setSettingsOpen(false)}>
+                Close
+              </button>
+            </div>
+            <nav className="settings-tabs" aria-label="Settings sections">
+              {(
+                [
+                  ['vault', 'Vault'],
+                  ['network', 'Network'],
+                  ['security', 'Security'],
+                  ['notifications', 'Notifications'],
+                  ['backup', 'Backup'],
+                  ['updates', 'Updates'],
+                  ['advanced', 'Advanced'],
+                ] as const
+              ).map(([id, label]) => (
+                <button
+                  key={id}
+                  type="button"
+                  className={settingsTab === id ? 'on' : ''}
+                  onClick={() => setSettingsTab(id)}
+                >
+                  {label}
+                </button>
+              ))}
+            </nav>
+            <div className="settings-tab-panel">
+            {settingsTab === 'vault' && (
+              <>
+            <h2 className="settings-section settings-section-first">Vault location</h2>
             <p className="lede">Pick the folder that contains your .md notes. Use local disk for the live vault.</p>
             <label className="field">
               Path
@@ -1846,9 +1896,6 @@ function App() {
             <div className="modal-actions">
               <button type="button" className="primary" onClick={() => void applyVaultPath(vaultPathInput)}>
                 Use this folder
-              </button>
-              <button type="button" className="ghost" onClick={() => setSettingsOpen(false)}>
-                Cancel
               </button>
             </div>
             <div className="browser">
@@ -1873,8 +1920,12 @@ function App() {
                 ))}
               </ul>
             </div>
+              </>
+            )}
 
-            <h2 className="settings-section">Network</h2>
+            {settingsTab === 'network' && (
+              <>
+            <h2 className="settings-section settings-section-first">Network</h2>
             <p className="lede">
               Default is this PC only. LAN access is opt-in. Enable self-signed HTTPS to use https:// as well as http:// (browser will warn — that is expected). Restart required after changes.
             </p>
@@ -1967,85 +2018,12 @@ function App() {
             {restartNeeded && !restartBusy && (
               <p className="warn">Network settings saved — click Restart server to apply them.</p>
             )}
-
-            <h2 className="settings-section">Cloud backup mirror</h2>
-            <p className="lede">
-              Keep the live vault on local disk. Optionally copy one-way to iCloud, OneDrive, etc. Never open the mirror
-              as the live vault — use a separate folder name such as <code>JotdexMirror</code>.
-            </p>
-            <label className="field checkbox-row">
-              <input type="checkbox" checked={mirrorEnabled} onChange={(e) => setMirrorEnabled(e.target.checked)} />
-              Enable automatic mirror
-            </label>
-            <label className="field">
-              Destination folder
-              <input
-                value={mirrorDest}
-                onChange={(e) => setMirrorDest(e.target.value)}
-                placeholder="C:\Users\You\iCloudDrive\JotdexMirror"
-              />
-            </label>
-            <p className="muted">
-              Prefer <code>…\iCloudDrive\JotdexMirror</code> (not a folder also named JotdexVault). Mirror is one-way:
-              local live vault → destination.
-            </p>
-            <label className="field">
-              Interval (minutes)
-              <input
-                type="number"
-                min={5}
-                max={1440}
-                value={mirrorInterval}
-                onChange={(e) => setMirrorInterval(Number(e.target.value) || 15)}
-              />
-            </label>
-            <div className="modal-actions">
-              <button type="button" className="primary" onClick={() => void saveMirrorSettings()}>
-                Save mirror
-              </button>
-              <button type="button" className="ghost" onClick={() => void runMirrorNow()}>
-                Mirror now
-              </button>
-            </div>
-            {mirrorStatus && <p className="muted">{mirrorStatus}</p>}
-
-            <h2 className="settings-section">Start with Windows</h2>
-            <p className="lede">
-              After a reboot, Jotdex should come back by itself. Easiest: enable a Startup shortcut for your Windows user.
-              For a always-on PC, prefer the Windows Service (run <code>install-service.ps1</code> as Administrator once).
-            </p>
-            <div className="modal-actions">
-              <button
-                type="button"
-                className="ghost"
-                onClick={() => void loadAutostart()}
-              >
-                Check status
-              </button>
-              <button type="button" className="primary" onClick={() => void setAutostart(true)}>
-                Enable Start with Windows
-              </button>
-              <button type="button" className="ghost" onClick={() => void setAutostart(false)}>
-                Disable
-              </button>
-            </div>
-            {autostartInfo && (
-              <div className="autostart-status muted">
-                <p>{autostartInfo.hint}</p>
-                <p>
-                  User startup: {autostartInfo.userStartupEnabled ? 'on' : 'off'}
-                  {autostartInfo.userStartupPath ? ` — ${autostartInfo.userStartupPath}` : ''}
-                </p>
-                <p>
-                  Windows Service:{' '}
-                  {autostartInfo.windowsService?.installed
-                    ? `${autostartInfo.windowsService.status} (${autostartInfo.windowsService.startType})`
-                    : 'not installed'}
-                </p>
-              </div>
+              </>
             )}
 
-            <h2 className="settings-section">Security</h2>
+            {settingsTab === 'security' && (
+              <>
+            <h2 className="settings-section settings-section-first">Security</h2>
             <p className="lede">
               Optional password protection — no username. When a password is set, Jotdex asks for it on open. You can
               remove it anytime to open freely again.
@@ -2183,8 +2161,12 @@ function App() {
                 </label>
               </>
             )}
+              </>
+            )}
 
-            <h2 className="settings-section">Todo notifications</h2>
+            {settingsTab === 'notifications' && (
+              <>
+            <h2 className="settings-section settings-section-first">Todo notifications</h2>
             <p className="lede">
               Reminders use the browser’s notification permission (works best in Chrome / Edge while a Jotdex tab is
               open). Safari support varies. Chrome is also prompted automatically when you add your first to-do. Use this
@@ -2224,6 +2206,253 @@ function App() {
               </button>
             </div>
             {notifyHint && <p className="muted">{notifyHint}</p>}
+              </>
+            )}
+
+            {settingsTab === 'backup' && (
+              <>
+            <h2 className="settings-section settings-section-first">Move to another PC</h2>
+            <p className="lede">
+              Create a single ZIP that packages your vault, password/settings/history, and (when you are running the
+              portable build) the Jotdex program itself. On the new PC: unzip → run <code>Restore-Jotdex.ps1</code> →
+              choose install folder and vault folder → start <code>start-portable.cmd</code>.
+            </p>
+            <p className="muted">
+              Prefer a local-disk vault on the new machine (not iCloud). Treat the ZIP as secret if it includes your
+              password. Search indexes are rebuilt automatically — they are not in the ZIP. For a data-only archive
+              without the program, use Create backup ZIP below.
+            </p>
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="primary"
+                onClick={() => {
+                  void (async () => {
+                    setNetworkHint('Creating move kit ZIP (may take a while for large vaults)…')
+                    try {
+                      const data = await fetch('/api/admin/move-kit', { method: 'POST' }).then((r) => r.json())
+                      if (!data.success) {
+                        setError(data.error ?? 'Move kit failed')
+                        setNetworkHint(null)
+                        return
+                      }
+                      const mb = (data.bytes / (1024 * 1024)).toFixed(1)
+                      const appNote = data.includedApp
+                        ? 'Includes portable app.'
+                        : data.hint ??
+                          'Vault + app data only (no exe). Use portable Jotdex or scripts\\create-move-kit.ps1 for a full kit.'
+                      setNetworkHint(`Move kit OK (${mb} MB): ${data.bundlePath} — ${appNote}`)
+                      window.alert(
+                        `Move kit ready (${mb} MB):\n${data.bundlePath}\n\n${appNote}\n\nCopy that ZIP to the new PC, unzip, and run Restore-Jotdex.ps1.`,
+                      )
+                    } catch (e) {
+                      setError(e instanceof Error ? e.message : 'Move kit failed')
+                      setNetworkHint(null)
+                    }
+                  })()
+                }}
+              >
+                Create move kit (ZIP)
+              </button>
+            </div>
+
+            <h2 className="settings-section">Backup ZIP</h2>
+            <p className="lede">
+              Archive vault notes plus optional app data (auth, history) into a ZIP — no program files. Good for a
+              periodic snapshot on this PC.
+            </p>
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="primary"
+                onClick={() => {
+                  void (async () => {
+                    setNetworkHint('Creating backup ZIP…')
+                    const data = await fetch('/api/admin/backup', { method: 'POST' }).then((r) => r.json())
+                    if (!data.success) {
+                      setError(data.error ?? 'Backup failed')
+                      setNetworkHint(null)
+                      return
+                    }
+                    const mb = (data.bytes / (1024 * 1024)).toFixed(1)
+                    setNetworkHint(`Backup OK (${mb} MB): ${data.bundlePath}`)
+                  })()
+                }}
+              >
+                Create backup ZIP
+              </button>
+            </div>
+
+            <h2 className="settings-section">Cloud backup mirror</h2>
+            <p className="lede">
+              Keep the live vault on local disk. Optionally copy one-way to iCloud, OneDrive, etc. Never open the mirror
+              as the live vault — use a separate folder name such as <code>JotdexMirror</code>.
+            </p>
+            <label className="field checkbox-row">
+              <input type="checkbox" checked={mirrorEnabled} onChange={(e) => setMirrorEnabled(e.target.checked)} />
+              Enable automatic mirror
+            </label>
+            <label className="field">
+              Destination folder
+              <input
+                value={mirrorDest}
+                onChange={(e) => setMirrorDest(e.target.value)}
+                placeholder="C:\Users\You\iCloudDrive\JotdexMirror"
+              />
+            </label>
+            <p className="muted">
+              Prefer <code>…\iCloudDrive\JotdexMirror</code> (not a folder also named JotdexVault). Mirror is one-way:
+              local live vault → destination.
+            </p>
+            <label className="field">
+              Interval (minutes)
+              <input
+                type="number"
+                min={5}
+                max={1440}
+                value={mirrorInterval}
+                onChange={(e) => setMirrorInterval(Number(e.target.value) || 15)}
+              />
+            </label>
+            <div className="modal-actions">
+              <button type="button" className="primary" onClick={() => void saveMirrorSettings()}>
+                Save mirror
+              </button>
+              <button type="button" className="ghost" onClick={() => void runMirrorNow()}>
+                Mirror now
+              </button>
+            </div>
+            {mirrorStatus && <p className="muted">{mirrorStatus}</p>}
+              </>
+            )}
+
+            {settingsTab === 'updates' && (
+              <>
+            <h2 className="settings-section settings-section-first">Updates</h2>
+            <p className="lede">
+              Jotdex checks GitHub Releases for a newer portable build. Updating replaces the program files only — your
+              vault and <code>data\</code> folder stay put. The updater backs up the current program to{' '}
+              <code>C:\JotdexBackupHold</code> first and can roll back if something looks wrong.
+            </p>
+            <p className="muted">
+              Current version will appear after you check. Use the portable install folder (not a raw <code>dotnet run</code>{' '}
+              debug build) when updating.
+            </p>
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="primary"
+                disabled={updateBusy}
+                onClick={() => {
+                  void (async () => {
+                    setUpdateBusy(true)
+                    setUpdateInfo(null)
+                    try {
+                      const data = await fetch('/api/updates/check', { credentials: 'same-origin' }).then((r) =>
+                        r.json(),
+                      )
+                      setUpdateInfo(data)
+                    } catch (e) {
+                      setUpdateInfo({
+                        success: false,
+                        error: e instanceof Error ? e.message : 'Update check failed',
+                      })
+                    } finally {
+                      setUpdateBusy(false)
+                    }
+                  })()
+                }}
+              >
+                {updateBusy ? 'Checking…' : 'Check for updates'}
+              </button>
+              {updateInfo?.htmlUrl && (
+                <a className="ghost settings-link-btn" href={updateInfo.htmlUrl} target="_blank" rel="noreferrer">
+                  Open Releases
+                </a>
+              )}
+            </div>
+            {updateInfo && (
+              <div className="update-status">
+                {updateInfo.currentVersion && (
+                  <p className="muted">Running: {updateInfo.currentVersion}</p>
+                )}
+                {updateInfo.latestTag && <p className="muted">Latest release: {updateInfo.latestTag}</p>}
+                {updateInfo.updateAvailable ? (
+                  <p className="warn">An update is available{updateInfo.downloadName ? ` (${updateInfo.downloadName})` : ''}.</p>
+                ) : (
+                  updateInfo.success && <p className="muted">No newer release found (or no zip asset on the latest release yet).</p>
+                )}
+                {updateInfo.notes && <p className="muted">{updateInfo.notes}</p>}
+                {updateInfo.error && <p className="warn">{updateInfo.error}</p>}
+                {updateInfo.installPath && (
+                  <p className="muted">
+                    Install folder: <code>{updateInfo.installPath}</code>
+                  </p>
+                )}
+              </div>
+            )}
+            <h3 className="settings-subhead">How to run the updater</h3>
+            <ol className="settings-steps">
+              <li>
+                Open File Explorer to your Jotdex install folder (where <code>Jotdex.Server.exe</code> and{' '}
+                <code>Update-Jotdex.ps1</code> live).
+              </li>
+              <li>
+                Right-click <code>Update-Jotdex.ps1</code> → <strong>Run with PowerShell</strong>
+                <br />
+                <span className="muted">
+                  Or: <code>powershell -NoProfile -ExecutionPolicy Bypass -File .\Update-Jotdex.ps1</code>
+                </span>
+              </li>
+              <li>
+                Wait while it backs up to <code>C:\JotdexBackupHold</code>, downloads the release, and restarts Jotdex.
+              </li>
+              <li>
+                Spot-check the app in your browser. Answer Yes if it looks good, or No to restore the backup
+                automatically.
+              </li>
+            </ol>
+            <p className="muted">
+              Tip for publishing updates: run <code>scripts\publish-win-x64.ps1</code>, then upload{' '}
+              <code>artifacts\jotdex-win-x64.zip</code> as a GitHub Release asset. See{' '}
+              <code>docs\upgrading.md</code>.
+            </p>
+              </>
+            )}
+
+            {settingsTab === 'advanced' && (
+              <>
+            <h2 className="settings-section settings-section-first">Start with Windows</h2>
+            <p className="lede">
+              After a reboot, Jotdex should come back by itself. Easiest: enable a Startup shortcut for your Windows user.
+              For a always-on PC, prefer the Windows Service (run <code>install-service.ps1</code> as Administrator once).
+            </p>
+            <div className="modal-actions">
+              <button type="button" className="ghost" onClick={() => void loadAutostart()}>
+                Check status
+              </button>
+              <button type="button" className="primary" onClick={() => void setAutostart(true)}>
+                Enable Start with Windows
+              </button>
+              <button type="button" className="ghost" onClick={() => void setAutostart(false)}>
+                Disable
+              </button>
+            </div>
+            {autostartInfo && (
+              <div className="autostart-status muted">
+                <p>{autostartInfo.hint}</p>
+                <p>
+                  User startup: {autostartInfo.userStartupEnabled ? 'on' : 'off'}
+                  {autostartInfo.userStartupPath ? ` — ${autostartInfo.userStartupPath}` : ''}
+                </p>
+                <p>
+                  Windows Service:{' '}
+                  {autostartInfo.windowsService?.installed
+                    ? `${autostartInfo.windowsService.status} (${autostartInfo.windowsService.startType})`
+                    : 'not installed'}
+                </p>
+              </div>
+            )}
 
             <h2 className="settings-section">Logs</h2>
             <p className="lede">
@@ -2240,8 +2469,8 @@ function App() {
             <h2 className="settings-section">Maintenance</h2>
             <p className="lede">
               Rescan reloads the note list from disk (use after adding/editing .md files outside Jotdex). Reindex rebuilds
-              search only. Also: diagnostics, integrity, trash, backup ZIP, and full-vault static HTML export. To share one
-              note, open it and use Share HTML.
+              search only. Also: diagnostics, integrity, trash, and full-vault static HTML export. Backups live under the
+              Backup tab. To share one note, open it and use Share HTML.
             </p>
             <div className="modal-actions">
               <button
@@ -2302,25 +2531,6 @@ function App() {
                 type="button"
                 className="ghost"
                 onClick={() => {
-                  void (async () => {
-                    setNetworkHint('Creating backup ZIP…')
-                    const data = await fetch('/api/admin/backup', { method: 'POST' }).then((r) => r.json())
-                    if (!data.success) {
-                      setError(data.error ?? 'Backup failed')
-                      setNetworkHint(null)
-                      return
-                    }
-                    const mb = (data.bytes / (1024 * 1024)).toFixed(1)
-                    setNetworkHint(`Backup OK (${mb} MB): ${data.bundlePath}`)
-                  })()
-                }}
-              >
-                Create backup ZIP
-              </button>
-              <button
-                type="button"
-                className="ghost"
-                onClick={() => {
                   if (!window.confirm('Empty the trash folder in app data?')) return
                   void (async () => {
                     const data = await fetch('/api/admin/trash/empty', { method: 'POST' }).then((r) => r.json())
@@ -2371,6 +2581,10 @@ function App() {
             {diagText && (
               <pre className="maint-report">{diagText}</pre>
             )}
+              </>
+            )}
+            </div>
+            {networkHint && <p className="muted settings-footer-hint">{networkHint}</p>}
           </div>
         </div>
       )}

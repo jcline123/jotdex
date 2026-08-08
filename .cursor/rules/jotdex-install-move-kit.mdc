@@ -1,0 +1,19 @@
+---
+description: Keep first-run setup and move-kit scripts aligned with new data folders and install changes
+alwaysApply: true
+---
+
+# Setup and move-kit stay current
+
+Whenever you add, remove, or rename **app data folders**, **config files**, **portable publish contents**, or **install/restore steps** that a new PC or first-time install must know about:
+
+1. Update in the **same change set**:
+   - [`scripts/Setup-Jotdex.ps1`](scripts/Setup-Jotdex.ps1) / [`Setup.cmd`](Setup.cmd) (first-time install)
+   - [`scripts/Restore-Jotdex.ps1`](scripts/Restore-Jotdex.ps1) (move-kit restore)
+   - [`scripts/Update-Jotdex.ps1`](scripts/Update-Jotdex.ps1) (in-place upgrade from GitHub Releases)
+   - [`scripts/create-move-kit.ps1`](scripts/create-move-kit.ps1) and/or [`MoveKitService`](src/Infrastructure/Maintenance/MoveKitService.cs) (what goes in the ZIP)
+   - [`scripts/publish-win-x64.ps1`](scripts/publish-win-x64.ps1) if new files must ship beside the portable exe (also refresh `artifacts\jotdex-win-x64.zip` for Releases)
+2. Refresh user-facing copy in [`docs/backup.md`](docs/backup.md), [`docs/portability.md`](docs/portability.md), and [`README.md`](README.md) when the user steps change.
+3. Do **not** leave setup/move-kit assuming an outdated layout (missing new `data\` subfolders, config keys, or restore rewrites).
+
+Search indexes remain rebuildable and should stay out of move kits unless product direction changes.

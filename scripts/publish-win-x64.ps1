@@ -45,6 +45,8 @@ dotnet publish $serverProj `
 Copy-Item (Join-Path $PSScriptRoot "start-portable.cmd") $OutputRoot -Force
 Copy-Item (Join-Path $PSScriptRoot "install-service.ps1") $OutputRoot -Force
 Copy-Item (Join-Path $PSScriptRoot "uninstall-service.ps1") $OutputRoot -Force
+Copy-Item (Join-Path $PSScriptRoot "Restore-Jotdex.ps1") $OutputRoot -Force
+Copy-Item (Join-Path $PSScriptRoot "Update-Jotdex.ps1") $OutputRoot -Force
 
 $example = Join-Path $OutputRoot "appsettings.example.json"
 @"
@@ -87,3 +89,24 @@ Windows Service: run install-service.ps1 elevated from this folder.
 
 Write-Host "Done: $OutputRoot"
 Get-ChildItem $OutputRoot | Select-Object Name, Length
+
+# Convenience zip for GitHub Releases (upload this asset as jotdex-win-x64.zip)
+$releaseZip = Join-Path (Split-Path $OutputRoot -Parent) "jotdex-win-x64.zip"
+if (Test-Path -LiteralPath $releaseZip) { Remove-Item -LiteralPath $releaseZip -Force }
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+$stageZip = Join-Path $env:TEMP ("jotdex-release-zip-" + [guid]::NewGuid().ToString("N"))
+New-Item -ItemType Directory -Force -Path $stageZip | Out-Null
+try {
+    Get-ChildItem -LiteralPath $OutputRoot -Force | Where-Object { $_.Name -ne "data" } | ForEach-Object {
+        $dest = Join-Path $stageZip $_.Name
+        if ($_.PSIsContainer) {
+            Copy-Item -LiteralPath $_.FullName -Destination $dest -Recurse -Force
+        } else {
+            Copy-Item -LiteralPath $_.FullName -Destination $dest -Force
+        }
+    }
+    [System.IO.Compression.ZipFile]::CreateFromDirectory($stageZip, $releaseZip)
+    Write-Host "Release zip: $releaseZip"
+} finally {
+    Remove-Item -LiteralPath $stageZip -Recurse -Force -ErrorAction SilentlyContinue
+}

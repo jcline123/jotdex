@@ -55,6 +55,7 @@ Vault stays on local disk outside the install folder. Upgrades: stop service, re
 ## Upgrade / backup notes
 
 1. Stop Jotdex (or the service).
-2. Back up the **vault** folder and optionally `data\auth`, `data\history`, `data\config`.
-3. Replace application binaries only.
-4. Start → health check → Rescan if needed.
+2. Prefer **Settings → Backup → Create move kit** (full kit) or **Create backup ZIP** (data only) — see [backup.md](../docs/backup.md).
+3. Or manually back up the **vault** folder and optionally `data\auth`, `data\history`, `data\config`.
+4. Replace application binaries only (for upgrades).
+5. Start → health check → Rescan if needed.
