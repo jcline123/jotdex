@@ -7,10 +7,11 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 
 ---
 
-## 2026-08-08 — Denser mobile note chrome
+## 2026-08-08 — Denser mobile note chrome (`c73a8be`)
 
 **Phone note view had huge gaps under the title/path and empty space beside the editor**
 - Mobile-only: collapse default `<p>` margin on the path, tighten action/toolbar spacing, and let the note body use full width.
+- Portable build republished to `artifacts\win-x64`.
 
 ---
 
