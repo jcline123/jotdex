@@ -7,6 +7,20 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 
 ---
 
+## 2026-08-08 — Collapsed Todos ticker polish
+
+**Label sat at the top of the strip (unlike Folders/Notes), and the loop jumped when it wrapped**
+- Move the Todos label to the bottom of the collapsed rail; duplicate equal-height ticker groups so the -50% scroll seam is continuous.
+
+---
+
+## 2026-08-08 — Collapsed Todos title ticker
+
+**When the Todos rail is collapsed, open items were invisible until you expanded again**
+- Thin rail scrolls open to-do titles vertically (title only); click the rail to expand. Respects `prefers-reduced-motion`.
+
+---
+
 ## 2026-08-08 — Vault-backed Todos + collapsible columns (`85137eb`)
 
 **Wanted glanceable to-dos, more editor width, undo on mis-clicks, and a clear Chrome notification path**

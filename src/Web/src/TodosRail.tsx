@@ -217,12 +217,42 @@ export function TodosRail({ fill, collapsed, onToggleCollapsed }: Props) {
   }
 
   if (collapsed && !fill) {
+    const titles = items.map((t) => t.title.trim()).filter(Boolean)
+    const durationSec = Math.max(14, titles.length * 5)
     return (
-      <aside className="pane todos pane-rail-collapsed">
-        <button type="button" className="pane-collapsed-tab" onClick={onToggleCollapsed} title="Show todos">
+      <aside
+        className="pane todos pane-rail-collapsed todos-ticker-rail"
+        role="button"
+        tabIndex={0}
+        title="Show todos"
+        onClick={onToggleCollapsed}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            onToggleCollapsed?.()
+          }
+        }}
+      >
+        {titles.length > 0 && (
+          <div className="todos-ticker" aria-hidden>
+            <div className="todos-ticker-track" style={{ animationDuration: `${durationSec}s` }}>
+              {/* Two identical groups: -50% translate lands on the seam with no jump. */}
+              {[0, 1].map((copy) => (
+                <div key={copy} className="todos-ticker-group">
+                  {titles.map((title, i) => (
+                    <span key={`${copy}-${i}`} className="todos-ticker-item">
+                      {title}
+                    </span>
+                  ))}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        <div className="todos-ticker-label">
           Todos
-          {items.length > 0 ? ` · ${items.length}` : ''}
-        </button>
+          {titles.length > 0 ? ` · ${titles.length}` : ''}
+        </div>
       </aside>
     )
   }

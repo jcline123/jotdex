@@ -281,6 +281,111 @@ button {
   background: var(--accent-soft);
 }
 
+.todos-ticker-rail {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  overflow: hidden;
+  cursor: pointer;
+  background: var(--bg-elevated);
+  padding: 0;
+}
+
+.todos-ticker-rail:hover,
+.todos-ticker-rail:focus-visible {
+  background: var(--accent-soft);
+  outline: none;
+}
+
+.todos-ticker-label {
+  flex: 0 0 auto;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  align-self: center;
+  padding: 0.55rem 0.2rem 0.75rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-top: auto;
+}
+
+.todos-ticker-rail:hover .todos-ticker-label,
+.todos-ticker-rail:focus-visible .todos-ticker-label {
+  color: var(--text);
+}
+
+.todos-ticker {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  position: relative;
+  mask-image: linear-gradient(180deg, transparent, #000 10%, #000 90%, transparent);
+}
+
+.todos-ticker-track {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  width: 100%;
+  animation-name: todos-ticker-scroll;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+  will-change: transform;
+}
+
+/* Equal-height halves (content + trailing gap) so -50% is a seamless seam. */
+.todos-ticker-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.75rem;
+  flex: 0 0 auto;
+  padding-bottom: 1.75rem;
+  box-sizing: border-box;
+}
+
+.todos-ticker-item {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  font-size: 0.78rem;
+  font-weight: 500;
+  line-height: 1.15;
+  color: var(--text);
+  opacity: 0.88;
+  max-height: 14rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0 0.15rem;
+}
+
+@keyframes todos-ticker-scroll {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(0, -50%, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .todos-ticker-track {
+    animation: none;
+  }
+
+  .todos-ticker {
+    overflow-y: auto;
+    mask-image: none;
+  }
+
+  .todos-ticker-group:last-child {
+    display: none;
+  }
+}
+
+
 .pane-rail-head {
   display: flex;
   align-items: center;
