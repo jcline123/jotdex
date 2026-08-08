@@ -7,6 +7,13 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 
 ---
 
+## 2026-08-08 — Denser mobile note chrome
+
+**Phone note view had huge gaps under the title/path and empty space beside the editor**
+- Mobile-only: collapse default `<p>` margin on the path, tighten action/toolbar spacing, and let the note body use full width.
+
+---
+
 ## 2026-08-07 — Phosphor lock/login backdrop (`eeabf49`)
 
 **Wanted a Swordfish-ish tech feel on the password screen without cluttering the form**
