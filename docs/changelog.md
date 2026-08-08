@@ -7,6 +7,29 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 
 ---
 
+## 2026-08-08 — Prompt notifications on first to-do
+
+**Finding the Settings allow button is easy to miss; first Add is a natural user gesture for Chrome’s prompt**
+- Adding the first open to-do calls `Notification.requestPermission()`; Settings remains the re-prompt path.
+
+---
+
+## 2026-08-08 — Collapse side columns + todo undo + notify prompt
+
+**Needed more editor width, a safety net for mis-clicks, and a clear Chrome notification allow path**
+- Folders and notes columns get the same collapse strip as Todos (desktop; remembered). Completing a to-do still removes it, with a 30s Undo bar.
+- Settings → Todo notifications (and turning on a reminder) calls the browser permission prompt; blocked sites need the browser’s site settings.
+
+---
+
+## 2026-08-08 — Vault-backed Todos rail
+
+**Wanted glanceable to-dos beside notes without a separate app or archive pile**
+- Open items live in vault-root `Todos.md` (checkbox lines + `jotdex-todo` HTML comments for id/priority/due/remind). Checking done removes the line — no done list.
+- Desktop: collapsible right rail; mobile: fourth bottom tab. Browser notifications while the tab can run; catch-up fires at most one alert per to-do.
+
+---
+
 ## 2026-08-08 — Collapsing format toolbar while scrolling (`c6f0f45`)
 
 **Sticky formatting bar ate mobile/desktop reading space mid-note**

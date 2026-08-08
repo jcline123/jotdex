@@ -66,6 +66,16 @@ Rules:
 - Preserve `created` when present; app may update `modified`.
 - No BOM unless an imported file requires preservation.
 
+### Vault root `Todos.md`
+
+Optional notebook-wide to-do list used by the UI rail/tab. Open items only:
+
+```markdown
+- [ ] Call dentist <!-- jotdex-todo id="…" priority="high" due="2026-08-10T15:00:00Z" remind="every:30m" -->
+```
+
+Done items are deleted from the file (not kept as `- [x]`). Attributes: `id`, `priority` (`low`|`normal`|`high`|`critical`), optional `due` (ISO-8601), `remind` (`off`|`once:ISO`|`every:30m`|`every:1h`).
+
 ## Attachments
 
 ```text

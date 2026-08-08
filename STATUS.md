@@ -1,7 +1,7 @@
 # Jotdex STATUS
 
 **Active milestone:** V1 complete / polish  
-**Last updated:** 2026-08-07
+**Last updated:** 2026-08-08
 
 ## Highlights
 
@@ -10,11 +10,13 @@
 - Code boxes with language + Copy in the editor
 - Auth, search, TipTap editor, static export, backup ZIP, integrity scan
 - **Share HTML** on a note (self-contained); full-vault HTML export under Settings
+- **Todos** rail/tab backed by vault-root `Todos.md` (done items disappear with 30s undo; browser reminders while tab is open)
+- Desktop: collapsible Folders / Notes / Todos columns for more editor space
 
 ## Durable memory
 
 - Fix / behavior rationale: [`docs/changelog.md`](docs/changelog.md) — agents must read when relevant and append when landing non-trivial changes
-- Architecture decisions: [`docs/decisions/`](docs/decisions/)
+- Architecture decisions: [`docs/decisions/`](decisions/)
 
 ## Known small polish (not blocking)
 

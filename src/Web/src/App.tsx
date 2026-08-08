@@ -16,12 +16,10 @@ import {
   type NoteTemplate,
 } from './templates'
 import { copyJotdexAiPrompt } from './jotdexAiPrompt'
-import {
-  IdleLockGate,
-  loadIdleLockEnabled,
-  loadIdleLockMinutes,
-  saveIdleLockPrefs,
-} from './IdleLockGate'
+import { IdleLockGate, loadIdleLockEnabled, loadIdleLockMinutes, saveIdleLockPrefs } from './IdleLockGate'
+import { TodosRail } from './TodosRail'
+import { getNotificationPermission, promptTodoNotifications, type NotifyPermission } from './todoReminders'
+
 
 function countRemoteImages(markdown: string): number {
   const re = /!\[[^\]]*\]\((https?:\/\/[^)\s]+)\)/gi
@@ -225,7 +223,37 @@ function App() {
   const [templateMenu, setTemplateMenu] = useState(false)
   const [templateMenuPos, setTemplateMenuPos] = useState<{ top: number; left: number } | null>(null)
   const templateBtnRef = useRef<HTMLButtonElement>(null)
-  const [mobilePane, setMobilePane] = useState<'folders' | 'notes' | 'editor'>('notes')
+  const [mobilePane, setMobilePane] = useState<'folders' | 'notes' | 'editor' | 'todos'>('notes')
+  const [todosCollapsed, setTodosCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem('jotdex.todosCollapsed') === '1'
+    } catch {
+      return false
+    }
+  })
+  const [foldersCollapsed, setFoldersCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem('jotdex.foldersCollapsed') === '1'
+    } catch {
+      return false
+    }
+  })
+  const [notesCollapsed, setNotesCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem('jotdex.notesCollapsed') === '1'
+    } catch {
+      return false
+    }
+  })
+  const [narrowLayout, setNarrowLayout] = useState(() => {
+    try {
+      return window.matchMedia('(max-width: 900px)').matches
+    } catch {
+      return false
+    }
+  })
+  const [notifyPerm, setNotifyPerm] = useState<NotifyPermission>(() => getNotificationPermission())
+  const [notifyHint, setNotifyHint] = useState<string | null>(null)
   const popoutNoteId = useMemo(() => {
     try {
       return new URLSearchParams(window.location.search).get('popout')
@@ -322,6 +350,17 @@ function App() {
       })
       .catch((e: Error) => setError(e.message))
   }, [loadAuth, loadVault])
+
+  useEffect(() => {
+    try {
+      const mq = window.matchMedia('(max-width: 900px)')
+      const onChange = () => setNarrowLayout(mq.matches)
+      mq.addEventListener('change', onChange)
+      return () => mq.removeEventListener('change', onChange)
+    } catch {
+      return undefined
+    }
+  }, [])
 
   useEffect(() => {
     if (!vault?.configured) return
@@ -1746,6 +1785,8 @@ function App() {
             onClick={() => {
               setSettingsOpen(true)
               setNetworkHint(null)
+              setNotifyPerm(getNotificationPermission())
+              setNotifyHint(null)
               void openBrowse(vaultPathInput || undefined)
               void loadNetworkSettings()
               void loadMirrorSettings()
@@ -2122,6 +2163,47 @@ function App() {
               </>
             )}
 
+            <h2 className="settings-section">Todo notifications</h2>
+            <p className="lede">
+              Reminders use the browser’s notification permission (works best in Chrome / Edge while a Jotdex tab is
+              open). Safari support varies. Chrome is also prompted automatically when you add your first to-do. Use this
+              button to ask again after switching browsers or if you skipped/blocked earlier — Jotdex cannot override a
+              blocked permission; use the browser’s site settings if needed.
+            </p>
+            <p className="muted">
+              Status:{' '}
+              {notifyPerm === 'unsupported'
+                ? 'Not available in this browser'
+                : notifyPerm === 'granted'
+                  ? 'Allowed'
+                  : notifyPerm === 'denied'
+                    ? 'Blocked'
+                    : 'Not decided yet'}
+            </p>
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="primary"
+                disabled={notifyPerm === 'unsupported' || notifyPerm === 'granted'}
+                onClick={() => {
+                  void (async () => {
+                    setNotifyHint(null)
+                    const p = await promptTodoNotifications({ force: true })
+                    setNotifyPerm(p)
+                    if (p === 'granted') setNotifyHint('Notifications allowed for this site.')
+                    else if (p === 'denied')
+                      setNotifyHint(
+                        'Blocked — in Chrome: padlock / tune icon beside the URL → Site settings → Notifications → Allow.',
+                      )
+                    else setNotifyHint('No change — try again, or check the browser prompt.')
+                  })()
+                }}
+              >
+                {notifyPerm === 'granted' ? 'Notifications on' : 'Allow notifications'}
+              </button>
+            </div>
+            {notifyHint && <p className="muted">{notifyHint}</p>}
+
             <h2 className="settings-section">Logs</h2>
             <p className="lede">
               Logs are written to a daily file under app data (readable in Notepad). Use this viewer for the latest lines.
@@ -2272,101 +2354,186 @@ function App() {
         </div>
       )}
 
-      <div className={`body mobile-${mobilePane}`}>
-        <aside className="pane left">
-          <div className="mobile-pane-title">Folders</div>
-          <div className="pane-tools">
-            <button type="button" className="ghost" onClick={() => void createFolder()}>
-              New folder
-            </button>
-            <button type="button" className="ghost" disabled={!folder} onClick={() => void renameFolder()}>
-              Rename
-            </button>
-            <button type="button" className="ghost" disabled={!folder} onClick={() => void moveFolder()}>
-              Move
-            </button>
-            <button type="button" className="ghost" disabled={!folder} onClick={() => void deleteFolder()}>
-              Trash
-            </button>
-          </div>
-          {tree && (
-            <FolderTree
-              node={tree}
-              depth={0}
-              selected={folder}
-              collapsed={collapsedFolders}
-              onToggle={toggleFolderCollapsed}
-              onSelect={(p) => {
-                setFolder(p)
-                setSelectedId(null)
-                setMobilePane('notes')
+      <div
+        className={[
+          'body',
+          `mobile-${mobilePane}`,
+          !narrowLayout && foldersCollapsed ? 'folders-collapsed' : '',
+          !narrowLayout && notesCollapsed ? 'notes-collapsed' : '',
+          !narrowLayout && todosCollapsed ? 'todos-collapsed' : '',
+        ]
+          .filter(Boolean)
+          .join(' ')}
+      >
+        {foldersCollapsed && !narrowLayout ? (
+          <aside className="pane left pane-rail-collapsed">
+            <button
+              type="button"
+              className="pane-collapsed-tab"
+              title="Show folders"
+              onClick={() => {
+                setFoldersCollapsed(false)
+                try {
+                  localStorage.setItem('jotdex.foldersCollapsed', '0')
+                } catch {
+                  /* ignore */
+                }
               }}
-            />
-          )}
-        </aside>
-
-        <section className="pane middle">
-          <div className="pane-head">
-            <h2>{folder || 'All notes'}</h2>
-            <div className="pane-tools">
-              <div className="template-wrap">
-                <button type="button" className="ghost" onClick={() => void createNote()}>
-                  New note
-                </button>
-                <button
-                  ref={templateBtnRef}
-                  type="button"
-                  className={`ghost${templateMenu ? ' on' : ''}`}
-                  title="New note from template"
-                  aria-expanded={templateMenu}
-                  aria-haspopup="menu"
-                  onClick={() => setTemplateMenu((o) => !o)}
-                >
-                  ▾
-                </button>
-                {templateMenu &&
-                  templateMenuPos &&
-                  createPortal(
-                    <div
-                      className="template-menu"
-                      role="menu"
-                      style={{ top: templateMenuPos.top, left: templateMenuPos.left }}
-                    >
-                      {NOTE_TEMPLATES.map((t) => (
-                        <button
-                          key={t.id}
-                          type="button"
-                          role="menuitem"
-                          onClick={() => void createNote(t)}
-                        >
-                          <strong>{t.name}</strong>
-                          <span>{t.description}</span>
-                        </button>
-                      ))}
-                    </div>,
-                    document.body,
-                  )}
-              </div>
+            >
+              Folders
+            </button>
+          </aside>
+        ) : (
+          <aside className="pane left">
+            <div className="pane-rail-head desktop-only-rail">
+              <span className="pane-rail-label">Folders</span>
+              <button
+                type="button"
+                className="ghost pane-collapse-btn"
+                title="Collapse folders"
+                onClick={() => {
+                  setFoldersCollapsed(true)
+                  try {
+                    localStorage.setItem('jotdex.foldersCollapsed', '1')
+                  } catch {
+                    /* ignore */
+                  }
+                }}
+              >
+                ⟨
+              </button>
             </div>
-          </div>
-          <ul className="note-list">
-            {notes.map((n) => (
-              <li key={n.id}>
+            <div className="mobile-pane-title">Folders</div>
+            <div className="pane-tools">
+              <button type="button" className="ghost" onClick={() => void createFolder()}>
+                New folder
+              </button>
+              <button type="button" className="ghost" disabled={!folder} onClick={() => void renameFolder()}>
+                Rename
+              </button>
+              <button type="button" className="ghost" disabled={!folder} onClick={() => void moveFolder()}>
+                Move
+              </button>
+              <button type="button" className="ghost" disabled={!folder} onClick={() => void deleteFolder()}>
+                Trash
+              </button>
+            </div>
+            {tree && (
+              <FolderTree
+                node={tree}
+                depth={0}
+                selected={folder}
+                collapsed={collapsedFolders}
+                onToggle={toggleFolderCollapsed}
+                onSelect={(p) => {
+                  setFolder(p)
+                  setSelectedId(null)
+                  setMobilePane('notes')
+                }}
+              />
+            )}
+          </aside>
+        )}
+
+        {notesCollapsed && !narrowLayout ? (
+          <section className="pane middle pane-rail-collapsed">
+            <button
+              type="button"
+              className="pane-collapsed-tab"
+              title="Show notes"
+              onClick={() => {
+                setNotesCollapsed(false)
+                try {
+                  localStorage.setItem('jotdex.notesCollapsed', '0')
+                } catch {
+                  /* ignore */
+                }
+              }}
+            >
+              Notes
+            </button>
+          </section>
+        ) : (
+          <section className="pane middle">
+            <div className="pane-head">
+              <div className="pane-rail-head pane-rail-head-inline">
+                <h2>{folder || 'All notes'}</h2>
                 <button
                   type="button"
-                  className={selectedId === n.id ? 'active' : ''}
+                  className="ghost pane-collapse-btn desktop-only-rail"
+                  title="Collapse notes list"
                   onClick={() => {
-                    setSelectedId(n.id)
-                    setMobilePane('editor')
+                    setNotesCollapsed(true)
+                    try {
+                      localStorage.setItem('jotdex.notesCollapsed', '1')
+                    } catch {
+                      /* ignore */
+                    }
                   }}
                 >
-                  <span className="note-title">{n.title}</span>
-                  <span className="note-path">{n.folderPath || '/'}</span>
+                  ⟨
                 </button>
-              </li>
-            ))}
-          </ul>
-        </section>
+              </div>
+              <div className="pane-tools">
+                <div className="template-wrap">
+                  <button type="button" className="ghost" onClick={() => void createNote()}>
+                    New note
+                  </button>
+                  <button
+                    ref={templateBtnRef}
+                    type="button"
+                    className={`ghost${templateMenu ? ' on' : ''}`}
+                    title="New note from template"
+                    aria-expanded={templateMenu}
+                    aria-haspopup="menu"
+                    onClick={() => setTemplateMenu((o) => !o)}
+                  >
+                    ▾
+                  </button>
+                  {templateMenu &&
+                    templateMenuPos &&
+                    createPortal(
+                      <div
+                        className="template-menu"
+                        role="menu"
+                        style={{ top: templateMenuPos.top, left: templateMenuPos.left }}
+                      >
+                        {NOTE_TEMPLATES.map((t) => (
+                          <button
+                            key={t.id}
+                            type="button"
+                            role="menuitem"
+                            onClick={() => void createNote(t)}
+                          >
+                            <strong>{t.name}</strong>
+                            <span>{t.description}</span>
+                          </button>
+                        ))}
+                      </div>,
+                      document.body,
+                    )}
+                </div>
+              </div>
+            </div>
+            <ul className="note-list">
+              {notes.map((n) => (
+                <li key={n.id}>
+                  <button
+                    type="button"
+                    className={selectedId === n.id ? 'active' : ''}
+                    onClick={() => {
+                      setSelectedId(n.id)
+                      setMobilePane('editor')
+                    }}
+                  >
+                    <span className="note-title">{n.title}</span>
+                    <span className="note-path">{n.folderPath || '/'}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
 
         <section className="pane right">
           {error && saveStatus !== 'conflict' && <p className="err">{error}</p>}
@@ -2616,6 +2783,22 @@ function App() {
             </>
           )}
         </section>
+
+        <TodosRail
+          fill={mobilePane === 'todos'}
+          collapsed={mobilePane === 'todos' ? false : todosCollapsed}
+          onToggleCollapsed={() => {
+            setTodosCollapsed((c) => {
+              const next = !c
+              try {
+                localStorage.setItem('jotdex.todosCollapsed', next ? '1' : '0')
+              } catch {
+                /* ignore */
+              }
+              return next
+            })
+          }}
+        />
       </div>
 
       <nav className="mobile-tabbar" aria-label="Mobile navigation">
@@ -2640,6 +2823,13 @@ function App() {
           onClick={() => selectedId && setMobilePane('editor')}
         >
           Note
+        </button>
+        <button
+          type="button"
+          className={mobilePane === 'todos' ? 'on' : ''}
+          onClick={() => setMobilePane('todos')}
+        >
+          Todos
         </button>
       </nav>
 
