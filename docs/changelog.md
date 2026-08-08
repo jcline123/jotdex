@@ -7,10 +7,11 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 
 ---
 
-## 2026-08-08 — Collapsed Todos ticker polish
+## 2026-08-08 — Collapsed Todos ticker polish (`5ed51e9`)
 
 **Label sat at the top of the strip (unlike Folders/Notes), and the loop jumped when it wrapped**
 - Move the Todos label to the bottom of the collapsed rail; duplicate equal-height ticker groups so the -50% scroll seam is continuous.
+- Portable build republished to `artifacts\win-x64`.
 
 ---
 
