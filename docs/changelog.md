@@ -7,6 +7,32 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 
 ---
 
+## 2026-08-07 — Password-only security (no username); removable
+
+**Wanted a simple optional password, not a user account**
+- Settings → Security is password-only (set / change / remove). No username in the UI.
+- No password → app opens freely. Password set → required on open; **Remove password** turns that off again.
+- Idle lock stays opt-in with a choosable minute timeout, only when a password exists.
+
+---
+
+## 2026-08-07 — Password + idle lock live in Settings → Security
+
+**No obvious place to set a password; idle lock should not run without one**
+- Settings → Security now creates (or changes) the admin password. Idle lock options appear only after a password exists and default to off.
+- Dev mode still skips forced login for APIs, but a password can be set for Unlock / Production use.
+
+---
+
+## 2026-08-07 — Vault mirror ReadOnly fix, PFX copy, idle lock
+
+**iCloud mirror failed with robocopy exit 9; PFX wording was confusing; cookie idle ≠ step-away lock**
+- Robocopy now copies data/timestamps only (`/COPY:DT`), clears ReadOnly on write (`/A-:R`), pre-clears ReadOnly on dest, retries more, and surfaces ERROR lines in Settings.
+- Settings recommend a distinct mirror folder (`JotdexMirror`) and clarify that self-signed HTTPS needs no PFX (custom PFX + password are optional).
+- Frontend idle lock (default 15 min, Settings → Security) covers the app with an Unlock overlay when you stop interacting or leave the tab hidden — autosave no longer keeps you “unlocked.”
+
+---
+
 ## 2026-08-07 — AI prompt clipboard fallback + denser pop-out chrome (`f4931c9`)
 
 **AI prompt failed to copy on LAN http://; pop-out header ate note space**

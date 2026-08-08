@@ -204,6 +204,17 @@ public sealed class VaultMirrorService : IVaultMirrorService
 
     private static (bool Success, string? Error) RunRobocopy(string source, string dest)
     {
+        // Prior mirrors often copied the ReadOnly attribute onto cloud destinations; clear it
+        // so /MIR can overwrite (otherwise ERROR 5 → robocopy exit 8/9).
+        try
+        {
+            ClearReadOnlyAttributes(dest);
+        }
+        catch
+        {
+            /* best-effort; robocopy will report remaining failures */
+        }
+
         var psi = new ProcessStartInfo
         {
             FileName = "robocopy.exe",
@@ -212,12 +223,12 @@ public sealed class VaultMirrorService : IVaultMirrorService
                 source,
                 dest,
                 "/MIR",
-                "/R:2",
-                "/W:2",
-                "/NFL",
-                "/NDL",
-                "/NJH",
-                "/NJS",
+                // Data + timestamps only — do not stamp ReadOnly onto the mirror
+                "/COPY:DT",
+                "/DCOPY:T",
+                "/A-:R",
+                "/R:5",
+                "/W:3",
                 "/NP",
                 "/XD", ".git"
             },
@@ -228,11 +239,64 @@ public sealed class VaultMirrorService : IVaultMirrorService
         };
 
         using var proc = Process.Start(psi) ?? throw new InvalidOperationException("Could not start robocopy.");
+        var stdout = proc.StandardOutput.ReadToEnd();
+        var stderr = proc.StandardError.ReadToEnd();
         proc.WaitForExit();
+
         // robocopy: 0–7 = success/partial copy; >=8 = failure
         if (proc.ExitCode >= 8)
-            return (false, $"robocopy failed with exit code {proc.ExitCode}");
+        {
+            var detail = SummarizeRobocopyOutput(stdout, stderr);
+            var msg = $"robocopy failed with exit code {proc.ExitCode}";
+            if (!string.IsNullOrWhiteSpace(detail))
+                msg += ": " + detail;
+            return (false, msg);
+        }
+
         return (true, null);
+    }
+
+    private static void ClearReadOnlyAttributes(string root)
+    {
+        if (!Directory.Exists(root)) return;
+        foreach (var path in Directory.EnumerateFileSystemEntries(root, "*", SearchOption.AllDirectories))
+        {
+            try
+            {
+                var attrs = File.GetAttributes(path);
+                if ((attrs & FileAttributes.ReadOnly) != 0)
+                    File.SetAttributes(path, attrs & ~FileAttributes.ReadOnly);
+            }
+            catch
+            {
+                /* skip locked/cloud-only entries */
+            }
+        }
+    }
+
+    private static string SummarizeRobocopyOutput(string stdout, string stderr)
+    {
+        var combined = (stdout ?? "") + "\n" + (stderr ?? "");
+        var lines = combined
+            .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(l =>
+                l.Contains("ERROR", StringComparison.OrdinalIgnoreCase) ||
+                l.Contains("Access is denied", StringComparison.OrdinalIgnoreCase) ||
+                l.Contains("RETRY LIMIT", StringComparison.OrdinalIgnoreCase))
+            .Take(6)
+            .ToList();
+        if (lines.Count == 0)
+        {
+            // Fall back to a short tail so the UI isn't empty
+            lines = combined
+                .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .TakeLast(8)
+                .ToList();
+        }
+
+        var text = string.Join(" | ", lines);
+        const int max = 900;
+        return text.Length <= max ? text : text[..max] + "…";
     }
 
     private VaultMirrorSettings? Load()

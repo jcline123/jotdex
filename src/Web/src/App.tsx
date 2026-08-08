@@ -16,6 +16,12 @@ import {
   type NoteTemplate,
 } from './templates'
 import { copyJotdexAiPrompt } from './jotdexAiPrompt'
+import {
+  IdleLockGate,
+  loadIdleLockEnabled,
+  loadIdleLockMinutes,
+  saveIdleLockPrefs,
+} from './IdleLockGate'
 
 function countRemoteImages(markdown: string): number {
   const re = /!\[[^\]]*\]\((https?:\/\/[^)\s]+)\)/gi
@@ -235,6 +241,15 @@ function App() {
     }
   })
   const [aiPromptHint, setAiPromptHint] = useState<string | null>(null)
+  const [idleLockEnabled, setIdleLockEnabled] = useState(loadIdleLockEnabled)
+  const [idleLockMinutes, setIdleLockMinutes] = useState(loadIdleLockMinutes)
+  const [secPassword, setSecPassword] = useState('')
+  const [secConfirm, setSecConfirm] = useState('')
+  const [secCurrentPassword, setSecCurrentPassword] = useState('')
+  const [secNewPassword, setSecNewPassword] = useState('')
+  const [secNewConfirm, setSecNewConfirm] = useState('')
+  const [secHint, setSecHint] = useState<string | null>(null)
+  const [secBusy, setSecBusy] = useState(false)
 
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [vaultPathInput, setVaultPathInput] = useState('')
@@ -869,6 +884,136 @@ function App() {
       }
     } catch {
       /* ignore */
+    }
+  }
+
+  async function createAdminPassword() {
+    setSecHint(null)
+    if (secPassword !== secConfirm) {
+      setSecHint('Passwords do not match.')
+      return
+    }
+    if (secPassword.length < 10) {
+      setSecHint('Password must be at least 6 characters.')
+      return
+    }
+    setSecBusy(true)
+    try {
+      const res = await fetch('/api/auth/setup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ password: secPassword }),
+      })
+      const data = await res.json()
+      if (!res.ok || !data.success) {
+        setSecHint(data.error ?? 'Could not create password')
+        return
+      }
+      setSecPassword('')
+      setSecConfirm('')
+      setSecHint('Password saved. Idle lock is available below if you want it.')
+      await loadAuth()
+    } catch (e) {
+      setSecHint(e instanceof Error ? e.message : 'Could not create password')
+    } finally {
+      setSecBusy(false)
+    }
+  }
+
+  async function signInForSecurity() {
+    setSecHint(null)
+    setSecBusy(true)
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ password: secCurrentPassword }),
+      })
+      const data = await res.json()
+      if (!res.ok || !data.success) {
+        setSecHint(data.error ?? 'Incorrect password')
+        return
+      }
+      setSecCurrentPassword('')
+      setSecHint('Unlocked — you can change or remove the password.')
+      await loadAuth()
+    } catch (e) {
+      setSecHint(e instanceof Error ? e.message : 'Sign-in failed')
+    } finally {
+      setSecBusy(false)
+    }
+  }
+
+  async function changeAdminPassword() {
+    setSecHint(null)
+    if (secNewPassword !== secNewConfirm) {
+      setSecHint('New passwords do not match.')
+      return
+    }
+    if (secNewPassword.length < 10) {
+      setSecHint('New password must be at least 6 characters.')
+      return
+    }
+    setSecBusy(true)
+    try {
+      const res = await fetch('/api/auth/change-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ currentPassword: secCurrentPassword, newPassword: secNewPassword }),
+      })
+      const data = await res.json()
+      if (!res.ok || !data.success) {
+        setSecHint(data.error ?? (res.status === 401 ? 'Unlock with your password first.' : 'Could not change password'))
+        return
+      }
+      setSecCurrentPassword('')
+      setSecNewPassword('')
+      setSecNewConfirm('')
+      setSecHint('Password updated.')
+      await loadAuth()
+    } catch (e) {
+      setSecHint(e instanceof Error ? e.message : 'Could not change password')
+    } finally {
+      setSecBusy(false)
+    }
+  }
+
+  async function removeAdminPassword() {
+    setSecHint(null)
+    if (!secCurrentPassword) {
+      setSecHint('Enter your current password to remove protection.')
+      return
+    }
+    if (!window.confirm('Remove the password? Jotdex will open without asking again until you set a new one.')) {
+      return
+    }
+    setSecBusy(true)
+    try {
+      const res = await fetch('/api/auth/remove-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'same-origin',
+        body: JSON.stringify({ currentPassword: secCurrentPassword }),
+      })
+      const data = await res.json()
+      if (!res.ok || !data.success) {
+        setSecHint(data.error ?? 'Could not remove password')
+        return
+      }
+      setSecCurrentPassword('')
+      setSecNewPassword('')
+      setSecNewConfirm('')
+      setIdleLockEnabled(false)
+      saveIdleLockPrefs(false, idleLockMinutes)
+      setSecHint('Password removed. The app opens freely again.')
+      await loadAuth()
+    } catch (e) {
+      setSecHint(e instanceof Error ? e.message : 'Could not remove password')
+    } finally {
+      setSecBusy(false)
     }
   }
 
@@ -1544,6 +1689,11 @@ function App() {
             )}
           </div>
         )}
+      <IdleLockGate
+        enabled={idleLockEnabled}
+        minutes={idleLockMinutes}
+        authAvailable={!!auth?.setupComplete}
+      />
       </div>
     )
   }
@@ -1668,7 +1818,7 @@ function App() {
           >
             Settings
           </button>
-          {auth && !auth.developmentBypass && auth.authenticated && (
+          {auth && auth.setupComplete && auth.authenticated && (
             <button
               type="button"
               className="ghost"
@@ -1679,7 +1829,7 @@ function App() {
                 })
               }}
             >
-              Sign out
+              Lock
             </button>
           )}
         </div>
@@ -1794,7 +1944,11 @@ function App() {
                 placeholder={httpsPasswordConfigured ? '••••••••' : ''}
               />
             </label>
-            <p className="muted">Prefer env var JOTDEX_HTTPS_PFX_PASSWORD over storing the password in config.</p>
+            <p className="muted">
+              Leave blank unless you use your own certificate file. Most people only need the self-signed HTTPS checkbox
+              above (no PFX password). If you do use a custom PFX, you can type the password here, or set the env var
+              JOTDEX_HTTPS_PFX_PASSWORD so it is not stored in config on disk.
+            </p>
             {bindMode === 'lan' && !httpsSelfSigned && !httpsPfxPath.trim() && (
               <p className="warn">LAN without HTTPS exposes the app in cleartext on your network. Prefer enabling self-signed HTTPS or a PFX.</p>
             )}
@@ -1819,7 +1973,8 @@ function App() {
 
             <h2 className="settings-section">Cloud backup mirror</h2>
             <p className="lede">
-              Keep the live vault on local disk. Optionally copy one-way to iCloud, OneDrive, etc. Never open the mirror as the live vault.
+              Keep the live vault on local disk. Optionally copy one-way to iCloud, OneDrive, etc. Never open the mirror
+              as the live vault — use a separate folder name such as <code>JotdexMirror</code>.
             </p>
             <label className="field checkbox-row">
               <input type="checkbox" checked={mirrorEnabled} onChange={(e) => setMirrorEnabled(e.target.checked)} />
@@ -1830,9 +1985,13 @@ function App() {
               <input
                 value={mirrorDest}
                 onChange={(e) => setMirrorDest(e.target.value)}
-                placeholder="C:\Users\You\iCloudDrive\JotdexVault"
+                placeholder="C:\Users\You\iCloudDrive\JotdexMirror"
               />
             </label>
+            <p className="muted">
+              Prefer <code>…\iCloudDrive\JotdexMirror</code> (not a folder also named JotdexVault). Mirror is one-way:
+              local live vault → destination.
+            </p>
             <label className="field">
               Interval (minutes)
               <input
@@ -1887,6 +2046,145 @@ function App() {
                     : 'not installed'}
                 </p>
               </div>
+            )}
+
+            <h2 className="settings-section">Security</h2>
+            <p className="lede">
+              Optional password protection — no username. When a password is set, Jotdex asks for it on open. You can
+              remove it anytime to open freely again.
+            </p>
+            {!auth?.setupComplete ? (
+              <div className="security-block">
+                <h3 className="settings-subhead">Set password</h3>
+                <label className="field">
+                  Password (at least 6 characters)
+                  <input
+                    type="password"
+                    value={secPassword}
+                    onChange={(e) => setSecPassword(e.target.value)}
+                    autoComplete="new-password"
+                  />
+                </label>
+                <label className="field">
+                  Confirm password
+                  <input
+                    type="password"
+                    value={secConfirm}
+                    onChange={(e) => setSecConfirm(e.target.value)}
+                    autoComplete="new-password"
+                  />
+                </label>
+                <div className="modal-actions">
+                  <button type="button" className="primary" disabled={secBusy} onClick={() => void createAdminPassword()}>
+                    {secBusy ? 'Saving…' : 'Save password'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="security-block">
+                <p className="muted">Password is on. The app requires it to open.</p>
+                {!auth.authenticated && (
+                  <>
+                    <h3 className="settings-subhead">Unlock to manage</h3>
+                    <label className="field">
+                      Password
+                      <input
+                        type="password"
+                        value={secCurrentPassword}
+                        onChange={(e) => setSecCurrentPassword(e.target.value)}
+                        autoComplete="current-password"
+                      />
+                    </label>
+                    <div className="modal-actions">
+                      <button type="button" className="primary" disabled={secBusy} onClick={() => void signInForSecurity()}>
+                        {secBusy ? 'Unlocking…' : 'Unlock'}
+                      </button>
+                    </div>
+                  </>
+                )}
+                {auth.authenticated && (
+                  <>
+                    <h3 className="settings-subhead">Change password</h3>
+                    <label className="field">
+                      Current password
+                      <input
+                        type="password"
+                        value={secCurrentPassword}
+                        onChange={(e) => setSecCurrentPassword(e.target.value)}
+                        autoComplete="current-password"
+                      />
+                    </label>
+                    <label className="field">
+                      New password
+                      <input
+                        type="password"
+                        value={secNewPassword}
+                        onChange={(e) => setSecNewPassword(e.target.value)}
+                        autoComplete="new-password"
+                      />
+                    </label>
+                    <label className="field">
+                      Confirm new password
+                      <input
+                        type="password"
+                        value={secNewConfirm}
+                        onChange={(e) => setSecNewConfirm(e.target.value)}
+                        autoComplete="new-password"
+                      />
+                    </label>
+                    <div className="modal-actions">
+                      <button type="button" className="primary" disabled={secBusy} onClick={() => void changeAdminPassword()}>
+                        {secBusy ? 'Saving…' : 'Update password'}
+                      </button>
+                      <button type="button" className="ghost" disabled={secBusy} onClick={() => void removeAdminPassword()}>
+                        Remove password
+                      </button>
+                    </div>
+                    <p className="muted">Remove password turns protection off so Jotdex opens without asking.</p>
+                  </>
+                )}
+              </div>
+            )}
+            {secHint && <p className={/saved|updated|removed|Unlocked/i.test(secHint) ? 'muted' : 'warn'}>{secHint}</p>}
+
+            <h3 className="settings-subhead">Idle lock</h3>
+            {!auth?.setupComplete ? (
+              <p className="muted">Set a password above first. Until then, idle lock stays off.</p>
+            ) : (
+              <>
+                <p className="muted">
+                  After you stop interacting (or leave this tab hidden), require your password again. Off by default —
+                  choose how many minutes below.
+                </p>
+                <label className="field checkbox-row">
+                  <input
+                    type="checkbox"
+                    checked={idleLockEnabled}
+                    onChange={(e) => {
+                      const on = e.target.checked
+                      setIdleLockEnabled(on)
+                      saveIdleLockPrefs(on, idleLockMinutes)
+                    }}
+                  />
+                  Lock after idle
+                </label>
+                <label className="field">
+                  Minutes until lock
+                  <input
+                    type="number"
+                    min={1}
+                    max={240}
+                    value={idleLockMinutes}
+                    disabled={!idleLockEnabled}
+                    onChange={(e) => {
+                      const n = Number(e.target.value) || 15
+                      const clamped = Math.max(1, Math.min(240, Math.floor(n)))
+                      setIdleLockMinutes(clamped)
+                      saveIdleLockPrefs(idleLockEnabled, clamped)
+                    }}
+                  />
+                </label>
+              </>
             )}
 
             <h2 className="settings-section">Logs</h2>
@@ -2463,6 +2761,12 @@ function App() {
           </div>
         </div>
       )}
+
+      <IdleLockGate
+        enabled={idleLockEnabled}
+        minutes={idleLockMinutes}
+        authAvailable={!!auth?.setupComplete}
+      />
     </div>
   )
 }

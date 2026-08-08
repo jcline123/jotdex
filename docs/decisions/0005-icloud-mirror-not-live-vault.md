@@ -17,4 +17,4 @@ Bidirectional sync (iCloud) conflicts with multi-file note + assets writes and c
 
 ## Consequences
 
-Source code may live under iCloudDrive; vault data must not. Mirror scripts land in M7.
+Source code should live on local disk (e.g. `C:\Users\joshu\dev\jotdex`), not in iCloudDrive — GitHub is the backup. Vault data must never live in iCloud as the live vault. Mirror scripts land in M7.

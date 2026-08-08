@@ -45,17 +45,16 @@ public class AuthGateTests : IDisposable
     }
 
     [Fact]
-    public async Task Without_admin_notes_api_returns_setup_required()
+    public async Task Without_password_notes_api_is_open()
     {
         var status = await _client.GetFromJsonAsync<AuthStatusDto>("/api/auth/status");
         Assert.NotNull(status);
-        Assert.True(status!.SetupRequired);
-        Assert.False(status.DevelopmentBypass);
+        Assert.False(status!.SetupRequired);
+        Assert.False(status.SetupComplete);
+        Assert.False(status.AuthRequired);
 
         var notes = await _client.GetAsync("/api/notes");
-        Assert.Equal(HttpStatusCode.ServiceUnavailable, notes.StatusCode);
-        var body = await notes.Content.ReadAsStringAsync();
-        Assert.Contains("setupRequired", body, StringComparison.OrdinalIgnoreCase);
+        Assert.Equal(HttpStatusCode.OK, notes.StatusCode);
     }
 
     [Fact]
@@ -63,7 +62,6 @@ public class AuthGateTests : IDisposable
     {
         var setup = await _client.PostAsJsonAsync("/api/auth/setup", new
         {
-            username = "admin",
             password = "correct-horse-battery"
         });
         Assert.Equal(HttpStatusCode.OK, setup.StatusCode);
@@ -82,7 +80,6 @@ public class AuthGateTests : IDisposable
     {
         await _client.PostAsJsonAsync("/api/auth/setup", new
         {
-            username = "admin",
             password = "correct-horse-battery"
         });
         // setup auto-signs in on this client
@@ -91,10 +88,29 @@ public class AuthGateTests : IDisposable
     }
 
     [Fact]
+    public async Task Remove_password_restores_open_access()
+    {
+        await _client.PostAsJsonAsync("/api/auth/setup", new { password = "correct-horse-battery" });
+
+        using var anon = _factory.CreateClient();
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anon.GetAsync("/api/notes")).StatusCode);
+
+        var remove = await _client.PostAsJsonAsync("/api/auth/remove-password", new
+        {
+            currentPassword = "correct-horse-battery"
+        });
+        Assert.Equal(HttpStatusCode.OK, remove.StatusCode);
+
+        Assert.Equal(HttpStatusCode.OK, (await anon.GetAsync("/api/notes")).StatusCode);
+        var status = await anon.GetFromJsonAsync<AuthStatusDto>("/api/auth/status");
+        Assert.False(status!.SetupComplete);
+        Assert.False(status.AuthRequired);
+    }
+
+    [Fact]
     public async Task Network_settings_round_trip()
     {
         var put = await _client.PutAsJsonAsync("/api/settings/network", new { bindMode = "lan", port = 5199 });
-        // setup not complete — network is allowed during setup
         Assert.Equal(HttpStatusCode.OK, put.StatusCode);
         var get = await _client.GetFromJsonAsync<NetworkDto>("/api/settings/network");
         Assert.NotNull(get);

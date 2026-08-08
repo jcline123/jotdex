@@ -18,7 +18,6 @@ export function FirstRunWizard({ onComplete }: Props) {
   const [browseEntries, setBrowseEntries] = useState<BrowseEntry[]>([])
 
   // Admin
-  const [username, setUsername] = useState('admin')
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
 
@@ -114,7 +113,7 @@ export function FirstRunWizard({ onComplete }: Props) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'same-origin',
-        body: JSON.stringify({ username, password, displayName: username }),
+        body: JSON.stringify({ password }),
       })
       const data = await res.json()
       if (!res.ok || !data.success) {
@@ -137,7 +136,9 @@ export function FirstRunWizard({ onComplete }: Props) {
       return
     }
     if (step === 1) {
-      if (!(await createAdmin())) return
+      if (password.trim() || confirm.trim()) {
+        if (!(await createAdmin())) return
+      }
       setStep(2)
       return
     }
@@ -188,12 +189,8 @@ export function FirstRunWizard({ onComplete }: Props) {
 
         {step === 1 && (
           <>
-            <p>Create the local administrator account.</p>
+            <p>Optional: set a password to protect this vault. You can also skip and set one later in Settings → Security.</p>
             <div className="auth-form">
-              <label>
-                Username
-                <input value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" required />
-              </label>
               <label>
                 Password
                 <input
@@ -201,8 +198,7 @@ export function FirstRunWizard({ onComplete }: Props) {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   autoComplete="new-password"
-                  minLength={10}
-                  required
+                  minLength={6}
                 />
               </label>
               <label>
@@ -212,8 +208,7 @@ export function FirstRunWizard({ onComplete }: Props) {
                   value={confirm}
                   onChange={(e) => setConfirm(e.target.value)}
                   autoComplete="new-password"
-                  minLength={10}
-                  required
+                  minLength={6}
                 />
               </label>
             </div>
@@ -272,7 +267,6 @@ type LoginProps = {
 }
 
 export function LoginScreen({ onLoggedIn }: LoginProps) {
-  const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -286,7 +280,7 @@ export function LoginScreen({ onLoggedIn }: LoginProps) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'same-origin',
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ password }),
       })
       const data = await res.json()
       if (!res.ok || !data.success) {
@@ -305,12 +299,8 @@ export function LoginScreen({ onLoggedIn }: LoginProps) {
     <div className="setup-screen">
       <div className="setup-card">
         <h1>Jotdex</h1>
-        <p>Sign in to open your vault.</p>
+        <p>Enter your password to open your vault.</p>
         <form className="auth-form" onSubmit={(e) => void submit(e)}>
-          <label>
-            Username
-            <input value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" required />
-          </label>
           <label>
             Password
             <input
@@ -319,11 +309,12 @@ export function LoginScreen({ onLoggedIn }: LoginProps) {
               onChange={(e) => setPassword(e.target.value)}
               autoComplete="current-password"
               required
+              autoFocus
             />
           </label>
           {error && <p className="error">{error}</p>}
           <button type="submit" disabled={busy}>
-            {busy ? 'Signing in…' : 'Sign in'}
+            {busy ? 'Unlocking…' : 'Unlock'}
           </button>
         </form>
       </div>

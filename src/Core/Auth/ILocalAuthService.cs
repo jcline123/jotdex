@@ -20,11 +20,16 @@ public sealed class AuthResult
 
 public interface ILocalAuthService
 {
+    /// <summary>Fixed account name stored on disk; UI is password-only.</summary>
+    public const string DefaultUsername = "admin";
+
     bool IsSetupComplete { get; }
     AuthStatus GetStatus(string? currentUsername);
     AuthResult CreateAdmin(string username, string password, string? displayName = null);
     AuthResult ValidateCredentials(string username, string password);
     AuthResult ChangePassword(string username, string currentPassword, string newPassword);
+    /// <summary>Clears the password so the app opens without sign-in. Requires the current password.</summary>
+    AuthResult RemovePassword(string currentPassword);
     void RecordFailedLogin(string username);
     void RecordSuccessfulLogin(string username);
 }

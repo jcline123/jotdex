@@ -54,30 +54,38 @@ public static class AuthEndpointExtensions
         {
             var username = ctx.User.Identity?.IsAuthenticated == true ? ctx.User.Identity.Name : null;
             var status = auth.GetStatus(username);
-            var enforce = ShouldEnforceAuth(env, options);
+            var passwordSet = status.SetupComplete;
+            // Password is optional. When set, sign-in is required (even in Development).
+            // When not set, the app stays open. Dev bypass only matters when no password exists.
+            var openAccess = !passwordSet;
+            var developmentBypass = openAccess && env.IsDevelopment() && options.Value.Auth.BypassInDevelopment;
             return Results.Json(new
             {
-                setupComplete = status.SetupComplete,
+                setupComplete = passwordSet,
+                passwordSet,
                 authenticated = status.Authenticated,
-                authEnforced = enforce,
-                setupRequired = enforce && !status.SetupComplete,
-                authRequired = enforce && status.SetupComplete && !status.Authenticated,
+                authEnforced = passwordSet,
+                setupRequired = false,
+                authRequired = passwordSet && !status.Authenticated,
                 username = status.Username,
                 displayName = status.DisplayName,
-                developmentBypass = !enforce
+                developmentBypass
             });
         });
 
         app.MapPost("/api/auth/setup", async (HttpRequest request, HttpContext ctx, ILocalAuthService auth) =>
         {
             if (auth.IsSetupComplete)
-                return Results.BadRequest(new { error = "Administrator already exists." });
+                return Results.BadRequest(new { error = "A password is already set." });
 
             var body = await request.ReadFromJsonAsync<SetupBody>();
             if (body is null)
                 return Results.BadRequest(new { error = "Invalid body" });
 
-            var result = auth.CreateAdmin(body.Username ?? "", body.Password ?? "", body.DisplayName);
+            var result = auth.CreateAdmin(
+                body.Username ?? ILocalAuthService.DefaultUsername,
+                body.Password ?? "",
+                body.DisplayName);
             if (!result.Success)
                 return Results.BadRequest(new { error = result.Error });
 
@@ -136,6 +144,20 @@ public static class AuthEndpointExtensions
             return result.Success
                 ? Results.Json(new { success = true })
                 : Results.BadRequest(new { error = result.Error });
+        });
+
+        app.MapPost("/api/auth/remove-password", async (HttpRequest request, HttpContext ctx, ILocalAuthService auth) =>
+        {
+            var body = await request.ReadFromJsonAsync<RemovePasswordBody>();
+            if (body is null)
+                return Results.BadRequest(new { error = "Invalid body" });
+
+            var result = auth.RemovePassword(body.CurrentPassword ?? "");
+            if (!result.Success)
+                return Results.BadRequest(new { error = result.Error });
+
+            await ctx.SignOutAsync(CookieScheme);
+            return Results.Json(new { success = true });
         });
 
         app.MapGet("/api/settings/network", (INetworkSettingsService network) =>
@@ -250,14 +272,6 @@ public static class AuthEndpointExtensions
     {
         return app.Use(async (ctx, next) =>
         {
-            var env = ctx.RequestServices.GetRequiredService<IHostEnvironment>();
-            var options = ctx.RequestServices.GetRequiredService<IOptions<JotdexOptions>>();
-            if (!ShouldEnforceAuth(env, options))
-            {
-                await next();
-                return;
-            }
-
             var path = ctx.Request.Path.Value ?? "";
             if (!path.StartsWith("/api/", StringComparison.OrdinalIgnoreCase))
             {
@@ -272,19 +286,14 @@ public static class AuthEndpointExtensions
             }
 
             var auth = ctx.RequestServices.GetRequiredService<ILocalAuthService>();
+            // No password configured → open access (optional protection).
             if (!auth.IsSetupComplete)
             {
-                if (IsSetupAllowedApi(path))
-                {
-                    await next();
-                    return;
-                }
-
-                ctx.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
-                await ctx.Response.WriteAsJsonAsync(new { error = "Setup required", setupRequired = true });
+                await next();
                 return;
             }
 
+            // Password is set → require a signed-in session (including Development).
             if (ctx.User.Identity?.IsAuthenticated != true)
             {
                 ctx.Response.StatusCode = StatusCodes.Status401Unauthorized;
@@ -299,11 +308,6 @@ public static class AuthEndpointExtensions
     private static bool IsAnonymousApi(string path) =>
         path.StartsWith("/api/health", StringComparison.OrdinalIgnoreCase) ||
         path.StartsWith("/api/auth/", StringComparison.OrdinalIgnoreCase);
-
-    private static bool IsSetupAllowedApi(string path) =>
-        path.StartsWith("/api/settings/", StringComparison.OrdinalIgnoreCase) ||
-        path.StartsWith("/api/auth/setup", StringComparison.OrdinalIgnoreCase) ||
-        path.StartsWith("/api/auth/status", StringComparison.OrdinalIgnoreCase);
 
     private sealed class SetupBody
     {
@@ -322,6 +326,11 @@ public static class AuthEndpointExtensions
     {
         public string? CurrentPassword { get; set; }
         public string? NewPassword { get; set; }
+    }
+
+    private sealed class RemovePasswordBody
+    {
+        public string? CurrentPassword { get; set; }
     }
 
     private sealed class NetworkBody
