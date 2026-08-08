@@ -7,7 +7,12 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 
 ---
 
-## 2026-08-08 — Encrypted move kits + daily kit in mirror
+## 2026-08-08 — LAN firewall UAC helper
+
+**LAN worked on the server but other PCs were often blocked by Windows Firewall**
+- Saving LAN (Settings, first-run wizard) prompts UAC via `Ensure-JotdexFirewall.ps1` for HTTP/HTTPS allow rules. Decline or no-admin still keeps LAN enabled and shows a manual-port warning. Same helper from Setup/Restore/install-service and portable publish.
+
+---
 
 **Plain move kits in iCloud were risky once they included portable secrets**
 - When a password is set, move kits become `.jotdexkit` (AES; unlock password unwraps). `Decrypt-JotdexKit.ps1` for restore.

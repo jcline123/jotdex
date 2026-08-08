@@ -10,6 +10,7 @@
 ## Highlights
 
 - Live vault on local disk; optional one-way cloud mirror (Settings)
+- **LAN firewall:** saving LAN prompts UAC to allow HTTP/HTTPS; Setup/Restore/service install do the same when LAN is on
 - **DPAPI secrets** for SMTP/Telegram/TOTP; move kit carries portable secrets then rewraps
 - **Ops alerts** (email / Telegram) when mirror is stale; optional **TOTP** in Security
 - Restart server button for bind/port/HTTPS

@@ -320,6 +320,60 @@ try {
 
     Write-Step "Done"
     Write-Host ""
+
+    # If restored config uses LAN, offer / attempt firewall rules (UAC).
+    $netJson = Join-Path $configDir "network.json"
+    if (Test-Path -LiteralPath $netJson) {
+        try {
+            $net = Get-Content -LiteralPath $netJson -Raw | ConvertFrom-Json
+            $mode = [string]$net.bindMode
+            if ($mode -eq "lan") {
+                $httpPort = 5180
+                if ($net.PSObject.Properties.Name -contains "port" -and $net.port) { $httpPort = [int]$net.port }
+                $httpsPort = 0
+                $httpsOn = $false
+                if ($net.PSObject.Properties.Name -contains "httpsSelfSigned" -and $net.httpsSelfSigned) { $httpsOn = $true }
+                if ($net.PSObject.Properties.Name -contains "httpsPfxPath" -and $net.httpsPfxPath) { $httpsOn = $true }
+                if ($httpsOn -and $net.PSObject.Properties.Name -contains "httpsPort" -and [int]$net.httpsPort -gt 0) {
+                    $httpsPort = [int]$net.httpsPort
+                } elseif ($httpsOn) {
+                    $httpsPort = $httpPort + 1
+                }
+
+                Write-Step "LAN detected — Windows Firewall"
+                $fwScript = Join-Path $InstallPath "Ensure-JotdexFirewall.ps1"
+                if (-not (Test-Path -LiteralPath $fwScript)) {
+                    $fwScript = Join-Path $PSScriptRoot "Ensure-JotdexFirewall.ps1"
+                }
+                $exePath = Join-Path $InstallPath "Jotdex.Server.exe"
+                $portsDesc = if ($httpsPort -gt 0) { "TCP $httpPort (HTTP) and $httpsPort (HTTPS)" } else { "TCP $httpPort (HTTP)" }
+                if (Test-Path -LiteralPath $fwScript) {
+                    try {
+                        $argList = @(
+                            "-NoProfile", "-ExecutionPolicy", "Bypass",
+                            "-File", $fwScript,
+                            "-HttpPort", "$httpPort"
+                        )
+                        if ($httpsPort -gt 0) { $argList += @("-HttpsPort", "$httpsPort") }
+                        if (Test-Path -LiteralPath $exePath) { $argList += @("-ProgramPath", $exePath) }
+                        $p = Start-Process -FilePath "powershell.exe" -ArgumentList $argList -Verb RunAs -Wait -PassThru
+                        if ($p.ExitCode -eq 0) {
+                            Write-Ok "Firewall allow rules for $portsDesc"
+                        } else {
+                            Write-WarnLine "Firewall helper exited $($p.ExitCode). LAN still works locally — open $portsDesc manually if other PCs cannot connect."
+                        }
+                    } catch {
+                        Write-WarnLine "UAC/firewall skipped ($($_.Exception.Message)). Open $portsDesc in Windows Firewall if needed."
+                    }
+                } else {
+                    Write-WarnLine "Ensure-JotdexFirewall.ps1 missing. Open $portsDesc in Windows Firewall if LAN clients cannot connect."
+                }
+            }
+        } catch {
+            Write-WarnLine "Could not inspect network.json for firewall: $($_.Exception.Message)"
+        }
+    }
+
     Write-Host "Next steps:" -ForegroundColor Green
     Write-Host "  1. cd `"$InstallPath`""
     Write-Host "  2. Double-click start-portable.cmd  (or run .\Jotdex.Server.exe)"

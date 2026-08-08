@@ -44,7 +44,8 @@ Indexes are **never** included (rebuilt on first start).
 1. Copy the ZIP and unzip it.
 2. Run `Restore-Jotdex.ps1` (Run with PowerShell, or `powershell -NoProfile -ExecutionPolicy Bypass -File .\Restore-Jotdex.ps1`).
 3. Choose an **install folder** (e.g. `C:\Jotdex`) and a **local-disk vault** folder (e.g. `C:\JotdexVault` — not iCloud).
-4. Start `start-portable.cmd` → open http://127.0.0.1:5180 → unlock with your existing password.
+4. If the kit had **LAN** enabled, Restore prompts UAC to open Windows Firewall for HTTP/HTTPS (cancel is OK — open ports manually later).
+5. Start `start-portable.cmd` → open http://127.0.0.1:5180 → unlock with your existing password.
 
 If you created the kit while running `dotnet run` (dev), the ZIP may omit `app\`. Use the portable build’s Settings button, or from the repo:
 

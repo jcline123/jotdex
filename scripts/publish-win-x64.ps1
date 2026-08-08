@@ -48,6 +48,7 @@ Copy-Item (Join-Path $PSScriptRoot "uninstall-service.ps1") $OutputRoot -Force
 Copy-Item (Join-Path $PSScriptRoot "Restore-Jotdex.ps1") $OutputRoot -Force
 Copy-Item (Join-Path $PSScriptRoot "Update-Jotdex.ps1") $OutputRoot -Force
 Copy-Item (Join-Path $PSScriptRoot "Decrypt-JotdexKit.ps1") $OutputRoot -Force
+Copy-Item (Join-Path $PSScriptRoot "Ensure-JotdexFirewall.ps1") $OutputRoot -Force
 
 $example = Join-Path $OutputRoot "appsettings.example.json"
 @"
@@ -82,8 +83,9 @@ Jotdex portable build
 4. First-run: choose vault path, optional password (no username), network bind/port
 5. App data is stored in .\data beside this exe (password hash under data\auth if set)
 
-LAN access: use Settings → Network (LAN + port), then restart.
+LAN access: use Settings → Network (LAN + port), then Save (UAC may prompt for firewall) and Restart.
 Or pass: Jotdex.Server.exe --urls http://0.0.0.0:5180
+Manual firewall: run Ensure-JotdexFirewall.ps1 as Administrator from this folder.
 
 Windows Service: run install-service.ps1 elevated from this folder.
 "@ | Set-Content -Path $readme -Encoding UTF8

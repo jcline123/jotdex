@@ -304,6 +304,52 @@ $vaultJson = Join-Path $dataConfig "vault.json"
 @{ vaultPath = $VaultPath } | ConvertTo-Json | Set-Content -Path $vaultJson -Encoding UTF8
 Write-Ok "Wrote $vaultJson"
 
+# Optional LAN + firewall
+$wantLan = $false
+if (-not $NonInteractive) {
+    $wantLan = Confirm-Yes "Enable LAN access now (listen on all interfaces; prompts UAC for firewall)?" $false
+}
+if ($wantLan) {
+    Write-Step "LAN network settings + Windows Firewall"
+    $httpPort = 5180
+    $networkJson = Join-Path $dataConfig "network.json"
+    @{
+        bindMode         = "lan"
+        port             = $httpPort
+        httpsSelfSigned  = $false
+        httpsPort        = 0
+        httpsPfxPath     = $null
+        httpsPfxPassword = $null
+    } | ConvertTo-Json | Set-Content -Path $networkJson -Encoding UTF8
+    Write-Ok "Wrote $networkJson (bindMode=lan, port=$httpPort)"
+
+    $fwScript = Join-Path $artifacts "Ensure-JotdexFirewall.ps1"
+    if (-not (Test-Path -LiteralPath $fwScript)) {
+        $fwScript = Join-Path $root "scripts\Ensure-JotdexFirewall.ps1"
+    }
+    $exePath = Join-Path $artifacts "Jotdex.Server.exe"
+    if (Test-Path -LiteralPath $fwScript) {
+        try {
+            $argList = @(
+                "-NoProfile", "-ExecutionPolicy", "Bypass",
+                "-File", $fwScript,
+                "-HttpPort", "$httpPort",
+                "-ProgramPath", $exePath
+            )
+            $p = Start-Process -FilePath "powershell.exe" -ArgumentList $argList -Verb RunAs -Wait -PassThru
+            if ($p.ExitCode -eq 0) {
+                Write-Ok "Firewall allow rules added for TCP $httpPort"
+            } else {
+                Write-WarnLine "Firewall helper exited $($p.ExitCode). LAN is still enabled — open TCP $httpPort manually if other PCs cannot connect."
+            }
+        } catch {
+            Write-WarnLine "UAC/firewall skipped ($($_.Exception.Message)). LAN is still enabled — open TCP $httpPort in Windows Firewall if needed."
+        }
+    } else {
+        Write-WarnLine "Ensure-JotdexFirewall.ps1 not found. Open TCP $httpPort in Windows Firewall if LAN clients cannot connect."
+    }
+}
+
 # Startup shortcut
 $wantStartup = [bool]$AddStartupShortcut
 if (-not $NonInteractive -and -not $AddStartupShortcut) {
@@ -334,10 +380,14 @@ Write-Host "  --------------"
 Write-Host "  App folder : $artifacts"
 Write-Host "  Vault      : $VaultPath"
 Write-Host "  Start later: $artifacts\start-portable.cmd"
-Write-Host "  Browser    : http://127.0.0.1:5180"
+if ($wantLan) {
+    Write-Host "  Browser    : http://<this-pc-ip>:5180  (LAN) or http://127.0.0.1:5180"
+} else {
+    Write-Host "  Browser    : http://127.0.0.1:5180"
+}
 Write-Host ""
 Write-Host "  First open: finish any remaining wizard steps (admin password if asked)."
-Write-Host "  Optional: Settings -> Network for LAN / HTTPS; Settings -> Start with Windows."
+Write-Host "  Optional: Settings -> Network for LAN / HTTPS (UAC opens firewall); Settings -> Start with Windows."
 Write-Host ""
 
 if ($wantStart) {

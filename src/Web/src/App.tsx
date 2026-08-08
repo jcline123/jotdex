@@ -1165,7 +1165,26 @@ function App() {
     const httpsHint = data.httpsUrl
       ? ` HTTP ${data.httpUrl || data.listenUrl}; HTTPS ${data.httpsUrl} (self-signed — click past the browser warning).`
       : ` ${data.listenUrl}.`
-    setNetworkHint(`Saved.${httpsHint} Restart the server to apply.`)
+    let hint = `Saved.${httpsHint} Restart the server to apply.`
+    if (data.firewall?.message) {
+      hint += data.firewall.success
+        ? ` Firewall: ${data.firewall.message}`
+        : ` Firewall note: ${data.firewall.message}`
+    }
+    setNetworkHint(hint)
+  }
+
+  async function ensureLanFirewall() {
+    setNetworkHint(null)
+    setError(null)
+    try {
+      const res = await fetch('/api/settings/network/firewall', { method: 'POST' })
+      const data = await res.json()
+      if (data.message) setNetworkHint(data.message)
+      else if (!data.success) setNetworkHint('Could not update Windows Firewall rules.')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Firewall request failed')
+    }
   }
 
   async function restartServer() {
@@ -1991,7 +2010,7 @@ function App() {
               <>
             <h2 className="settings-section settings-section-first">Network</h2>
             <p className="lede">
-              Default is this PC only. LAN access is opt-in. Enable self-signed HTTPS to use https:// as well as http:// (browser will warn — that is expected). Restart required after changes.
+              Default is this PC only. LAN access is opt-in. Saving LAN prompts Windows UAC to allow HTTP/HTTPS through the firewall; if you decline or lack permission, LAN still saves — open the ports manually if other PCs cannot connect. Enable self-signed HTTPS to use https:// as well as http:// (browser will warn — that is expected). Restart required after changes.
             </p>
             <label className="field">
               Binding
@@ -2068,6 +2087,16 @@ function App() {
               <button type="button" className="primary" onClick={() => void saveNetworkSettings()}>
                 Save network
               </button>
+              {bindMode === 'lan' && (
+                <button
+                  type="button"
+                  className="ghost"
+                  onClick={() => void ensureLanFirewall()}
+                  title="Prompt UAC again to add Windows Firewall allow rules for the current HTTP/HTTPS ports"
+                >
+                  Open firewall ports
+                </button>
+              )}
               <button
                 type="button"
                 className={restartNeeded ? 'primary' : 'ghost'}

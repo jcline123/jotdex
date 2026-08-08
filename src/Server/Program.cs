@@ -131,6 +131,7 @@ builder.Services.AddSingleton<IStaticExportService, StaticExportService>();
 builder.Services.AddSingleton<INoteShareExportService, NoteShareExportService>();
 builder.Services.AddSingleton<IIntegrityScanService, IntegrityScanService>();
 builder.Services.AddSingleton<IMaintenanceService, MaintenanceService>();
+builder.Services.AddSingleton<IFirewallLanService, FirewallLanService>();
 builder.Services.AddSingleton<IBackupBundleService, BackupBundleService>();
 builder.Services.AddSingleton<IMoveKitService, MoveKitService>();
 builder.Services.AddSingleton<IUpdateCheckService, UpdateCheckService>();

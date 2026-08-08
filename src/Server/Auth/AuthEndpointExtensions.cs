@@ -4,6 +4,7 @@ using Jotdex.Core.Configuration;
 using Jotdex.Core.Notifications;
 using Jotdex.Infrastructure.Config;
 using Jotdex.Infrastructure.Maintenance;
+using Jotdex.Infrastructure.Net;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.Extensions.Options;
@@ -233,7 +234,7 @@ public static class AuthEndpointExtensions
             });
         });
 
-        app.MapPut("/api/settings/network", async (HttpRequest request, INetworkSettingsService network) =>
+        app.MapPut("/api/settings/network", async (HttpRequest request, INetworkSettingsService network, IFirewallLanService firewall) =>
         {
             var body = await request.ReadFromJsonAsync<NetworkBody>();
             if (body is null)
@@ -253,6 +254,19 @@ public static class AuthEndpointExtensions
             if (!ok || settings is null)
                 return Results.BadRequest(new { error });
 
+            object? firewallInfo = null;
+            if (settings.IsLan)
+            {
+                var httpsPort = settings.HttpsEnabled ? settings.EffectiveHttpsPort : 0;
+                var fw = firewall.EnsureLanRules(settings.Port, httpsPort, enable: true);
+                firewallInfo = new
+                {
+                    success = fw.Success,
+                    elevationDenied = fw.ElevationDenied,
+                    message = fw.Message
+                };
+            }
+
             return Results.Json(new
             {
                 success = true,
@@ -267,7 +281,30 @@ public static class AuthEndpointExtensions
                 listenUrl = settings.ToListenUrl(),
                 httpUrl = settings.ToHttpUrl(),
                 httpsUrl = settings.ToHttpsUrl(),
-                restartRequired = true
+                restartRequired = true,
+                firewall = firewallInfo
+            });
+        });
+
+        app.MapPost("/api/settings/network/firewall", (INetworkSettingsService network, IFirewallLanService firewall) =>
+        {
+            var s = network.Get();
+            if (!s.IsLan)
+            {
+                return Results.Json(new
+                {
+                    success = false,
+                    message = "Bind mode is not LAN. Switch to LAN and save first, or call this after enabling LAN."
+                });
+            }
+
+            var httpsPort = s.HttpsEnabled ? s.EffectiveHttpsPort : 0;
+            var fw = firewall.EnsureLanRules(s.Port, httpsPort, enable: true);
+            return Results.Json(new
+            {
+                success = fw.Success,
+                elevationDenied = fw.ElevationDenied,
+                message = fw.Message
             });
         });
 

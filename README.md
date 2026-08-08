@@ -192,9 +192,8 @@ In Development it may start with a sample vault. Use **Settings** to point at `C
 
 ## Use from another computer on your network
 
-1. On the Jotdex PC: **Settings → Network** → choose **LAN (all interfaces)** → **Save network** → **Restart server**.
-2. Allow Windows Firewall if it asks (private network).
-3. On the other PC’s browser, open:  
+1. On the Jotdex PC: **Settings → Network** → choose **LAN (all interfaces)** → **Save network** (Windows may ask for Admin to open the firewall for HTTP/HTTPS) → **Restart server**. If you cancel UAC, LAN still saves — open the ports yourself, or use **Open firewall ports** in Settings.
+2. On the other PC’s browser, open:  
    `http://THE-SERVER-PC-IP:5180`  
    Example: `http://192.168.1.50:5180`  
    (Find the IP in Windows: Settings → Network, or `ipconfig`.)

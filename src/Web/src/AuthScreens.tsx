@@ -26,6 +26,8 @@ export function FirstRunWizard({ onComplete }: Props) {
   // Network
   const [bindMode, setBindMode] = useState<'loopback' | 'lan'>('loopback')
   const [port, setPort] = useState(5180)
+  const [firewallNote, setFirewallNote] = useState<string | null>(null)
+  const [ackFirewall, setAckFirewall] = useState(false)
 
   useEffect(() => {
     void openBrowse()
@@ -80,8 +82,9 @@ export function FirstRunWizard({ onComplete }: Props) {
     }
   }
 
-  async function saveNetwork() {
+  async function saveNetwork(): Promise<{ ok: boolean; firewallWarn?: string }> {
     setError(null)
+    setFirewallNote(null)
     setBusy(true)
     try {
       const res = await fetch('/api/settings/network', {
@@ -92,12 +95,16 @@ export function FirstRunWizard({ onComplete }: Props) {
       const data = await res.json()
       if (!res.ok || !data.success) {
         setError(data.error ?? 'Could not save network settings')
-        return false
+        return { ok: false }
       }
-      return true
+      if (data.firewall?.message && !data.firewall.success) {
+        setFirewallNote(data.firewall.message)
+        return { ok: true, firewallWarn: data.firewall.message as string }
+      }
+      return { ok: true }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not save network settings')
-      return false
+      return { ok: false }
     } finally {
       setBusy(false)
     }
@@ -149,7 +156,16 @@ export function FirstRunWizard({ onComplete }: Props) {
       return
     }
     if (step === 2) {
-      if (!(await saveNetwork())) return
+      if (ackFirewall) {
+        onComplete()
+        return
+      }
+      const result = await saveNetwork()
+      if (!result.ok) return
+      if (result.firewallWarn) {
+        setAckFirewall(true)
+        return
+      }
       onComplete()
     }
   }
@@ -226,7 +242,11 @@ export function FirstRunWizard({ onComplete }: Props) {
 
         {step === 2 && (
           <>
-            <p>Network access defaults to this PC only. LAN binding is opt-in.</p>
+            <p>
+              Network access defaults to this PC only. Choosing LAN will prompt Windows for permission to open the
+              firewall for that port (and HTTPS later if you enable it). Declining UAC still enables LAN — you may need
+              to open the port manually.
+            </p>
             <div className="auth-form">
               <label>
                 Binding
@@ -255,21 +275,34 @@ export function FirstRunWizard({ onComplete }: Props) {
           </>
         )}
 
+        {firewallNote && <p className="warn">{firewallNote}</p>}
         {error && <p className="error">{error}</p>}
         <div className="wizard-actions">
           {step > 0 && (
-            <button type="button" className="ghost" disabled={busy} onClick={() => { setError(null); setStep((s) => s - 1) }}>
+            <button
+              type="button"
+              className="ghost"
+              disabled={busy}
+              onClick={() => {
+                setError(null)
+                setFirewallNote(null)
+                setAckFirewall(false)
+                setStep((s) => s - 1)
+              }}
+            >
               Back
             </button>
           )}
           <button type="button" className="primary" disabled={busy} onClick={() => void next()}>
             {busy
               ? 'Saving…'
-              : step === 2
-                ? 'Finish setup'
-                : step === 1 && !password.trim() && !confirm.trim()
-                  ? 'Skip password'
-                  : 'Continue'}
+              : ackFirewall
+                ? 'Continue anyway'
+                : step === 2
+                  ? 'Finish setup'
+                  : step === 1 && !password.trim() && !confirm.trim()
+                    ? 'Skip password'
+                    : 'Continue'}
           </button>
         </div>
       </div>

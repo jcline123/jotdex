@@ -44,6 +44,34 @@ sc.exe config $ServiceName binPath= $binPath start= auto | Out-Null
 $reg = "HKLM:\SYSTEM\CurrentControlSet\Services\$ServiceName"
 New-ItemProperty -Path $reg -Name AppDirectory -Value $workDir -PropertyType String -Force | Out-Null
 
+# If LAN is already configured, ensure firewall (we are elevated).
+$netJson = Join-Path $workDir "data\config\network.json"
+$fwScript = Join-Path $workDir "Ensure-JotdexFirewall.ps1"
+if ((Test-Path -LiteralPath $netJson) -and (Test-Path -LiteralPath $fwScript)) {
+    try {
+        $net = Get-Content -LiteralPath $netJson -Raw | ConvertFrom-Json
+        if ([string]$net.bindMode -eq "lan") {
+            $httpPort = 5180
+            if ($net.port) { $httpPort = [int]$net.port }
+            $httpsPort = 0
+            $httpsOn = ($net.httpsSelfSigned -eq $true) -or (-not [string]::IsNullOrWhiteSpace([string]$net.httpsPfxPath))
+            if ($httpsOn) {
+                if ($net.httpsPort -and [int]$net.httpsPort -gt 0) { $httpsPort = [int]$net.httpsPort }
+                else { $httpsPort = $httpPort + 1 }
+            }
+            Write-Host "LAN bind detected — ensuring firewall rules..."
+            $fwArgs = @("-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $fwScript, "-HttpPort", "$httpPort", "-ProgramPath", $exeFull)
+            if ($httpsPort -gt 0) { $fwArgs += @("-HttpsPort", "$httpsPort") }
+            & powershell.exe @fwArgs
+            if ($LASTEXITCODE -ne 0) {
+                Write-Warning "Firewall helper exited $LASTEXITCODE. Open the HTTP/HTTPS ports manually if LAN clients cannot connect."
+            }
+        }
+    } catch {
+        Write-Warning "Could not ensure firewall rules: $($_.Exception.Message)"
+    }
+}
+
 Write-Host "Starting $ServiceName..."
 Start-Service -Name $ServiceName
 Get-Service -Name $ServiceName | Format-List Name, Status, StartType
