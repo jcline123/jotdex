@@ -7,10 +7,11 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 
 ---
 
-## 2026-08-08 — Collapsing format toolbar while scrolling
+## 2026-08-08 — Collapsing format toolbar while scrolling (`c6f0f45`)
 
 **Sticky formatting bar ate mobile/desktop reading space mid-note**
 - Main editor formatting chrome auto-collapses after you scroll down (expands again at the top, or on hover/tap). **Pinned** keeps it open — same idea as pop-out Auto/Pin.
+- Portable build republished to `artifacts\win-x64`.
 
 ---
 
