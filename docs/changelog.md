@@ -7,11 +7,12 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 
 ---
 
-## 2026-08-07 — Mirror schedule stuck + first-run wizard
+## 2026-08-07 — Mirror schedule stuck + first-run wizard (`5b1fb28`)
 
 **15‑minute mirror looked idle; first-run wizard no longer appeared**
-- A mirror run could hang for a long time on iCloud (full-tree ReadOnly walk / robocopy). While `running`, later schedules never start. Removed the pre-walk, capped runs at 12 minutes, quieter robocopy flags.
+- A mirror run could hang for a long time on iCloud (full-tree ReadOnly walk / robocopy). While `running`, later schedules never start. Removed the pre-walk, capped runs at 12 minutes, quieter robocopy flags; Access Denied dest files are deleted and retried once.
 - First-run wizard shows again when no vault is configured (password step optional, password-only, min 6).
+- Portable build republished to `artifacts\win-x64`.
 
 ---
 
