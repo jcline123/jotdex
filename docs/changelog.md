@@ -7,7 +7,7 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 
 ---
 
-## 2026-08-08 — LAN firewall UAC helper
+## 2026-08-08 — LAN firewall UAC helper (`b9031e6`)
 
 **LAN worked on the server but other PCs were often blocked by Windows Firewall**
 - Saving LAN (Settings, first-run wizard) prompts UAC via `Ensure-JotdexFirewall.ps1` for HTTP/HTTPS allow rules. Decline or no-admin still keeps LAN enabled and shows a manual-port warning. Same helper from Setup/Restore/install-service and portable publish.
