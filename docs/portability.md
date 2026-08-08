@@ -24,9 +24,10 @@ Notes travel with the vault. Search index is rebuilt.
 | Note history snapshots | AppData `history\` | Optional / included in move kit |
 | Trash | AppData `trash\` | Optional |
 | Auth / sessions | AppData `auth\` | Recreate or copy carefully / included in move kit |
+| Secrets (SMTP/Telegram/TOTP) | AppData `secrets\` (DPAPI) | Move kit unwraps to `secrets-portable.json`; rewrapped on first start |
 | Logs | AppData `logs\` | Skip |
 
-Move-kit and backup ZIPs may include `history\` and `auth\`.
+Move-kit and backup ZIPs may include `history\`, `auth\`, and portable secrets. Treat those ZIPs as secret.
 
 ## AppData locations
 

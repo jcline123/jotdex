@@ -3,7 +3,9 @@ using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using Jotdex.Core.Configuration;
+using Jotdex.Core.Secrets;
 using Jotdex.Core.Vault;
+using Jotdex.Infrastructure.Secrets;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
@@ -18,12 +20,18 @@ public sealed class MoveKitResult
     public bool IncludedApp { get; init; }
     public bool IncludedAuth { get; init; }
     public bool IncludedHistory { get; init; }
+    public bool Encrypted { get; init; }
     public string? Hint { get; init; }
 }
 
 public interface IMoveKitService
 {
-    Task<MoveKitResult> CreateAsync(bool includeAuth = true, bool includeHistory = true, CancellationToken ct = default);
+    Task<MoveKitResult> CreateAsync(
+        bool includeAuth = true,
+        bool includeHistory = true,
+        string? passwordForInit = null,
+        string? outputDirectory = null,
+        CancellationToken ct = default);
 }
 
 /// <summary>
@@ -34,21 +42,32 @@ public sealed class MoveKitService : IMoveKitService
     private readonly IDataRootResolver _dataRoot;
     private readonly IVaultPathGuard _paths;
     private readonly IHostEnvironment _env;
+    private readonly ISecretStore _secrets;
+    private readonly IMoveKitCryptoService _crypto;
     private readonly ILogger<MoveKitService> _logger;
 
     public MoveKitService(
         IDataRootResolver dataRoot,
         IVaultPathGuard paths,
         IHostEnvironment env,
+        ISecretStore secrets,
+        IMoveKitCryptoService crypto,
         ILogger<MoveKitService> logger)
     {
         _dataRoot = dataRoot;
         _paths = paths;
         _env = env;
+        _secrets = secrets;
+        _crypto = crypto;
         _logger = logger;
     }
 
-    public async Task<MoveKitResult> CreateAsync(bool includeAuth = true, bool includeHistory = true, CancellationToken ct = default)
+    public async Task<MoveKitResult> CreateAsync(
+        bool includeAuth = true,
+        bool includeHistory = true,
+        string? passwordForInit = null,
+        string? outputDirectory = null,
+        CancellationToken ct = default)
     {
         if (!_paths.IsConfigured)
             return new MoveKitResult { Success = false, Error = "Vault not configured." };
@@ -57,9 +76,33 @@ public sealed class MoveKitService : IMoveKitService
         if (!Directory.Exists(vault))
             return new MoveKitResult { Success = false, Error = "Vault folder missing." };
 
+        if (_crypto.IsPasswordProtectionEnabled)
+        {
+            if (!_crypto.HasEncryptionKey)
+            {
+                if (string.IsNullOrEmpty(passwordForInit))
+                {
+                    return new MoveKitResult
+                    {
+                        Success = false,
+                        Error =
+                            "A Jotdex password is set, but move-kit encryption is not initialized yet. " +
+                            "Re-enter your password in the Create move kit dialog (or change/re-save password in Security)."
+                    };
+                }
+                try { _crypto.EnsureInitialized(passwordForInit); }
+                catch (Exception ex)
+                {
+                    return new MoveKitResult { Success = false, Error = "Could not init encryption: " + ex.Message };
+                }
+            }
+        }
+
         var dataRoot = _dataRoot.ResolveDataRoot();
         var stamp = DateTime.UtcNow.ToString("yyyyMMdd-HHmmss");
-        var outDir = Path.Combine(dataRoot, "exports", "backups");
+        var outDir = string.IsNullOrWhiteSpace(outputDirectory)
+            ? Path.Combine(dataRoot, "exports", "backups")
+            : outputDirectory;
         Directory.CreateDirectory(outDir);
         var zipPath = Path.Combine(outDir, $"jotdex-move-{stamp}.zip");
 
@@ -93,13 +136,15 @@ public sealed class MoveKitService : IMoveKitService
                         AddDirectory(zip, histDir, "appdata/history", ct, skipRelative: null);
                 }
 
+                PortableSecretsZip.AddToZip(zip, _secrets);
+
                 if (appDir is not null)
                 {
                     AddDirectory(zip, appDir, "app", ct, skipRelative: ShouldSkipAppRelative);
                 }
 
                 AddTextEntry(zip, "Restore-Jotdex.ps1", LoadRestoreScript());
-                AddTextEntry(zip, "README-MOVE.txt", BuildReadme(includedApp));
+                AddTextEntry(zip, "README-MOVE.txt", BuildReadme(includedApp, encrypt: _crypto.IsPasswordProtectionEnabled));
 
                 var manifest = new
                 {
@@ -109,18 +154,29 @@ public sealed class MoveKitService : IMoveKitService
                     includeAuth,
                     includeHistory,
                     includedApp,
+                    encrypted = _crypto.IsPasswordProtectionEnabled,
                     appSource = appDir,
-                    note = "Unzip, run Restore-Jotdex.ps1, choose install + vault paths. Indexes are not included — rebuilt on first start."
+                    note = "Unzip (decrypt .jotdexkit with your Jotdex password first if encrypted), run Restore-Jotdex.ps1."
                 };
                 AddTextEntry(zip, "MANIFEST.json",
                     JsonSerializer.Serialize(manifest, new JsonSerializerOptions { WriteIndented = true }));
             }, ct).ConfigureAwait(false);
 
-            var bytes = new FileInfo(zipPath).Length;
-            _logger.LogInformation("Move kit created: {Path} ({Bytes} bytes, app={App})", zipPath, bytes, includedApp);
+            var finalPath = zipPath;
+            var encrypted = false;
+            if (_crypto.IsPasswordProtectionEnabled && _crypto.HasEncryptionKey)
+            {
+                finalPath = _crypto.EncryptZipFile(zipPath);
+                encrypted = true;
+            }
+
+            var bytes = new FileInfo(finalPath).Length;
+            _logger.LogInformation("Move kit created: {Path} ({Bytes} bytes, app={App}, enc={Enc})", finalPath, bytes, includedApp, encrypted);
 
             string? hint = null;
-            if (!includedApp)
+            if (encrypted)
+                hint = "Encrypted with your Jotdex unlock password (.jotdexkit). Decrypt before Restore-Jotdex.ps1.";
+            else if (!includedApp)
             {
                 hint =
                     "This kit includes your vault and app data, but not Jotdex.Server.exe (you are not running the portable build). " +
@@ -130,11 +186,12 @@ public sealed class MoveKitService : IMoveKitService
             return new MoveKitResult
             {
                 Success = true,
-                BundlePath = zipPath,
+                BundlePath = finalPath,
                 Bytes = bytes,
                 IncludedApp = includedApp,
                 IncludedAuth = includeAuth,
                 IncludedHistory = includeHistory,
+                Encrypted = encrypted,
                 Hint = hint
             };
         }
@@ -287,39 +344,28 @@ public sealed class MoveKitService : IMoveKitService
         }
     }
 
-    private static string BuildReadme(bool includedApp) =>
+    private static string BuildReadme(bool includedApp, bool encrypt) =>
         $$"""
         Jotdex move kit
         ===============
 
-        This ZIP moves Jotdex to another Windows PC.
-
-        Contents
-        --------
-        - vault\          Your notes (Markdown + .assets)
-        - appdata\        Password, settings, note history (no search index)
-        - app\            Portable Jotdex program {{(includedApp ? "(included)" : "(NOT included — get portable build separately)")}}
-        - Restore-Jotdex.ps1
-        - MANIFEST.json
-
-        On the new PC
-        -------------
-        1. Copy this ZIP to the new computer and unzip it (any temporary folder).
+        Simple restore
+        --------------
+        1. Put this kit (.jotdexkit or .zip) in a folder with Restore-Jotdex.ps1 and Jotdex.Server.exe
+           (portable install folder is fine).
         2. Right-click Restore-Jotdex.ps1 → Run with PowerShell
-           Or in PowerShell:
-             cd <unzipped-folder>
-             powershell -NoProfile -ExecutionPolicy Bypass -File .\Restore-Jotdex.ps1
-        3. When prompted:
-           - Install folder (e.g. C:\Jotdex) — where the program + data\ live
-           - Vault folder (e.g. C:\JotdexVault) — local disk only, not iCloud
-        4. Open the install folder and double-click start-portable.cmd
-        5. Browse to http://127.0.0.1:5180 and unlock with your existing password
+        3. If the kit is encrypted, type your Jotdex unlock password when asked.
+        4. Choose install folder + local vault folder.
 
-        Notes
-        -----
-        - Treat this ZIP as secret if it includes your password hash (appdata\auth).
-        - Search rebuilds automatically on first start (indexes are not in the ZIP).
-        - Prefer a local-disk vault. iCloud/OneDrive are for read-only mirrors only.
+        No separate decrypt step — Restore does it for you.
+
+        {{(encrypt ? "This build produced an encrypted .jotdexkit (safer in cloud mirrors).\n" : "")}}
+        Contents (inside the archive)
+        -----------------------------
+        - vault\          Your notes
+        - appdata\        Password, settings, history, portable secrets
+        - app\            Portable program {{(includedApp ? "(included)" : "(not included)")}}
+        - Restore-Jotdex.ps1
         """;
 
     /// <summary>Minimal fallback if scripts/Restore-Jotdex.ps1 is not on disk.</summary>

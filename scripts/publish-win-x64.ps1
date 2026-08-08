@@ -47,6 +47,7 @@ Copy-Item (Join-Path $PSScriptRoot "install-service.ps1") $OutputRoot -Force
 Copy-Item (Join-Path $PSScriptRoot "uninstall-service.ps1") $OutputRoot -Force
 Copy-Item (Join-Path $PSScriptRoot "Restore-Jotdex.ps1") $OutputRoot -Force
 Copy-Item (Join-Path $PSScriptRoot "Update-Jotdex.ps1") $OutputRoot -Force
+Copy-Item (Join-Path $PSScriptRoot "Decrypt-JotdexKit.ps1") $OutputRoot -Force
 
 $example = Join-Path $OutputRoot "appsettings.example.json"
 @"

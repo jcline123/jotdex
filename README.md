@@ -2,7 +2,7 @@
 
 **Jotdex** is a notes app that runs on **your own Windows computer**.
 
-Your notes are normal **Markdown files** in a folder on your hard drive — not locked inside a company’s cloud. You open them in a web browser (on this PC, or another PC on your home/office network if you turn that on).
+Your notes are normal **Markdown files** in a folder on your hard drive. You open them in a web browser on this PC, on another computer on your home/office network if you turn LAN access on, or from elsewhere by connecting over a VPN to that network.
 
 Think of it like this:
 

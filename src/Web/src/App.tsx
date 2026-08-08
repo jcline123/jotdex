@@ -86,6 +86,7 @@ type AuthInfo = {
   authRequired: boolean
   setupRequired?: boolean
   authEnforced?: boolean
+  totpEnabled?: boolean
   username?: string
   displayName?: string
   developmentBypass?: boolean
@@ -317,7 +318,29 @@ function App() {
   const [mirrorEnabled, setMirrorEnabled] = useState(false)
   const [mirrorDest, setMirrorDest] = useState('')
   const [mirrorInterval, setMirrorInterval] = useState(15)
+  const [mirrorDailyMoveKit, setMirrorDailyMoveKit] = useState(false)
   const [mirrorStatus, setMirrorStatus] = useState<string | null>(null)
+  const [opsNotifyHint, setOpsNotifyHint] = useState<string | null>(null)
+  const [smtpEnabled, setSmtpEnabled] = useState(false)
+  const [smtpHost, setSmtpHost] = useState('')
+  const [smtpPort, setSmtpPort] = useState(587)
+  const [smtpSsl, setSmtpSsl] = useState(true)
+  const [smtpUser, setSmtpUser] = useState('')
+  const [smtpPassword, setSmtpPassword] = useState('')
+  const [smtpFrom, setSmtpFrom] = useState('')
+  const [smtpTo, setSmtpTo] = useState('')
+  const [smtpPasswordSet, setSmtpPasswordSet] = useState(false)
+  const [tgEnabled, setTgEnabled] = useState(false)
+  const [tgChatId, setTgChatId] = useState('')
+  const [tgToken, setTgToken] = useState('')
+  const [tgTokenSet, setTgTokenSet] = useState(false)
+  const [mirrorStaleAlert, setMirrorStaleAlert] = useState(false)
+  const [mirrorStaleHours, setMirrorStaleHours] = useState(24)
+  const [totpManualKey, setTotpManualKey] = useState<string | null>(null)
+  const [totpUri, setTotpUri] = useState<string | null>(null)
+  const [totpConfirmCode, setTotpConfirmCode] = useState('')
+  const [totpRecoveryCodes, setTotpRecoveryCodes] = useState<string[] | null>(null)
+  const [secTotpCode, setSecTotpCode] = useState('')
   const [integrityReport, setIntegrityReport] = useState<string | null>(null)
   const [diagText, setDiagText] = useState<string | null>(null)
   const [logText, setLogText] = useState<string | null>(null)
@@ -933,14 +956,44 @@ function App() {
       setMirrorEnabled(!!m.enabled)
       setMirrorDest(m.destinationPath ?? '')
       if (typeof m.intervalMinutes === 'number') setMirrorInterval(m.intervalMinutes)
+      setMirrorDailyMoveKit(!!m.includeDailyMoveKit)
       const st = m.status
       if (st?.lastSucceededUtc) {
-        setMirrorStatus(`Last OK: ${new Date(st.lastSucceededUtc).toLocaleString()}`)
+        const kit =
+          st.lastMoveKitUtc != null
+            ? ` · Move kit: ${new Date(st.lastMoveKitUtc).toLocaleString()}`
+            : m.includeDailyMoveKit
+              ? ' · Daily move kit: waiting'
+              : ''
+        setMirrorStatus(`Last OK: ${new Date(st.lastSucceededUtc).toLocaleString()}${kit}`)
       } else if (st?.lastError) {
         setMirrorStatus(`Last error: ${st.lastError}`)
       } else {
         setMirrorStatus(st?.hint ?? null)
       }
+    } catch {
+      /* ignore */
+    }
+  }
+
+  async function loadOpsNotifications() {
+    try {
+      const n = await fetch('/api/settings/notifications', { credentials: 'same-origin' }).then((r) => r.json())
+      setSmtpEnabled(!!n.smtp?.enabled)
+      setSmtpHost(n.smtp?.host ?? '')
+      setSmtpPort(typeof n.smtp?.port === 'number' ? n.smtp.port : 587)
+      setSmtpSsl(n.smtp?.useSsl !== false)
+      setSmtpUser(n.smtp?.username ?? '')
+      setSmtpFrom(n.smtp?.fromAddress ?? '')
+      setSmtpTo(n.smtp?.toAddress ?? '')
+      setTgEnabled(!!n.telegram?.enabled)
+      setTgChatId(n.telegram?.chatId ?? '')
+      setMirrorStaleAlert(!!n.alerts?.mirrorStaleEnabled)
+      setMirrorStaleHours(typeof n.alerts?.mirrorStaleHours === 'number' ? n.alerts.mirrorStaleHours : 24)
+      setSmtpPasswordSet(!!n.status?.smtpPasswordSet)
+      setTgTokenSet(!!n.status?.telegramTokenSet)
+      setSmtpPassword('')
+      setTgToken('')
     } catch {
       /* ignore */
     }
@@ -988,14 +1041,22 @@ function App() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'same-origin',
-        body: JSON.stringify({ password: secCurrentPassword }),
+        body: JSON.stringify({
+          password: secCurrentPassword,
+          totpCode: auth?.totpEnabled || secTotpCode.trim() ? secTotpCode.trim() : undefined,
+        }),
       })
       const data = await res.json()
+      if (data.requiresTotp) {
+        setSecHint('Enter your authenticator code below, then Unlock again.')
+        return
+      }
       if (!res.ok || !data.success) {
         setSecHint(data.error ?? 'Incorrect password')
         return
       }
       setSecCurrentPassword('')
+      setSecTotpCode('')
       setSecHint('Unlocked — you can change or remove the password.')
       await loadAuth()
     } catch (e) {
@@ -1172,6 +1233,7 @@ function App() {
         enabled: mirrorEnabled,
         destinationPath: mirrorDest,
         intervalMinutes: mirrorInterval,
+        includeDailyMoveKit: mirrorDailyMoveKit,
       }),
     })
     const data = await res.json()
@@ -1687,6 +1749,7 @@ function App() {
         enabled={idleLockEnabled}
         minutes={idleLockMinutes}
         authAvailable={!!auth?.setupComplete}
+        totpEnabled={!!auth?.totpEnabled}
       />
       </div>
     )
@@ -1830,6 +1893,7 @@ function App() {
               void openBrowse(vaultPathInput || undefined)
               void loadNetworkSettings()
               void loadMirrorSettings()
+              void loadOpsNotifications()
             }}
           >
             Settings
@@ -2070,6 +2134,19 @@ function App() {
                         autoComplete="current-password"
                       />
                     </label>
+                    {(auth.totpEnabled || secTotpCode) && (
+                      <label className="field">
+                        Authenticator code
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          autoComplete="one-time-code"
+                          value={secTotpCode}
+                          onChange={(e) => setSecTotpCode(e.target.value)}
+                          placeholder="6-digit or recovery code"
+                        />
+                      </label>
+                    )}
                     <div className="modal-actions">
                       <button type="button" className="primary" disabled={secBusy} onClick={() => void signInForSecurity()}>
                         {secBusy ? 'Unlocking…' : 'Unlock'}
@@ -2120,7 +2197,170 @@ function App() {
                 )}
               </div>
             )}
-            {secHint && <p className={/saved|updated|removed|Unlocked/i.test(secHint) ? 'muted' : 'warn'}>{secHint}</p>}
+            {secHint && <p className={/saved|updated|removed|Unlocked|Authenticator|enabled|disabled/i.test(secHint) ? 'muted' : 'warn'}>{secHint}</p>}
+
+            {auth?.setupComplete && auth.authenticated && (
+              <>
+                <h3 className="settings-subhead">Authenticator (TOTP)</h3>
+                <p className="muted">
+                  Optional second factor after your password (Google Authenticator, Microsoft Authenticator, etc.).
+                </p>
+                {auth.totpEnabled ? (
+                  <>
+                    <p className="muted">Authenticator is on.</p>
+                    <label className="field">
+                      Password (to disable)
+                      <input
+                        type="password"
+                        value={secCurrentPassword}
+                        onChange={(e) => setSecCurrentPassword(e.target.value)}
+                        autoComplete="current-password"
+                      />
+                    </label>
+                    <label className="field">
+                      Current authenticator or recovery code
+                      <input
+                        type="text"
+                        value={secTotpCode}
+                        onChange={(e) => setSecTotpCode(e.target.value)}
+                        autoComplete="one-time-code"
+                      />
+                    </label>
+                    <div className="modal-actions">
+                      <button
+                        type="button"
+                        className="ghost"
+                        disabled={secBusy}
+                        onClick={() => {
+                          void (async () => {
+                            setSecBusy(true)
+                            setSecHint(null)
+                            try {
+                              const res = await fetch('/api/auth/totp/disable', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                credentials: 'same-origin',
+                                body: JSON.stringify({ password: secCurrentPassword, totpCode: secTotpCode }),
+                              })
+                              const data = await res.json()
+                              if (!res.ok || !data.success) {
+                                setSecHint(data.error ?? 'Could not disable authenticator')
+                                return
+                              }
+                              setSecCurrentPassword('')
+                              setSecTotpCode('')
+                              setTotpRecoveryCodes(null)
+                              setSecHint('Authenticator disabled.')
+                              await loadAuth()
+                            } finally {
+                              setSecBusy(false)
+                            }
+                          })()
+                        }}
+                      >
+                        Disable authenticator
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="modal-actions">
+                      <button
+                        type="button"
+                        className="primary"
+                        disabled={secBusy}
+                        onClick={() => {
+                          void (async () => {
+                            setSecBusy(true)
+                            setSecHint(null)
+                            setTotpRecoveryCodes(null)
+                            try {
+                              const res = await fetch('/api/auth/totp/begin', {
+                                method: 'POST',
+                                credentials: 'same-origin',
+                              })
+                              const data = await res.json()
+                              if (!res.ok || !data.success) {
+                                setSecHint(data.error ?? 'Could not start authenticator setup')
+                                return
+                              }
+                              setTotpManualKey(data.manualKey ?? null)
+                              setTotpUri(data.otpAuthUri ?? null)
+                              setSecHint('Scan the otpauth URI in your app (or enter the manual key), then confirm with a code.')
+                            } finally {
+                              setSecBusy(false)
+                            }
+                          })()
+                        }}
+                      >
+                        Set up authenticator
+                      </button>
+                    </div>
+                    {totpManualKey && (
+                      <>
+                        <p className="muted">
+                          Manual key: <code>{totpManualKey}</code>
+                        </p>
+                        {totpUri && (
+                          <p className="muted" style={{ wordBreak: 'break-all' }}>
+                            URI: <code>{totpUri}</code>
+                          </p>
+                        )}
+                        <label className="field">
+                          Code from authenticator
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            value={totpConfirmCode}
+                            onChange={(e) => setTotpConfirmCode(e.target.value)}
+                            autoComplete="one-time-code"
+                          />
+                        </label>
+                        <div className="modal-actions">
+                          <button
+                            type="button"
+                            className="primary"
+                            disabled={secBusy}
+                            onClick={() => {
+                              void (async () => {
+                                setSecBusy(true)
+                                setSecHint(null)
+                                try {
+                                  const res = await fetch('/api/auth/totp/confirm', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    credentials: 'same-origin',
+                                    body: JSON.stringify({ code: totpConfirmCode }),
+                                  })
+                                  const data = await res.json()
+                                  if (!res.ok || !data.success) {
+                                    setSecHint(data.error ?? 'Could not confirm authenticator')
+                                    return
+                                  }
+                                  setTotpManualKey(null)
+                                  setTotpUri(null)
+                                  setTotpConfirmCode('')
+                                  setTotpRecoveryCodes(data.recoveryCodes ?? null)
+                                  setSecHint('Authenticator enabled. Save the recovery codes below — shown once.')
+                                  await loadAuth()
+                                } finally {
+                                  setSecBusy(false)
+                                }
+                              })()
+                            }}
+                          >
+                            Confirm & enable
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </>
+                )}
+                {totpRecoveryCodes && totpRecoveryCodes.length > 0 && (
+                  <pre className="maint-report">{totpRecoveryCodes.join('\n')}</pre>
+                )}
+              </>
+            )}
 
             <h3 className="settings-subhead">Idle lock</h3>
             {!auth?.setupComplete ? (
@@ -2206,6 +2446,164 @@ function App() {
               </button>
             </div>
             {notifyHint && <p className="muted">{notifyHint}</p>}
+
+            <h2 className="settings-section">Ops alerts (email / Telegram)</h2>
+            <p className="lede">
+              Optional alerts when cloud mirror backup goes stale. Passwords and bot tokens are stored with Windows DPAPI
+              on this PC (and travel in the move kit as a portable secrets file).
+            </p>
+            <h3 className="settings-subhead">Email (SMTP)</h3>
+            <label className="field checkbox-row">
+              <input type="checkbox" checked={smtpEnabled} onChange={(e) => setSmtpEnabled(e.target.checked)} />
+              Enable email alerts
+            </label>
+            <label className="field">
+              SMTP host
+              <input value={smtpHost} onChange={(e) => setSmtpHost(e.target.value)} placeholder="smtp.example.com" />
+            </label>
+            <label className="field">
+              Port
+              <input
+                type="number"
+                min={1}
+                max={65535}
+                value={smtpPort}
+                onChange={(e) => setSmtpPort(Number(e.target.value) || 587)}
+              />
+            </label>
+            <label className="field checkbox-row">
+              <input type="checkbox" checked={smtpSsl} onChange={(e) => setSmtpSsl(e.target.checked)} />
+              Use SSL/TLS
+            </label>
+            <label className="field">
+              Username
+              <input value={smtpUser} onChange={(e) => setSmtpUser(e.target.value)} autoComplete="off" />
+            </label>
+            <label className="field">
+              Password {smtpPasswordSet ? '(saved — leave blank to keep)' : ''}
+              <input
+                type="password"
+                value={smtpPassword}
+                onChange={(e) => setSmtpPassword(e.target.value)}
+                autoComplete="new-password"
+                placeholder={smtpPasswordSet ? '••••••••' : ''}
+              />
+            </label>
+            <label className="field">
+              From address
+              <input value={smtpFrom} onChange={(e) => setSmtpFrom(e.target.value)} placeholder="jotdex@example.com" />
+            </label>
+            <label className="field">
+              To address
+              <input value={smtpTo} onChange={(e) => setSmtpTo(e.target.value)} placeholder="you@example.com" />
+            </label>
+
+            <h3 className="settings-subhead">Telegram</h3>
+            <label className="field checkbox-row">
+              <input type="checkbox" checked={tgEnabled} onChange={(e) => setTgEnabled(e.target.checked)} />
+              Enable Telegram alerts
+            </label>
+            <label className="field">
+              Chat id
+              <input value={tgChatId} onChange={(e) => setTgChatId(e.target.value)} placeholder="123456789" />
+            </label>
+            <label className="field">
+              Bot token {tgTokenSet ? '(saved — leave blank to keep)' : ''}
+              <input
+                type="password"
+                value={tgToken}
+                onChange={(e) => setTgToken(e.target.value)}
+                autoComplete="new-password"
+                placeholder={tgTokenSet ? '••••••••' : ''}
+              />
+            </label>
+
+            <h3 className="settings-subhead">Mirror stale alert</h3>
+            <label className="field checkbox-row">
+              <input type="checkbox" checked={mirrorStaleAlert} onChange={(e) => setMirrorStaleAlert(e.target.checked)} />
+              Alert if mirror has not succeeded
+            </label>
+            <label className="field">
+              Hours without success
+              <input
+                type="number"
+                min={1}
+                max={720}
+                value={mirrorStaleHours}
+                onChange={(e) => setMirrorStaleHours(Number(e.target.value) || 24)}
+              />
+            </label>
+            <div className="modal-actions">
+              <button
+                type="button"
+                className="primary"
+                onClick={() => {
+                  void (async () => {
+                    setOpsNotifyHint(null)
+                    try {
+                      const res = await fetch('/api/settings/notifications', {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'same-origin',
+                        body: JSON.stringify({
+                          smtp: {
+                            enabled: smtpEnabled,
+                            host: smtpHost,
+                            port: smtpPort,
+                            useSsl: smtpSsl,
+                            username: smtpUser,
+                            fromAddress: smtpFrom,
+                            fromDisplayName: 'Jotdex',
+                            toAddress: smtpTo,
+                          },
+                          telegram: { enabled: tgEnabled, chatId: tgChatId },
+                          alerts: { mirrorStaleEnabled: mirrorStaleAlert, mirrorStaleHours },
+                          smtpPassword: smtpPassword.trim() || undefined,
+                          telegramBotToken: tgToken.trim() || undefined,
+                        }),
+                      })
+                      const data = await res.json()
+                      if (!res.ok || !data.success) {
+                        setOpsNotifyHint(data.error ?? 'Could not save notification settings')
+                        return
+                      }
+                      setOpsNotifyHint('Ops notification settings saved.')
+                      await loadOpsNotifications()
+                    } catch (e) {
+                      setOpsNotifyHint(e instanceof Error ? e.message : 'Save failed')
+                    }
+                  })()
+                }}
+              >
+                Save ops alerts
+              </button>
+              <button
+                type="button"
+                className="ghost"
+                onClick={() => {
+                  void (async () => {
+                    setOpsNotifyHint(null)
+                    try {
+                      const res = await fetch('/api/settings/notifications/test', {
+                        method: 'POST',
+                        credentials: 'same-origin',
+                      })
+                      const data = await res.json()
+                      if (!res.ok || !data.success) {
+                        setOpsNotifyHint(data.error ?? 'Test send failed')
+                        return
+                      }
+                      setOpsNotifyHint(data.warning ? `Test sent (partial): ${data.warning}` : 'Test message sent.')
+                    } catch (e) {
+                      setOpsNotifyHint(e instanceof Error ? e.message : 'Test send failed')
+                    }
+                  })()
+                }}
+              >
+                Send test
+              </button>
+            </div>
+            {opsNotifyHint && <p className="muted">{opsNotifyHint}</p>}
               </>
             )}
 
@@ -2213,14 +2611,12 @@ function App() {
               <>
             <h2 className="settings-section settings-section-first">Move to another PC</h2>
             <p className="lede">
-              Create a single ZIP that packages your vault, password/settings/history, and (when you are running the
-              portable build) the Jotdex program itself. On the new PC: unzip → run <code>Restore-Jotdex.ps1</code> →
-              choose install folder and vault folder → start <code>start-portable.cmd</code>.
+              Create a recovery archive with your vault, settings/history, and (when portable) the Jotdex program. If you
+              have an unlock password, it is saved as an encrypted <code>.jotdexkit</code> — safer in cloud folders.
             </p>
             <p className="muted">
-              Prefer a local-disk vault on the new machine (not iCloud). Treat the ZIP as secret if it includes your
-              password. Search indexes are rebuilt automatically — they are not in the ZIP. For a data-only archive
-              without the program, use Create backup ZIP below.
+              Restore stays simple: run <code>Restore-Jotdex.ps1</code> on the kit file; enter your password if asked;
+              choose folders. Prefer a local-disk vault on the new PC.
             </p>
             <div className="modal-actions">
               <button
@@ -2228,23 +2624,36 @@ function App() {
                 className="primary"
                 onClick={() => {
                   void (async () => {
-                    setNetworkHint('Creating move kit ZIP (may take a while for large vaults)…')
+                    setNetworkHint('Creating move kit (may take a while for large vaults)…')
                     try {
-                      const data = await fetch('/api/admin/move-kit', { method: 'POST' }).then((r) => r.json())
+                      let password: string | undefined
+                      if (auth?.setupComplete) {
+                        const entered = window.prompt(
+                          'Enter your Jotdex unlock password to encrypt the move kit (required the first time encryption is set up; leave blank if already initialized):',
+                        )
+                        if (entered === null) {
+                          setNetworkHint(null)
+                          return
+                        }
+                        password = entered || undefined
+                      }
+                      const data = await fetch('/api/admin/move-kit', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        credentials: 'same-origin',
+                        body: JSON.stringify({ password }),
+                      }).then((r) => r.json())
                       if (!data.success) {
                         setError(data.error ?? 'Move kit failed')
                         setNetworkHint(null)
                         return
                       }
                       const mb = (data.bytes / (1024 * 1024)).toFixed(1)
-                      const appNote = data.includedApp
-                        ? 'Includes portable app.'
-                        : data.hint ??
-                          'Vault + app data only (no exe). Use portable Jotdex or scripts\\create-move-kit.ps1 for a full kit.'
-                      setNetworkHint(`Move kit OK (${mb} MB): ${data.bundlePath} — ${appNote}`)
-                      window.alert(
-                        `Move kit ready (${mb} MB):\n${data.bundlePath}\n\n${appNote}\n\nCopy that ZIP to the new PC, unzip, and run Restore-Jotdex.ps1.`,
-                      )
+                      const encNote = data.encrypted
+                        ? 'Encrypted (.jotdexkit). Run Restore-Jotdex.ps1 — it will ask for your unlock password.'
+                        : data.hint ?? 'Plain ZIP — treat as secret. Run Restore-Jotdex.ps1.'
+                      setNetworkHint(`Move kit OK (${mb} MB): ${data.bundlePath} — ${encNote}`)
+                      window.alert(`Move kit ready (${mb} MB):\n${data.bundlePath}\n\n${encNote}`)
                     } catch (e) {
                       setError(e instanceof Error ? e.message : 'Move kit failed')
                       setNetworkHint(null)
@@ -2252,7 +2661,7 @@ function App() {
                   })()
                 }}
               >
-                Create move kit (ZIP)
+                Create move kit
               </button>
             </div>
 
@@ -2285,8 +2694,8 @@ function App() {
 
             <h2 className="settings-section">Cloud backup mirror</h2>
             <p className="lede">
-              Keep the live vault on local disk. Optionally copy one-way to iCloud, OneDrive, etc. Never open the mirror
-              as the live vault — use a separate folder name such as <code>JotdexMirror</code>.
+              Keep the live vault on local disk. Optionally copy the whole vault one-way to iCloud, OneDrive, etc. Never
+              open the mirror as the live vault — use a separate folder name such as <code>JotdexMirror</code>.
             </p>
             <label className="field checkbox-row">
               <input type="checkbox" checked={mirrorEnabled} onChange={(e) => setMirrorEnabled(e.target.checked)} />
@@ -2302,7 +2711,7 @@ function App() {
             </label>
             <p className="muted">
               Prefer <code>…\iCloudDrive\JotdexMirror</code> (not a folder also named JotdexVault). Mirror is one-way:
-              local live vault → destination.
+              local live vault → destination (full vault copy, as before).
             </p>
             <label className="field">
               Interval (minutes)
@@ -2314,6 +2723,19 @@ function App() {
                 onChange={(e) => setMirrorInterval(Number(e.target.value) || 15)}
               />
             </label>
+            <label className="field checkbox-row">
+              <input
+                type="checkbox"
+                checked={mirrorDailyMoveKit}
+                onChange={(e) => setMirrorDailyMoveKit(e.target.checked)}
+              />
+              Also drop a daily recovery move kit into that mirror folder
+            </label>
+            <p className="muted">
+              Extra safety net only: still mirrors the full vault. Adds <code>jotdex-move-kits\</code> with one archive
+              (encrypted when a password is set) plus <code>Restore-Jotdex.ps1</code>. On a new PC, run Restore on that
+              kit and enter your password if asked.
+            </p>
             <div className="modal-actions">
               <button type="button" className="primary" onClick={() => void saveMirrorSettings()}>
                 Save mirror
@@ -3150,6 +3572,7 @@ function App() {
         enabled={idleLockEnabled}
         minutes={idleLockMinutes}
         authAvailable={!!auth?.setupComplete}
+        totpEnabled={!!auth?.totpEnabled}
       />
     </div>
   )

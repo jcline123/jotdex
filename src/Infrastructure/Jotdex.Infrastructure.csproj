@@ -12,6 +12,8 @@
     <PackageReference Include="Microsoft.Extensions.Identity.Core" Version="10.0.10" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.10" />
     <PackageReference Include="Microsoft.Extensions.Options" Version="10.0.10" />
+    <PackageReference Include="Otp.NET" Version="1.4.0" />
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="9.0.8" />
   </ItemGroup>
 
   <PropertyGroup>

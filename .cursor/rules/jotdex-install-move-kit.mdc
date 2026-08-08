@@ -11,6 +11,7 @@ Whenever you add, remove, or rename **app data folders**, **config files**, **po
    - [`scripts/Setup-Jotdex.ps1`](scripts/Setup-Jotdex.ps1) / [`Setup.cmd`](Setup.cmd) (first-time install)
    - [`scripts/Restore-Jotdex.ps1`](scripts/Restore-Jotdex.ps1) (move-kit restore)
    - [`scripts/Update-Jotdex.ps1`](scripts/Update-Jotdex.ps1) (in-place upgrade from GitHub Releases)
+   - [`scripts/Decrypt-JotdexKit.ps1`](scripts/Decrypt-JotdexKit.ps1) (decrypt password-protected move kits)
    - [`scripts/create-move-kit.ps1`](scripts/create-move-kit.ps1) and/or [`MoveKitService`](src/Infrastructure/Maintenance/MoveKitService.cs) (what goes in the ZIP)
    - [`scripts/publish-win-x64.ps1`](scripts/publish-win-x64.ps1) if new files must ship beside the portable exe (also refresh `artifacts\jotdex-win-x64.zip` for Releases)
 2. Refresh user-facing copy in [`docs/backup.md`](docs/backup.md), [`docs/portability.md`](docs/portability.md), and [`README.md`](README.md) when the user steps change.

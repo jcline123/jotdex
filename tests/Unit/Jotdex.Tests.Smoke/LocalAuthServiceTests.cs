@@ -1,20 +1,25 @@
 using Jotdex.Core.Auth;
 using Jotdex.Core.Configuration;
 using Jotdex.Infrastructure.Auth;
+using Jotdex.Infrastructure.Secrets;
 using Microsoft.Extensions.Logging.Abstractions;
+using OtpNet;
 
 namespace Jotdex.Tests.Smoke;
 
 public class LocalAuthServiceTests : IDisposable
 {
     private readonly string _root;
+    private readonly DpapiSecretStore _secrets;
     private readonly LocalAuthService _auth;
 
     public LocalAuthServiceTests()
     {
         _root = Path.Combine(Path.GetTempPath(), "jotdex-auth-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(_root);
-        _auth = new LocalAuthService(new TempDataRoot(_root), NullLogger<LocalAuthService>.Instance);
+        var data = new TempDataRoot(_root);
+        _secrets = new DpapiSecretStore(data, NullLogger<DpapiSecretStore>.Instance);
+        _auth = new LocalAuthService(data, _secrets, NullLogger<LocalAuthService>.Instance);
     }
 
     public void Dispose()
@@ -74,6 +79,51 @@ public class LocalAuthServiceTests : IDisposable
         Assert.True(_auth.RemovePassword("correct-horse-battery").Success);
         Assert.False(_auth.IsSetupComplete);
         Assert.False(_auth.ValidateCredentials("", "correct-horse-battery").Success);
+    }
+
+    [Fact]
+    public void Totp_requires_code_after_enrollment()
+    {
+        Assert.True(_auth.CreateAdmin("", "correct-horse-battery").Success);
+        var begin = _auth.BeginTotpEnrollment(ILocalAuthService.DefaultUsername);
+        Assert.True(begin.Success);
+        Assert.False(string.IsNullOrWhiteSpace(begin.ManualKey));
+
+        var totp = new Totp(Base32Encoding.ToBytes(begin.ManualKey!));
+        var code = totp.ComputeTotp();
+        var confirm = _auth.ConfirmTotpEnrollment(ILocalAuthService.DefaultUsername, code);
+        Assert.True(confirm.Success);
+        Assert.NotNull(confirm.RecoveryCodes);
+        Assert.NotEmpty(confirm.RecoveryCodes!);
+
+        var needs = _auth.ValidateCredentials("", "correct-horse-battery");
+        Assert.False(needs.Success);
+        Assert.True(needs.RequiresTotp);
+
+        var code2 = totp.ComputeTotp();
+        var ok = _auth.ValidateCredentials("", "correct-horse-battery", code2);
+        Assert.True(ok.Success);
+    }
+
+    [Fact]
+    public void SecretStore_round_trips_and_portable_import()
+    {
+        _secrets.Set("notifications.smtp.password", "s3cret!");
+        Assert.True(_secrets.Has("notifications.smtp.password"));
+        Assert.True(_secrets.TryGet("notifications.smtp.password", out var v));
+        Assert.Equal("s3cret!", v);
+
+        var portable = _secrets.ExportPortable();
+        Assert.Equal("s3cret!", portable["notifications.smtp.password"]);
+
+        var portablePath = Path.Combine(_root, "secrets", "secrets-portable.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(portablePath)!);
+        File.WriteAllText(portablePath, """{"kind":"jotdex-secrets-portable","secrets":{"notifications.telegram.botToken":"tok-123"}}""");
+        var n = _secrets.ImportPortableFileIfPresent();
+        Assert.True(n >= 1);
+        Assert.False(File.Exists(portablePath));
+        Assert.True(_secrets.TryGet("notifications.telegram.botToken", out var tok));
+        Assert.Equal("tok-123", tok);
     }
 
     private sealed class TempDataRoot : IDataRootResolver

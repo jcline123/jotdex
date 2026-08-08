@@ -1,7 +1,9 @@
 using System.IO.Compression;
 using System.Text.Json;
 using Jotdex.Core.Configuration;
+using Jotdex.Core.Secrets;
 using Jotdex.Core.Vault;
+using Jotdex.Infrastructure.Secrets;
 using Microsoft.Extensions.Logging;
 
 namespace Jotdex.Infrastructure.Maintenance;
@@ -26,12 +28,14 @@ public sealed class BackupBundleService : IBackupBundleService
 {
     private readonly IDataRootResolver _dataRoot;
     private readonly IVaultPathGuard _paths;
+    private readonly ISecretStore _secrets;
     private readonly ILogger<BackupBundleService> _logger;
 
-    public BackupBundleService(IDataRootResolver dataRoot, IVaultPathGuard paths, ILogger<BackupBundleService> logger)
+    public BackupBundleService(IDataRootResolver dataRoot, IVaultPathGuard paths, ISecretStore secrets, ILogger<BackupBundleService> logger)
     {
         _dataRoot = dataRoot;
         _paths = paths;
+        _secrets = secrets;
         _logger = logger;
     }
 
@@ -77,13 +81,15 @@ public sealed class BackupBundleService : IBackupBundleService
                         AddDirectory(zip, histDir, "appdata/history", ct);
                 }
 
+                PortableSecretsZip.AddToZip(zip, _secrets);
+
                 var manifest = new
                 {
                     createdUtc = DateTimeOffset.UtcNow,
                     vaultPath = vault,
                     includeAuth,
                     includeHistory,
-                    note = "Restore vault/ to local disk; restore appdata pieces into the Jotdex data root. Indexes are not included — rebuild via Rescan."
+                    note = "Restore vault/ to local disk; restore appdata pieces into the Jotdex data root. Indexes are not included — rebuild via Rescan. secrets-portable.json is imported on first start then deleted."
                 };
                 var entry = zip.CreateEntry("MANIFEST.json");
                 using var w = new StreamWriter(entry.Open());

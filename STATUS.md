@@ -1,11 +1,17 @@
 # Jotdex STATUS
 
-**Active milestone:** V1 complete / polish  
+**Active milestone:** M8 complete — polish / next ops as needed  
 **Last updated:** 2026-08-08
+
+## In progress
+
+- (none)
 
 ## Highlights
 
 - Live vault on local disk; optional one-way cloud mirror (Settings)
+- **DPAPI secrets** for SMTP/Telegram/TOTP; move kit carries portable secrets then rewraps
+- **Ops alerts** (email / Telegram) when mirror is stale; optional **TOTP** in Security
 - Restart server button for bind/port/HTTPS
 - Code boxes with language + Copy in the editor
 - Auth, search, TipTap editor, static export, backup ZIP, integrity scan

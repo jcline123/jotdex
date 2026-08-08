@@ -283,6 +283,8 @@ type LoginProps = {
 
 export function LoginScreen({ onLoggedIn }: LoginProps) {
   const [password, setPassword] = useState('')
+  const [totpCode, setTotpCode] = useState('')
+  const [needsTotp, setNeedsTotp] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
@@ -295,9 +297,17 @@ export function LoginScreen({ onLoggedIn }: LoginProps) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'same-origin',
-        body: JSON.stringify({ password }),
+        body: JSON.stringify({
+          password,
+          totpCode: needsTotp || totpCode.trim() ? totpCode.trim() : undefined,
+        }),
       })
       const data = await res.json()
+      if (data.requiresTotp) {
+        setNeedsTotp(true)
+        setError(null)
+        return
+      }
       if (!res.ok || !data.success) {
         setError(data.error ?? 'Login failed')
         return
@@ -325,12 +335,27 @@ export function LoginScreen({ onLoggedIn }: LoginProps) {
               onChange={(e) => setPassword(e.target.value)}
               autoComplete="current-password"
               required
-              autoFocus
+              autoFocus={!needsTotp}
             />
           </label>
+          {needsTotp && (
+            <label>
+              Authenticator code
+              <input
+                type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                value={totpCode}
+                onChange={(e) => setTotpCode(e.target.value)}
+                placeholder="6-digit or recovery code"
+                required
+                autoFocus
+              />
+            </label>
+          )}
           {error && <p className="error">{error}</p>}
           <button type="submit" disabled={busy}>
-            {busy ? 'Unlocking…' : 'Unlock'}
+            {busy ? 'Unlocking…' : needsTotp ? 'Verify & unlock' : 'Unlock'}
           </button>
         </form>
       </div>

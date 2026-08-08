@@ -2,7 +2,7 @@
 
 Mark items `- [x]` when done. IDs are stable for chat (“done M1-04”).
 
-**Active milestone:** V1 complete — polish / ops as needed
+**Active milestone:** M8 complete — polish as needed
 
 ---
 
@@ -152,6 +152,20 @@ Mark items `- [x]` when done. IDs are stable for chat (“done M1-04”).
 - [x] `M7-05` Maintenance page
 - [x] `M7-06` Security suite *(CSP, SSRF, sanitizer, auth gate, path guard — expand later)*
 - [x] `M7-07` Gate: static site + restore + mirror documented
+
+---
+
+## M8 — Secrets, ops alerts, TOTP
+
+- [x] `M8-00` README LAN/VPN wording; threat-model defer vault crypto + BitLocker
+- [x] `M8-01` ADR: secrets via DPAPI at rest; move-kit unwraps to portable plaintext then rewraps on restore
+- [x] `M8-02` `ISecretStore` + DPAPI implementation + export/import portable format + tests
+- [x] `M8-03` Wire secrets into move-kit/backup/Restore + docs (seamless transfer; warn ZIP is sensitive)
+- [x] `M8-04` Notification channel model + SMTP sender + Settings UI + test send
+- [x] `M8-05` Telegram channel (same pipeline)
+- [x] `M8-06` Mirror-stale alert job (configurable hours, dedupe)
+- [x] `M8-07` TOTP enroll / verify / recovery codes + login + idle unlock
+- [x] `M8-08` Gate: password-only still works; secrets never logged; smoke tests for SMTP config round-trip (mock) + TOTP verify
 
 ---
 

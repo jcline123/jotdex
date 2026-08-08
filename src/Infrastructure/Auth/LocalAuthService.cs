@@ -1,9 +1,14 @@
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Jotdex.Core.Auth;
 using Jotdex.Core.Configuration;
+using Jotdex.Core.Notifications;
+using Jotdex.Core.Secrets;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Logging;
+using OtpNet;
 
 namespace Jotdex.Infrastructure.Auth;
 
@@ -17,17 +22,21 @@ public sealed class LocalAuthService : ILocalAuthService
     };
 
     private readonly IDataRootResolver _dataRoot;
+    private readonly ISecretStore _secrets;
     private readonly ILogger<LocalAuthService> _logger;
     private readonly PasswordHasher<AuthUserRecord> _hasher = new();
     private readonly object _gate = new();
+    private string? _pendingTotpSecret;
 
     private const int MaxFailedAttempts = 5;
     private static readonly TimeSpan LockoutDuration = TimeSpan.FromMinutes(15);
     private const int MinPasswordLength = 6;
+    private const int RecoveryCodeCount = 8;
 
-    public LocalAuthService(IDataRootResolver dataRoot, ILogger<LocalAuthService> logger)
+    public LocalAuthService(IDataRootResolver dataRoot, ISecretStore secrets, ILogger<LocalAuthService> logger)
     {
         _dataRoot = dataRoot;
+        _secrets = secrets;
         _logger = logger;
     }
 
@@ -37,9 +46,17 @@ public sealed class LocalAuthService : ILocalAuthService
         {
             lock (_gate)
             {
-                var store = LoadUnlocked();
-                return store.Users.Count > 0;
+                return LoadUnlocked().Users.Count > 0;
             }
+        }
+    }
+
+    public bool IsTotpEnabled()
+    {
+        lock (_gate)
+        {
+            var user = LoadUnlocked().Users.FirstOrDefault();
+            return user?.TotpEnabled == true;
         }
     }
 
@@ -53,13 +70,15 @@ public sealed class LocalAuthService : ILocalAuthService
                 : store.Users.FirstOrDefault(u =>
                     string.Equals(u.Username, currentUsername, StringComparison.OrdinalIgnoreCase));
 
+            var any = store.Users.FirstOrDefault();
             return new AuthStatus
             {
                 SetupComplete = store.Users.Count > 0,
                 Authenticated = user is not null,
                 AuthRequired = store.Users.Count > 0,
                 Username = user?.Username,
-                DisplayName = user?.DisplayName
+                DisplayName = user?.DisplayName,
+                TotpEnabled = any?.TotpEnabled == true
             };
         }
     }
@@ -92,24 +111,12 @@ public sealed class LocalAuthService : ILocalAuthService
         }
     }
 
-    public AuthResult ValidateCredentials(string username, string password)
+    public AuthResult ValidateCredentials(string username, string password, string? totpOrRecoveryCode = null)
     {
         lock (_gate)
         {
             var store = LoadUnlocked();
-            AuthUserRecord? user;
-            if (string.IsNullOrWhiteSpace(username))
-            {
-                user = store.Users.Count == 1 ? store.Users[0] : store.Users.FirstOrDefault(u =>
-                    string.Equals(u.Username, ILocalAuthService.DefaultUsername, StringComparison.OrdinalIgnoreCase));
-            }
-            else
-            {
-                username = username.Trim();
-                user = store.Users.FirstOrDefault(u =>
-                    string.Equals(u.Username, username, StringComparison.OrdinalIgnoreCase));
-            }
-
+            var user = ResolveUser(store, username);
             if (user is null)
                 return Fail("Invalid password.");
 
@@ -127,24 +134,23 @@ public sealed class LocalAuthService : ILocalAuthService
 
             var result = _hasher.VerifyHashedPassword(user, user.PasswordHash, password ?? "");
             if (result == PasswordVerificationResult.Failed)
+                return FailAfterAttempt(store, user, "Invalid password.");
+
+            if (user.TotpEnabled)
             {
-                user.FailedAttempts++;
-                if (user.FailedAttempts >= MaxFailedAttempts)
+                if (string.IsNullOrWhiteSpace(totpOrRecoveryCode))
                 {
-                    user.LockoutUntilUtc = DateTimeOffset.UtcNow.Add(LockoutDuration);
-                    user.FailedAttempts = 0;
-                    SaveUnlocked(store);
                     return new AuthResult
                     {
                         Success = false,
-                        LockedOut = true,
-                        RetryAfterSeconds = (int)LockoutDuration.TotalSeconds,
-                        Error = "Too many failed attempts. Locked temporarily."
+                        RequiresTotp = true,
+                        Username = user.Username,
+                        Error = "Enter your authenticator code."
                     };
                 }
 
-                SaveUnlocked(store);
-                return Fail("Invalid password.");
+                if (!VerifyTotpOrRecovery(store, user, totpOrRecoveryCode.Trim()))
+                    return FailAfterAttempt(store, user, "Invalid authenticator or recovery code.");
             }
 
             if (result == PasswordVerificationResult.SuccessRehashNeeded)
@@ -197,14 +203,163 @@ public sealed class LocalAuthService : ILocalAuthService
 
             store.Users.Clear();
             SaveUnlocked(store);
+            _secrets.Remove(SecretKeys.TotpSecret);
+            _pendingTotpSecret = null;
             _logger.LogInformation("Password protection removed");
             return new AuthResult { Success = true };
+        }
+    }
+
+    public TotpBeginResult BeginTotpEnrollment(string username)
+    {
+        lock (_gate)
+        {
+            var store = LoadUnlocked();
+            var user = ResolveUser(store, username);
+            if (user is null)
+                return new TotpBeginResult { Success = false, Error = "Set a password first." };
+            if (user.TotpEnabled)
+                return new TotpBeginResult { Success = false, Error = "Authenticator is already enabled. Disable it first to re-enroll." };
+
+            var key = KeyGeneration.GenerateRandomKey(20);
+            var manual = Base32Encoding.ToString(key);
+            _pendingTotpSecret = manual;
+            var label = Uri.EscapeDataString($"Jotdex:{user.Username}");
+            var issuer = Uri.EscapeDataString("Jotdex");
+            var uri = $"otpauth://totp/{label}?secret={manual}&issuer={issuer}&digits=6&period=30";
+            return new TotpBeginResult { Success = true, ManualKey = manual, OtpAuthUri = uri };
+        }
+    }
+
+    public TotpConfirmResult ConfirmTotpEnrollment(string username, string code)
+    {
+        lock (_gate)
+        {
+            var store = LoadUnlocked();
+            var user = ResolveUser(store, username);
+            if (user is null)
+                return new TotpConfirmResult { Success = false, Error = "Set a password first." };
+            if (string.IsNullOrWhiteSpace(_pendingTotpSecret))
+                return new TotpConfirmResult { Success = false, Error = "Start enrollment first." };
+
+            if (!VerifyCode(_pendingTotpSecret, code))
+                return new TotpConfirmResult { Success = false, Error = "Invalid code. Try again." };
+
+            _secrets.Set(SecretKeys.TotpSecret, _pendingTotpSecret);
+            var recovery = GenerateRecoveryCodes();
+            user.TotpEnabled = true;
+            user.RecoveryCodeHashes = recovery.Select(HashRecovery).ToList();
+            _pendingTotpSecret = null;
+            SaveUnlocked(store);
+            _logger.LogInformation("TOTP enabled for {User}", user.Username);
+            return new TotpConfirmResult { Success = true, RecoveryCodes = recovery };
+        }
+    }
+
+    public AuthResult DisableTotp(string username, string password, string? totpOrRecoveryCode = null)
+    {
+        lock (_gate)
+        {
+            var store = LoadUnlocked();
+            var user = ResolveUser(store, username);
+            if (user is null)
+                return Fail("No password is set.");
+
+            var verify = _hasher.VerifyHashedPassword(user, user.PasswordHash, password ?? "");
+            if (verify == PasswordVerificationResult.Failed)
+                return Fail("Current password is incorrect.");
+
+            if (user.TotpEnabled)
+            {
+                if (string.IsNullOrWhiteSpace(totpOrRecoveryCode) ||
+                    !VerifyTotpOrRecovery(store, user, totpOrRecoveryCode.Trim()))
+                    return Fail("Authenticator or recovery code required to disable.");
+            }
+
+            user.TotpEnabled = false;
+            user.RecoveryCodeHashes = [];
+            _secrets.Remove(SecretKeys.TotpSecret);
+            _pendingTotpSecret = null;
+            SaveUnlocked(store);
+            _logger.LogInformation("TOTP disabled for {User}", user.Username);
+            return new AuthResult { Success = true, Username = user.Username };
         }
     }
 
     public void RecordFailedLogin(string username) { /* handled in ValidateCredentials */ }
 
     public void RecordSuccessfulLogin(string username) { /* handled in ValidateCredentials */ }
+
+    private AuthResult FailAfterAttempt(AuthStore store, AuthUserRecord user, string message)
+    {
+        user.FailedAttempts++;
+        if (user.FailedAttempts >= MaxFailedAttempts)
+        {
+            user.LockoutUntilUtc = DateTimeOffset.UtcNow.Add(LockoutDuration);
+            user.FailedAttempts = 0;
+            SaveUnlocked(store);
+            return new AuthResult
+            {
+                Success = false,
+                LockedOut = true,
+                RetryAfterSeconds = (int)LockoutDuration.TotalSeconds,
+                Error = "Too many failed attempts. Locked temporarily."
+            };
+        }
+
+        SaveUnlocked(store);
+        return Fail(message);
+    }
+
+    private bool VerifyTotpOrRecovery(AuthStore store, AuthUserRecord user, string code)
+    {
+        if (_secrets.TryGet(SecretKeys.TotpSecret, out var secret) && !string.IsNullOrEmpty(secret) &&
+            VerifyCode(secret, code))
+            return true;
+
+        var hash = HashRecovery(code);
+        var idx = user.RecoveryCodeHashes.FindIndex(h =>
+            string.Equals(h, hash, StringComparison.Ordinal));
+        if (idx < 0) return false;
+        user.RecoveryCodeHashes.RemoveAt(idx);
+        SaveUnlocked(store);
+        _logger.LogInformation("Recovery code used for {User}; {Left} remaining", user.Username, user.RecoveryCodeHashes.Count);
+        return true;
+    }
+
+    private static bool VerifyCode(string base32Secret, string code)
+    {
+        try
+        {
+            var cleaned = new string((code ?? "").Where(char.IsDigit).ToArray());
+            if (cleaned.Length != 6) return false;
+            var key = Base32Encoding.ToBytes(base32Secret.Replace(" ", ""));
+            var totp = new Totp(key);
+            return totp.VerifyTotp(cleaned, out _, new VerificationWindow(1, 1));
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static List<string> GenerateRecoveryCodes()
+    {
+        var list = new List<string>(RecoveryCodeCount);
+        for (var i = 0; i < RecoveryCodeCount; i++)
+        {
+            var bytes = RandomNumberGenerator.GetBytes(5);
+            list.Add(Convert.ToHexString(bytes).ToLowerInvariant());
+        }
+        return list;
+    }
+
+    private static string HashRecovery(string code)
+    {
+        var normalized = (code ?? "").Trim().ToLowerInvariant().Replace(" ", "");
+        var hash = SHA256.HashData(Encoding.UTF8.GetBytes("jotdex-recovery:" + normalized));
+        return Convert.ToHexString(hash);
+    }
 
     private static AuthUserRecord? ResolveUser(AuthStore store, string? username)
     {
@@ -267,5 +422,7 @@ public sealed class LocalAuthService : ILocalAuthService
         public DateTimeOffset? LastLoginUtc { get; set; }
         public int FailedAttempts { get; set; }
         public DateTimeOffset? LockoutUntilUtc { get; set; }
+        public bool TotpEnabled { get; set; }
+        public List<string> RecoveryCodeHashes { get; set; } = [];
     }
 }

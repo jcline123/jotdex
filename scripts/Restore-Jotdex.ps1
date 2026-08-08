@@ -1,17 +1,20 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-  Restore a Jotdex move kit on a new Windows PC.
+  Restore a Jotdex move kit on a new Windows PC (handles .jotdexkit, .zip, or unzipped folder).
 
 .DESCRIPTION
-  Run this from the unzipped move-kit folder. Prompts for:
-    - Install folder (portable program + .\data)
-    - Vault folder (live notes on local disk — not iCloud)
-
-  Copies app\, vault\, and appdata\; rewrites vault.json; disables stale cloud mirror paths.
+  Simple flow:
+    1. Point this script at jotdex-move-latest.jotdexkit (or an unzipped kit folder).
+    2. If the kit is encrypted, enter your Jotdex unlock password when asked.
+    3. Choose install folder + vault folder — done.
 
 .PARAMETER KitRoot
-  Unzipped kit folder (default: this script's directory).
+  Unzipped kit folder, OR a .zip / .jotdexkit file (default: this script's directory,
+  or jotdex-move-latest.* beside the script).
+
+.PARAMETER Password
+  Unlock password for .jotdexkit (prompted if needed).
 
 .PARAMETER InstallPath
   Where to place Jotdex (default: prompted, e.g. C:\Jotdex).
@@ -28,6 +31,7 @@
 [CmdletBinding()]
 param(
     [string]$KitRoot = "",
+    [string]$Password = "",
     [string]$InstallPath = "",
     [string]$VaultPath = "",
     [switch]$Force,
@@ -69,7 +73,6 @@ function Copy-Tree([string]$Source, [string]$Dest) {
         throw "Missing source: $Source"
     }
     New-Item -ItemType Directory -Force -Path $Dest | Out-Null
-    # robocopy exit codes 0-7 are success
     & robocopy $Source $Dest /E /COPY:DAT /R:2 /W:2 /NFL /NDL /NJH /NJS | Out-Null
     $code = $LASTEXITCODE
     if ($code -ge 8) {
@@ -77,10 +80,113 @@ function Copy-Tree([string]$Source, [string]$Dest) {
     }
 }
 
-if ([string]::IsNullOrWhiteSpace($KitRoot)) {
-    $KitRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+function Find-ServerExe([string]$Beside) {
+    foreach ($c in @(
+            (Join-Path $Beside "Jotdex.Server.exe"),
+            (Join-Path $Beside "app\Jotdex.Server.exe"),
+            (Join-Path (Get-Location) "Jotdex.Server.exe")
+        )) {
+        if (Test-Path -LiteralPath $c) { return (Resolve-Path -LiteralPath $c).Path }
+    }
+    return $null
 }
+
+function Expand-MoveKitArchive {
+    param(
+        [string]$ArchivePath,
+        [string]$Password,
+        [string]$WorkRoot
+    )
+
+    $ArchivePath = [System.IO.Path]::GetFullPath($ArchivePath)
+    $ext = [System.IO.Path]::GetExtension($ArchivePath).ToLowerInvariant()
+    $zipPath = $ArchivePath
+
+    if ($ext -eq ".jotdexkit") {
+        Write-Step "Encrypted kit — enter your Jotdex unlock password"
+        if ([string]::IsNullOrWhiteSpace($Password)) {
+            if ($NonInteractive) { throw "Password required for .jotdexkit in NonInteractive mode." }
+            $secure = Read-Host "Jotdex unlock password" -AsSecureString
+            $bstr = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure)
+            try {
+                $Password = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($bstr)
+            } finally {
+                [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($bstr)
+            }
+        }
+
+        $exe = Find-ServerExe (Split-Path -Parent $ArchivePath)
+        if (-not $exe) { $exe = Find-ServerExe $scriptDir }
+        if (-not $exe) {
+            throw "Need Jotdex.Server.exe beside this script (or in the kit folder) to decrypt. Copy the portable exe here, then re-run."
+        }
+
+        $zipPath = Join-Path $WorkRoot "kit.zip"
+        $env:JOTDEX_DECRYPT_PASSWORD = $Password
+        try {
+            & $exe --decrypt-kit $ArchivePath $zipPath
+            if ($LASTEXITCODE -ne 0) { throw "Decrypt failed — check your password." }
+        } finally {
+            Remove-Item Env:\JOTDEX_DECRYPT_PASSWORD -ErrorAction SilentlyContinue
+        }
+        Write-Ok "Decrypted"
+    }
+    elseif ($ext -ne ".zip") {
+        throw "Expected a .jotdexkit, .zip, or unzipped kit folder."
+    }
+
+    Write-Step "Unpacking kit"
+    $extract = Join-Path $WorkRoot "extracted"
+    if (Test-Path -LiteralPath $extract) { Remove-Item -LiteralPath $extract -Recurse -Force }
+    New-Item -ItemType Directory -Force -Path $extract | Out-Null
+    Expand-Archive -LiteralPath $zipPath -DestinationPath $extract -Force
+
+    $children = @(Get-ChildItem -LiteralPath $extract -Force)
+    if ($children.Count -eq 1 -and $children[0].PSIsContainer -and -not (Test-Path -LiteralPath (Join-Path $children[0].FullName "vault"))) {
+        return $children[0].FullName
+    }
+    if (-not (Test-Path -LiteralPath (Join-Path $extract "vault"))) {
+        $found = Get-ChildItem -LiteralPath $extract -Recurse -Directory -Filter "vault" -ErrorAction SilentlyContinue |
+            Select-Object -First 1
+        if ($found) { return (Split-Path -Parent $found.FullName) }
+        throw "Unpacked kit has no vault\ folder."
+    }
+    return $extract
+}
+
+$scriptDir = if ($PSScriptRoot) { $PSScriptRoot } else { Split-Path -Parent $MyInvocation.MyCommand.Path }
+$workTemp = $null
+
+if ([string]::IsNullOrWhiteSpace($KitRoot)) {
+    $KitRoot = $scriptDir
+}
+
 $KitRoot = [System.IO.Path]::GetFullPath($KitRoot)
+
+if ((Test-Path -LiteralPath $KitRoot -PathType Container) -and -not (Test-Path -LiteralPath (Join-Path $KitRoot "vault"))) {
+    $latest = @(
+        Get-ChildItem -LiteralPath $KitRoot -File -ErrorAction SilentlyContinue |
+            Where-Object { $_.Name -match '^jotdex-move.*\.(jotdexkit|zip)$' } |
+            Sort-Object LastWriteTime -Descending
+    ) | Select-Object -First 1
+    if ($latest) {
+        Write-Host "Using kit file: $($latest.FullName)"
+        $KitRoot = $latest.FullName
+    }
+}
+
+if (Test-Path -LiteralPath $KitRoot -PathType Leaf) {
+    $workTemp = Join-Path $env:TEMP ("jotdex-restore-" + [Guid]::NewGuid().ToString("N").Substring(0, 8))
+    New-Item -ItemType Directory -Force -Path $workTemp | Out-Null
+    try {
+        $KitRoot = Expand-MoveKitArchive -ArchivePath $KitRoot -Password $Password -WorkRoot $workTemp
+    } catch {
+        if ($workTemp -and (Test-Path -LiteralPath $workTemp)) {
+            Remove-Item -LiteralPath $workTemp -Recurse -Force -ErrorAction SilentlyContinue
+        }
+        throw
+    }
+}
 
 $vaultSrc = Join-Path $KitRoot "vault"
 $appSrc = Join-Path $KitRoot "app"
@@ -91,7 +197,7 @@ Write-Host "Jotdex restore (move kit)" -ForegroundColor White
 Write-Host "Kit: $KitRoot"
 
 if (-not (Test-Path -LiteralPath $vaultSrc)) {
-    throw "This does not look like a move kit (missing vault\). Unzip the jotdex-move-*.zip first, then run this script from that folder."
+    throw "This does not look like a move kit (missing vault\). Point -KitRoot at a .jotdexkit / .zip / unzipped folder."
 }
 
 $includedApp = Test-Path -LiteralPath (Join-Path $appSrc "Jotdex.Server.exe")
@@ -136,66 +242,72 @@ if ((Test-Path -LiteralPath $VaultPath) -and -not $Force) {
     }
 }
 
-Write-Step "Copying vault"
-Copy-Tree $vaultSrc $VaultPath
-Write-Ok $VaultPath
+try {
+    Write-Step "Copying vault"
+    Copy-Tree $vaultSrc $VaultPath
+    Write-Ok $VaultPath
 
-$dataDest = Join-Path $InstallPath "data"
-Write-Step "Preparing install folder"
-New-Item -ItemType Directory -Force -Path $InstallPath | Out-Null
-New-Item -ItemType Directory -Force -Path $dataDest | Out-Null
+    $dataDest = Join-Path $InstallPath "data"
+    Write-Step "Preparing install folder"
+    New-Item -ItemType Directory -Force -Path $InstallPath | Out-Null
+    New-Item -ItemType Directory -Force -Path $dataDest | Out-Null
 
-if ($includedApp) {
-    Write-Step "Copying portable app"
-    Copy-Tree $appSrc $InstallPath
-    Write-Ok "Jotdex.Server.exe -> $InstallPath"
-} else {
-    Write-WarnLine "Skipped app copy (not in kit)."
-}
-
-if (Test-Path -LiteralPath $appdataSrc) {
-    Write-Step "Copying app data (auth, config, history)"
-    Get-ChildItem -LiteralPath $appdataSrc -Directory -ErrorAction SilentlyContinue | ForEach-Object {
-        $dest = Join-Path $dataDest $_.Name
-        Copy-Tree $_.FullName $dest
-        Write-Ok $_.Name
+    if ($includedApp) {
+        Write-Step "Copying portable app"
+        Copy-Tree $appSrc $InstallPath
+        Write-Ok "Jotdex.Server.exe -> $InstallPath"
+    } else {
+        Write-WarnLine "Skipped app copy (not in kit)."
     }
-}
 
-Write-Step "Pointing config at the new vault path"
-$configDir = Join-Path $dataDest "config"
-New-Item -ItemType Directory -Force -Path $configDir | Out-Null
-$vaultJson = Join-Path $configDir "vault.json"
-$vaultObj = @{ vaultPath = $VaultPath }
-$vaultObj | ConvertTo-Json | Set-Content -LiteralPath $vaultJson -Encoding UTF8
-Write-Ok $vaultJson
-
-$mirrorJson = Join-Path $configDir "vault-mirror.json"
-if (Test-Path -LiteralPath $mirrorJson) {
-    try {
-        $mirror = Get-Content -LiteralPath $mirrorJson -Raw | ConvertFrom-Json
-        $changed = $false
-        if ($mirror.PSObject.Properties.Name -contains "enabled" -and $mirror.enabled) {
-            $mirror.enabled = $false
-            $changed = $true
+    if (Test-Path -LiteralPath $appdataSrc) {
+        Write-Step "Copying app data (auth, config, history)"
+        Get-ChildItem -LiteralPath $appdataSrc -Directory -ErrorAction SilentlyContinue | ForEach-Object {
+            $dest = Join-Path $dataDest $_.Name
+            Copy-Tree $_.FullName $dest
+            Write-Ok $_.Name
         }
-        if ($mirror.PSObject.Properties.Name -contains "destinationPath") {
-            $mirror.destinationPath = ""
-            $changed = $true
+        $portableLoose = Join-Path $appdataSrc "secrets-portable.json"
+        if (Test-Path -LiteralPath $portableLoose) {
+            $secDir = Join-Path $dataDest "secrets"
+            New-Item -ItemType Directory -Force -Path $secDir | Out-Null
+            Copy-Item -LiteralPath $portableLoose -Destination (Join-Path $secDir "secrets-portable.json") -Force
         }
-        if ($changed) {
-            $mirror | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $mirrorJson -Encoding UTF8
-            Write-WarnLine "Disabled cloud mirror settings (old PC path). Re-enable in Settings if needed."
-        }
-    } catch {
-        Write-WarnLine "Could not adjust vault-mirror.json: $($_.Exception.Message)"
     }
-}
 
-# Ensure portable mode beside install
-$example = Join-Path $InstallPath "appsettings.json"
-if (-not (Test-Path -LiteralPath $example)) {
-    @"
+    Write-Step "Pointing config at the new vault path"
+    $configDir = Join-Path $dataDest "config"
+    New-Item -ItemType Directory -Force -Path $configDir | Out-Null
+    $vaultJson = Join-Path $configDir "vault.json"
+    $vaultObj = @{ vaultPath = $VaultPath }
+    $vaultObj | ConvertTo-Json | Set-Content -LiteralPath $vaultJson -Encoding UTF8
+    Write-Ok $vaultJson
+
+    $mirrorJson = Join-Path $configDir "vault-mirror.json"
+    if (Test-Path -LiteralPath $mirrorJson) {
+        try {
+            $mirror = Get-Content -LiteralPath $mirrorJson -Raw | ConvertFrom-Json
+            $changed = $false
+            if ($mirror.PSObject.Properties.Name -contains "enabled" -and $mirror.enabled) {
+                $mirror.enabled = $false
+                $changed = $true
+            }
+            if ($mirror.PSObject.Properties.Name -contains "destinationPath") {
+                $mirror.destinationPath = ""
+                $changed = $true
+            }
+            if ($changed) {
+                $mirror | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $mirrorJson -Encoding UTF8
+                Write-WarnLine "Disabled cloud mirror settings (old PC path). Re-enable in Settings if needed."
+            }
+        } catch {
+            Write-WarnLine "Could not adjust vault-mirror.json: $($_.Exception.Message)"
+        }
+    }
+
+    $example = Join-Path $InstallPath "appsettings.json"
+    if (-not (Test-Path -LiteralPath $example)) {
+        @"
 {
   "Jotdex": {
     "VaultPath": "",
@@ -204,17 +316,26 @@ if (-not (Test-Path -LiteralPath $example)) {
   }
 }
 "@ | Set-Content -LiteralPath $example -Encoding UTF8
-}
+    }
 
-Write-Step "Done"
-Write-Host ""
-Write-Host "Next steps:" -ForegroundColor Green
-Write-Host "  1. cd `"$InstallPath`""
-Write-Host "  2. Double-click start-portable.cmd  (or run .\Jotdex.Server.exe)"
-Write-Host "  3. Open http://127.0.0.1:5180"
-Write-Host "  4. Unlock with your existing password (if you had one)"
-Write-Host "  5. Search rebuilds automatically on first start"
-Write-Host ""
-if (Test-Path -LiteralPath $manifestPath) {
-    Write-Host "Manifest: $manifestPath"
+    Write-Step "Done"
+    Write-Host ""
+    Write-Host "Next steps:" -ForegroundColor Green
+    Write-Host "  1. cd `"$InstallPath`""
+    Write-Host "  2. Double-click start-portable.cmd  (or run .\Jotdex.Server.exe)"
+    Write-Host "  3. Open http://127.0.0.1:5180"
+    Write-Host "  4. Unlock with your existing password (and authenticator code if TOTP is on)"
+    Write-Host "  5. Search rebuilds automatically; notification secrets import on first start"
+    Write-Host ""
+    if (Test-Path -LiteralPath (Join-Path $dataDest "secrets\secrets-portable.json")) {
+        Write-Host "Note: secrets-portable.json will be imported into DPAPI on first launch, then removed." -ForegroundColor Yellow
+    }
+    if (Test-Path -LiteralPath $manifestPath) {
+        Write-Host "Manifest: $manifestPath"
+    }
+}
+finally {
+    if ($workTemp -and (Test-Path -LiteralPath $workTemp)) {
+        try { Remove-Item -LiteralPath $workTemp -Recurse -Force -ErrorAction SilentlyContinue } catch { }
+    }
 }

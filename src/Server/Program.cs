@@ -1,9 +1,15 @@
 using System.Diagnostics;
 using System.Reflection;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
 using Jotdex.Core.Configuration;
+using Jotdex.Core.Notifications;
 using Jotdex.Core.Search;
+using Jotdex.Core.Secrets;
 using Jotdex.Core.Vault;
+using Jotdex.Infrastructure.Auth;
 using Jotdex.Infrastructure.Config;
 using Jotdex.Infrastructure.Export;
 using Jotdex.Infrastructure.History;
@@ -11,12 +17,96 @@ using Jotdex.Infrastructure.Images;
 using Jotdex.Infrastructure.Logging;
 using Jotdex.Infrastructure.Maintenance;
 using Jotdex.Infrastructure.Net;
+using Jotdex.Infrastructure.Notifications;
 using Jotdex.Infrastructure.Paths;
 using Jotdex.Infrastructure.Search;
+using Jotdex.Infrastructure.Secrets;
 using Jotdex.Infrastructure.Vault;
 using Jotdex.Server.Auth;
 using Jotdex.Server.Hosting;
 using Microsoft.Extensions.Options;
+
+// Offline helper: Jotdex.Server.exe --decrypt-kit <kit.jotdexkit> <out.zip>
+// Password via env JOTDEX_DECRYPT_PASSWORD or prompt.
+if (args is ["--decrypt-kit", var kitPath, var outZip])
+{
+    var password = Environment.GetEnvironmentVariable("JOTDEX_DECRYPT_PASSWORD");
+    if (string.IsNullOrEmpty(password))
+    {
+        Console.Write("Jotdex unlock password: ");
+        password = ReadPassword();
+        Console.WriteLine();
+    }
+    try
+    {
+        DecryptKitFile(kitPath, password!, outZip);
+        Console.WriteLine("OK " + outZip);
+        return;
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine(ex.Message);
+        Environment.ExitCode = 1;
+        return;
+    }
+}
+
+static string ReadPassword()
+{
+    var sb = new StringBuilder();
+    while (true)
+    {
+        var key = Console.ReadKey(intercept: true);
+        if (key.Key == ConsoleKey.Enter) break;
+        if (key.Key == ConsoleKey.Backspace)
+        {
+            if (sb.Length > 0) sb.Length--;
+            continue;
+        }
+        sb.Append(key.KeyChar);
+    }
+    return sb.ToString();
+}
+
+static void DecryptKitFile(string encryptedPath, string password, string outputZipPath)
+{
+    const string Magic = "JDXK1";
+    const int NonceSize = 12;
+    const int TagSize = 16;
+    const int KeySize = 32;
+    const int Pbkdf2Iterations = 200_000;
+
+    var bytes = File.ReadAllBytes(encryptedPath);
+    using var ms = new MemoryStream(bytes);
+    using var br = new BinaryReader(ms);
+    var magic = Encoding.ASCII.GetString(br.ReadBytes(Magic.Length));
+    if (magic != Magic) throw new InvalidDataException("Not a Jotdex encrypted move kit.");
+    var saltLen = br.ReadUInt16();
+    var salt = br.ReadBytes(saltLen);
+    var wrapLen = br.ReadUInt16();
+    var wrapped = br.ReadBytes(wrapLen);
+    var nonce = br.ReadBytes(NonceSize);
+    var tag = br.ReadBytes(TagSize);
+    var cipher = br.ReadBytes((int)(ms.Length - ms.Position));
+
+    var kek = Rfc2898DeriveBytes.Pbkdf2(
+        Encoding.UTF8.GetBytes(password), salt, Pbkdf2Iterations, HashAlgorithmName.SHA256, KeySize);
+    if (wrapped.Length < NonceSize + TagSize + KeySize)
+        throw new InvalidDataException("Invalid wrapped key.");
+    var wNonce = wrapped.AsSpan(0, NonceSize);
+    var wTag = wrapped.AsSpan(NonceSize, TagSize);
+    var wCipher = wrapped.AsSpan(NonceSize + TagSize);
+    var aesKey = new byte[wCipher.Length];
+    using (var aes = new AesGcm(kek, TagSize))
+        aes.Decrypt(wNonce, wCipher, wTag, aesKey);
+
+    var plain = new byte[cipher.Length];
+    using (var aes = new AesGcm(aesKey, TagSize))
+        aes.Decrypt(nonce, cipher, tag, plain);
+
+    Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outputZipPath))!);
+    File.WriteAllBytes(outputZipPath, plain);
+}
 
 var builder = WebApplication.CreateBuilder(args);
 Jotdex.Server.Hosting.NetworkListenConfigurator.Apply(builder);
@@ -45,6 +135,17 @@ builder.Services.AddSingleton<IBackupBundleService, BackupBundleService>();
 builder.Services.AddSingleton<IMoveKitService, MoveKitService>();
 builder.Services.AddSingleton<IUpdateCheckService, UpdateCheckService>();
 builder.Services.AddHttpClient("github");
+builder.Services.AddHttpClient("telegram");
+builder.Services.AddSingleton<ISecretStore, DpapiSecretStore>();
+builder.Services.AddSingleton<ILocalAuthProbe, LocalAuthProbe>();
+builder.Services.AddSingleton<IMoveKitCryptoService, MoveKitCryptoService>();
+builder.Services.AddSingleton<NotificationSettingsService>();
+builder.Services.AddSingleton<INotificationSettingsService>(sp => sp.GetRequiredService<NotificationSettingsService>());
+builder.Services.AddSingleton<IMirrorAlertState>(sp => sp.GetRequiredService<NotificationSettingsService>());
+builder.Services.AddSingleton<IOpsAlertSender, OpsAlertSender>();
+builder.Services.AddHostedService<PortableSecretsImportHostedService>();
+builder.Services.AddHostedService<MirrorStaleAlertHostedService>();
+builder.Services.AddHostedService<DailyMirrorMoveKitHostedService>();
 builder.Services.AddSingleton<IVaultMirrorService, VaultMirrorService>();
 builder.Services.AddSingleton<INoteLinkService, NoteLinkService>();
 builder.Services.AddHostedService<VaultMirrorHostedService>();
@@ -290,7 +391,21 @@ app.MapPost("/api/admin/move-kit", async (HttpRequest request, IMoveKitService m
 {
     var includeAuth = !string.Equals(request.Query["includeAuth"], "false", StringComparison.OrdinalIgnoreCase);
     var includeHistory = !string.Equals(request.Query["includeHistory"], "false", StringComparison.OrdinalIgnoreCase);
-    var result = await moveKit.CreateAsync(includeAuth, includeHistory, ct);
+    string? password = null;
+    try
+    {
+        if (request.ContentLength is > 0 ||
+            (request.ContentType?.Contains("json", StringComparison.OrdinalIgnoreCase) ?? false))
+        {
+            var body = await request.ReadFromJsonAsync<MoveKitBody>();
+            password = body?.Password;
+            if (body?.IncludeAuth is bool ia) includeAuth = ia;
+            if (body?.IncludeHistory is bool ih) includeHistory = ih;
+        }
+    }
+    catch { /* optional body */ }
+
+    var result = await moveKit.CreateAsync(includeAuth, includeHistory, password, null, ct);
     return result.Success ? Results.Json(result) : Results.BadRequest(result);
 });
 
@@ -602,6 +717,13 @@ internal sealed class VaultSettingsBody
 internal sealed class AutostartBody
 {
     public bool Enabled { get; set; } = true;
+}
+
+internal sealed class MoveKitBody
+{
+    public string? Password { get; set; }
+    public bool? IncludeAuth { get; set; }
+    public bool? IncludeHistory { get; set; }
 }
 
 internal sealed class AssemblyAppVersion : IAppVersion

@@ -1,7 +1,9 @@
 using System.Security.Claims;
 using Jotdex.Core.Auth;
 using Jotdex.Core.Configuration;
+using Jotdex.Core.Notifications;
 using Jotdex.Infrastructure.Config;
+using Jotdex.Infrastructure.Maintenance;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.Extensions.Options;
@@ -67,13 +69,14 @@ public static class AuthEndpointExtensions
                 authEnforced = passwordSet,
                 setupRequired = false,
                 authRequired = passwordSet && !status.Authenticated,
+                totpEnabled = status.TotpEnabled,
                 username = status.Username,
                 displayName = status.DisplayName,
                 developmentBypass
             });
         });
 
-        app.MapPost("/api/auth/setup", async (HttpRequest request, HttpContext ctx, ILocalAuthService auth) =>
+        app.MapPost("/api/auth/setup", async (HttpRequest request, HttpContext ctx, ILocalAuthService auth, IMoveKitCryptoService moveKitCrypto) =>
         {
             if (auth.IsSetupComplete)
                 return Results.BadRequest(new { error = "A password is already set." });
@@ -89,6 +92,8 @@ public static class AuthEndpointExtensions
             if (!result.Success)
                 return Results.BadRequest(new { error = result.Error });
 
+            moveKitCrypto.OnPasswordSet(body.Password ?? "");
+
             var claims = new List<Claim>
             {
                 new(ClaimTypes.Name, result.Username!),
@@ -98,22 +103,31 @@ public static class AuthEndpointExtensions
             return Results.Json(new { success = true, username = result.Username });
         });
 
-        app.MapPost("/api/auth/login", async (HttpRequest request, HttpContext ctx, ILocalAuthService auth) =>
+        app.MapPost("/api/auth/login", async (HttpRequest request, HttpContext ctx, ILocalAuthService auth, IMoveKitCryptoService moveKitCrypto) =>
         {
             var body = await request.ReadFromJsonAsync<LoginBody>();
             if (body is null)
                 return Results.BadRequest(new { error = "Invalid body" });
 
-            var result = auth.ValidateCredentials(body.Username ?? "", body.Password ?? "");
+            var result = auth.ValidateCredentials(body.Username ?? "", body.Password ?? "", body.TotpCode);
             if (!result.Success)
             {
                 return Results.Json(new
                 {
                     success = false,
                     error = result.Error,
+                    requiresTotp = result.RequiresTotp,
                     lockedOut = result.LockedOut,
                     retryAfterSeconds = result.RetryAfterSeconds
-                }, statusCode: result.LockedOut ? StatusCodes.Status429TooManyRequests : StatusCodes.Status401Unauthorized);
+                }, statusCode: result.RequiresTotp
+                    ? StatusCodes.Status401Unauthorized
+                    : result.LockedOut ? StatusCodes.Status429TooManyRequests : StatusCodes.Status401Unauthorized);
+            }
+
+            // Existing installs: initialize move-kit encryption wrap on first successful unlock.
+            if (!string.IsNullOrEmpty(body.Password) && !moveKitCrypto.HasEncryptionKey)
+            {
+                try { moveKitCrypto.OnPasswordSet(body.Password); } catch { /* non-fatal */ }
             }
 
             var claims = new List<Claim>
@@ -125,13 +139,47 @@ public static class AuthEndpointExtensions
             return Results.Json(new { success = true, username = result.Username });
         });
 
+        app.MapPost("/api/auth/totp/begin", (HttpContext ctx, ILocalAuthService auth) =>
+        {
+            if (ctx.User.Identity?.IsAuthenticated != true || string.IsNullOrEmpty(ctx.User.Identity.Name))
+                return Results.Unauthorized();
+            var result = auth.BeginTotpEnrollment(ctx.User.Identity.Name);
+            return result.Success
+                ? Results.Json(new { success = true, manualKey = result.ManualKey, otpAuthUri = result.OtpAuthUri })
+                : Results.BadRequest(new { error = result.Error });
+        });
+
+        app.MapPost("/api/auth/totp/confirm", async (HttpRequest request, HttpContext ctx, ILocalAuthService auth) =>
+        {
+            if (ctx.User.Identity?.IsAuthenticated != true || string.IsNullOrEmpty(ctx.User.Identity.Name))
+                return Results.Unauthorized();
+            var body = await request.ReadFromJsonAsync<TotpCodeBody>();
+            if (body is null) return Results.BadRequest(new { error = "Invalid body" });
+            var result = auth.ConfirmTotpEnrollment(ctx.User.Identity.Name, body.Code ?? "");
+            return result.Success
+                ? Results.Json(new { success = true, recoveryCodes = result.RecoveryCodes })
+                : Results.BadRequest(new { error = result.Error });
+        });
+
+        app.MapPost("/api/auth/totp/disable", async (HttpRequest request, HttpContext ctx, ILocalAuthService auth) =>
+        {
+            if (ctx.User.Identity?.IsAuthenticated != true || string.IsNullOrEmpty(ctx.User.Identity.Name))
+                return Results.Unauthorized();
+            var body = await request.ReadFromJsonAsync<TotpDisableBody>();
+            if (body is null) return Results.BadRequest(new { error = "Invalid body" });
+            var result = auth.DisableTotp(ctx.User.Identity.Name, body.Password ?? "", body.TotpCode);
+            return result.Success
+                ? Results.Json(new { success = true })
+                : Results.BadRequest(new { error = result.Error });
+        });
+
         app.MapPost("/api/auth/logout", async (HttpContext ctx) =>
         {
             await ctx.SignOutAsync(CookieScheme);
             return Results.Json(new { success = true });
         });
 
-        app.MapPost("/api/auth/change-password", async (HttpRequest request, HttpContext ctx, ILocalAuthService auth) =>
+        app.MapPost("/api/auth/change-password", async (HttpRequest request, HttpContext ctx, ILocalAuthService auth, IMoveKitCryptoService moveKitCrypto) =>
         {
             if (ctx.User.Identity?.IsAuthenticated != true || string.IsNullOrEmpty(ctx.User.Identity.Name))
                 return Results.Unauthorized();
@@ -141,12 +189,14 @@ public static class AuthEndpointExtensions
                 return Results.BadRequest(new { error = "Invalid body" });
 
             var result = auth.ChangePassword(ctx.User.Identity.Name, body.CurrentPassword ?? "", body.NewPassword ?? "");
-            return result.Success
-                ? Results.Json(new { success = true })
-                : Results.BadRequest(new { error = result.Error });
+            if (!result.Success)
+                return Results.BadRequest(new { error = result.Error });
+
+            moveKitCrypto.OnPasswordSet(body.NewPassword ?? "");
+            return Results.Json(new { success = true });
         });
 
-        app.MapPost("/api/auth/remove-password", async (HttpRequest request, HttpContext ctx, ILocalAuthService auth) =>
+        app.MapPost("/api/auth/remove-password", async (HttpRequest request, HttpContext ctx, ILocalAuthService auth, IMoveKitCryptoService moveKitCrypto) =>
         {
             var body = await request.ReadFromJsonAsync<RemovePasswordBody>();
             if (body is null)
@@ -156,6 +206,7 @@ public static class AuthEndpointExtensions
             if (!result.Success)
                 return Results.BadRequest(new { error = result.Error });
 
+            moveKitCrypto.OnPasswordCleared();
             await ctx.SignOutAsync(CookieScheme);
             return Results.Json(new { success = true });
         });
@@ -229,6 +280,7 @@ public static class AuthEndpointExtensions
                 enabled = s.Enabled,
                 destinationPath = s.DestinationPath,
                 intervalMinutes = s.IntervalMinutes,
+                includeDailyMoveKit = s.IncludeDailyMoveKit,
                 status = st
             });
         });
@@ -243,7 +295,8 @@ public static class AuthEndpointExtensions
             {
                 Enabled = body.Enabled ?? false,
                 DestinationPath = body.DestinationPath ?? "",
-                IntervalMinutes = body.IntervalMinutes ?? 15
+                IntervalMinutes = body.IntervalMinutes ?? 15,
+                IncludeDailyMoveKit = body.IncludeDailyMoveKit ?? false
             });
 
             if (!ok || settings is null)
@@ -255,6 +308,7 @@ public static class AuthEndpointExtensions
                 enabled = settings.Enabled,
                 destinationPath = settings.DestinationPath,
                 intervalMinutes = settings.IntervalMinutes,
+                includeDailyMoveKit = settings.IncludeDailyMoveKit,
                 status = mirror.GetStatus()
             });
         });
@@ -265,6 +319,75 @@ public static class AuthEndpointExtensions
             return ok
                 ? Results.Json(new { success = true, status = mirror.GetStatus() })
                 : Results.BadRequest(new { error, status = mirror.GetStatus() });
+        });
+
+        app.MapGet("/api/settings/notifications", (INotificationSettingsService notify) =>
+        {
+            var s = notify.GetSettings();
+            var st = notify.GetStatus();
+            return Results.Json(new
+            {
+                smtp = s.Smtp,
+                telegram = s.Telegram,
+                alerts = s.Alerts,
+                status = st
+            });
+        });
+
+        app.MapPut("/api/settings/notifications", async (HttpRequest request, INotificationSettingsService notify) =>
+        {
+            var body = await request.ReadFromJsonAsync<NotificationsBody>();
+            if (body is null)
+                return Results.BadRequest(new { error = "Invalid body" });
+
+            var settings = new NotificationSettings
+            {
+                Smtp = new SmtpChannelSettings
+                {
+                    Enabled = body.Smtp?.Enabled ?? false,
+                    Host = body.Smtp?.Host ?? "",
+                    Port = body.Smtp?.Port ?? 587,
+                    UseSsl = body.Smtp?.UseSsl ?? true,
+                    Username = body.Smtp?.Username ?? "",
+                    FromAddress = body.Smtp?.FromAddress ?? "",
+                    FromDisplayName = body.Smtp?.FromDisplayName ?? "Jotdex",
+                    ToAddress = body.Smtp?.ToAddress ?? ""
+                },
+                Telegram = new TelegramChannelSettings
+                {
+                    Enabled = body.Telegram?.Enabled ?? false,
+                    ChatId = body.Telegram?.ChatId ?? ""
+                },
+                Alerts = new AlertRulesSettings
+                {
+                    MirrorStaleEnabled = body.Alerts?.MirrorStaleEnabled ?? false,
+                    MirrorStaleHours = body.Alerts?.MirrorStaleHours ?? 24
+                }
+            };
+
+            notify.SaveSettings(
+                settings,
+                body.SmtpPassword,
+                body.TelegramBotToken,
+                body.ClearSmtpPassword ?? false,
+                body.ClearTelegramToken ?? false);
+
+            return Results.Json(new
+            {
+                success = true,
+                smtp = settings.Smtp,
+                telegram = settings.Telegram,
+                alerts = settings.Alerts,
+                status = notify.GetStatus()
+            });
+        });
+
+        app.MapPost("/api/settings/notifications/test", async (IOpsAlertSender sender, CancellationToken ct) =>
+        {
+            var (ok, error) = await sender.SendTestAsync(ct);
+            return ok
+                ? Results.Json(new { success = true, warning = error })
+                : Results.BadRequest(new { error });
         });
     }
 
@@ -321,6 +444,18 @@ public static class AuthEndpointExtensions
     {
         public string? Username { get; set; }
         public string? Password { get; set; }
+        public string? TotpCode { get; set; }
+    }
+
+    private sealed class TotpCodeBody
+    {
+        public string? Code { get; set; }
+    }
+
+    private sealed class TotpDisableBody
+    {
+        public string? Password { get; set; }
+        public string? TotpCode { get; set; }
     }
 
     private sealed class ChangePasswordBody
@@ -350,5 +485,41 @@ public static class AuthEndpointExtensions
         public bool? Enabled { get; set; }
         public string? DestinationPath { get; set; }
         public int? IntervalMinutes { get; set; }
+        public bool? IncludeDailyMoveKit { get; set; }
+    }
+
+    private sealed class NotificationsBody
+    {
+        public SmtpBody? Smtp { get; set; }
+        public TelegramBody? Telegram { get; set; }
+        public AlertsBody? Alerts { get; set; }
+        public string? SmtpPassword { get; set; }
+        public string? TelegramBotToken { get; set; }
+        public bool? ClearSmtpPassword { get; set; }
+        public bool? ClearTelegramToken { get; set; }
+    }
+
+    private sealed class SmtpBody
+    {
+        public bool? Enabled { get; set; }
+        public string? Host { get; set; }
+        public int? Port { get; set; }
+        public bool? UseSsl { get; set; }
+        public string? Username { get; set; }
+        public string? FromAddress { get; set; }
+        public string? FromDisplayName { get; set; }
+        public string? ToAddress { get; set; }
+    }
+
+    private sealed class TelegramBody
+    {
+        public bool? Enabled { get; set; }
+        public string? ChatId { get; set; }
+    }
+
+    private sealed class AlertsBody
+    {
+        public bool? MirrorStaleEnabled { get; set; }
+        public int? MirrorStaleHours { get; set; }
     }
 }

@@ -7,6 +7,23 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 
 ---
 
+## 2026-08-08 — Encrypted move kits + daily kit in mirror
+
+**Plain move kits in iCloud were risky once they included portable secrets**
+- When a password is set, move kits become `.jotdexkit` (AES; unlock password unwraps). `Decrypt-JotdexKit.ps1` for restore.
+- Mirror setting can drop one daily kit into `jotdex-move-kits\` for PC-loss recovery without thrashing iCloud on every note file.
+
+---
+
+## 2026-08-08 — DPAPI secrets, ops alerts, optional TOTP (M8)
+
+**Needed a place for SMTP/Telegram secrets and a second factor without vault encryption**
+- Secrets at rest use Windows DPAPI; move kits unwrap to `secrets-portable.json` and rewrap on first start.
+- Settings → Notifications: SMTP + Telegram + mirror-stale alerts; Security: optional TOTP.
+- In-app vault encryption deferred (FTS/history leak); prefer BitLocker — see ADR 0006.
+
+---
+
 ## 2026-08-08 — Updates tab + Update-Jotdex.ps1; settings tabs
 
 **Settings got crowded, and there was no guided way to pull a new build from GitHub**

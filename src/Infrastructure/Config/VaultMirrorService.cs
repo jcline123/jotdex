@@ -14,6 +14,12 @@ public sealed class VaultMirrorSettings
     public string DestinationPath { get; set; } = "";
     /// <summary>Minutes between automatic mirrors. Clamped 5–1440.</summary>
     public int IntervalMinutes { get; set; } = 15;
+    /// <summary>Persisted last successful mirror (for stale alerts across restarts).</summary>
+    public DateTimeOffset? LastSucceededUtc { get; set; }
+    public string? LastError { get; set; }
+    /// <summary>Once per day, place an encrypted (or plain) move-kit ZIP in the mirror folder.</summary>
+    public bool IncludeDailyMoveKit { get; set; }
+    public DateTimeOffset? LastMoveKitUtc { get; set; }
 }
 
 public sealed class VaultMirrorStatus
@@ -26,6 +32,8 @@ public sealed class VaultMirrorStatus
     public string? LastError { get; init; }
     public bool Running { get; init; }
     public string? Hint { get; init; }
+    public bool IncludeDailyMoveKit { get; init; }
+    public DateTimeOffset? LastMoveKitUtc { get; init; }
 }
 
 public interface IVaultMirrorService
@@ -34,6 +42,7 @@ public interface IVaultMirrorService
     (bool Success, string? Error, VaultMirrorSettings? Settings) SaveSettings(VaultMirrorSettings incoming);
     VaultMirrorStatus GetStatus();
     Task<(bool Success, string? Error)> RunNowAsync(CancellationToken ct = default);
+    void RecordMoveKitPublished(DateTimeOffset utc);
 }
 
 public sealed class VaultMirrorService : IVaultMirrorService
@@ -61,6 +70,8 @@ public sealed class VaultMirrorService : IVaultMirrorService
         _paths = paths;
         _logger = logger;
         _settings = Load() ?? new VaultMirrorSettings();
+        _lastSucceeded = _settings.LastSucceededUtc;
+        _lastError = _settings.LastError;
     }
 
     public VaultMirrorSettings GetSettings()
@@ -81,6 +92,8 @@ public sealed class VaultMirrorService : IVaultMirrorService
                 LastSucceededUtc = _lastSucceeded,
                 LastError = _lastError,
                 Running = _running,
+                IncludeDailyMoveKit = _settings.IncludeDailyMoveKit,
+                LastMoveKitUtc = _settings.LastMoveKitUtc,
                 Hint = "One-way copy: live vault (local) → destination. Never point VaultPath at the mirror."
             };
         }
@@ -106,7 +119,11 @@ public sealed class VaultMirrorService : IVaultMirrorService
         {
             Enabled = incoming.Enabled,
             DestinationPath = dest,
-            IntervalMinutes = interval
+            IntervalMinutes = interval,
+            IncludeDailyMoveKit = incoming.IncludeDailyMoveKit,
+            LastSucceededUtc = _settings.LastSucceededUtc,
+            LastError = _settings.LastError,
+            LastMoveKitUtc = _settings.LastMoveKitUtc
         };
 
         lock (_gate)
@@ -152,10 +169,15 @@ public sealed class VaultMirrorService : IVaultMirrorService
                 {
                     _lastSucceeded = DateTimeOffset.UtcNow;
                     _lastError = null;
+                    _settings.LastSucceededUtc = _lastSucceeded;
+                    _settings.LastError = null;
+                    Persist(_settings);
                 }
                 else
                 {
                     _lastError = result.Error;
+                    _settings.LastError = result.Error;
+                    Persist(_settings);
                 }
             }
 
@@ -450,8 +472,21 @@ public sealed class VaultMirrorService : IVaultMirrorService
     {
         Enabled = s.Enabled,
         DestinationPath = s.DestinationPath,
-        IntervalMinutes = s.IntervalMinutes
+        IntervalMinutes = s.IntervalMinutes,
+        LastSucceededUtc = s.LastSucceededUtc,
+        LastError = s.LastError,
+        IncludeDailyMoveKit = s.IncludeDailyMoveKit,
+        LastMoveKitUtc = s.LastMoveKitUtc
     };
+
+    public void RecordMoveKitPublished(DateTimeOffset utc)
+    {
+        lock (_gate)
+        {
+            _settings.LastMoveKitUtc = utc;
+            Persist(_settings);
+        }
+    }
 }
 
 public sealed class VaultMirrorHostedService : BackgroundService

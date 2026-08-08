@@ -103,6 +103,15 @@ foreach ($name in @("config", $(if ($IncludeAuth) { "auth" } else { $null }), $(
     }
 }
 
+# Prefer already-exported portable secrets (from a prior in-app move kit / manual export).
+# Raw DPAPI secrets.json will not work on another PC — do not copy it.
+$portableSecrets = Join-Path $DataRoot "secrets\secrets-portable.json"
+if (Test-Path -LiteralPath $portableSecrets) {
+    $secDest = Join-Path $appdata "secrets"
+    New-Item -ItemType Directory -Force -Path $secDest | Out-Null
+    Copy-Item -LiteralPath $portableSecrets -Destination (Join-Path $secDest "secrets-portable.json") -Force
+}
+
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot "Restore-Jotdex.ps1") -Destination (Join-Path $stage "Restore-Jotdex.ps1") -Force
 
 $readme = @"
@@ -110,6 +119,8 @@ Jotdex move kit
 ===============
 Unzip and run Restore-Jotdex.ps1 on the new PC.
 See docs/backup.md in the Jotdex repo for details.
+For SMTP/Telegram/TOTP secrets, prefer Settings → Backup → Create move kit
+(it unwraps DPAPI). This CLI kit only includes secrets-portable.json if that file already exists.
 "@
 Set-Content -LiteralPath (Join-Path $stage "README-MOVE.txt") -Value $readme -Encoding UTF8
 

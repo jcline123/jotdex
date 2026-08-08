@@ -2,6 +2,23 @@
 
 Jotdex keeps **notes on disk in the vault**. App data is separate.
 
+## Encrypted move kit (.jotdexkit)
+
+When a Jotdex unlock password is set, Create move kit writes an AES-encrypted **`.jotdexkit`** (safer in cloud folders). Restore stays one step:
+
+1. Put the kit next to `Restore-Jotdex.ps1` and `Jotdex.Server.exe` (your portable folder is fine).
+2. Run **Restore-Jotdex.ps1** (right-click → Run with PowerShell).
+3. Enter your unlock password when asked — Restore decrypts and continues.
+4. Choose install + vault folders.
+
+No separate decrypt command required.
+
+### Daily kit in the cloud mirror
+
+Mirror still copies your **whole vault** as normal. Optionally also enable **Also drop a daily recovery move kit** — that adds `jotdex-move-kits\` inside the same mirror destination (one archive + Restore script) for PC-loss recovery.
+
+---
+
 ## Easiest: move to another PC (recommended)
 
 **Settings → Backup → Move to another PC → Create move kit (ZIP)** builds:
@@ -14,6 +31,7 @@ Jotdex keeps **notes on disk in the vault**. App data is separate.
 | `appdata/config/` | Vault path, network, mirror settings |
 | `appdata/auth/` | Password hash (secret) |
 | `appdata/history/` | Note rollback snapshots |
+| `appdata/secrets/secrets-portable.json` | Unwrapped notification / TOTP secrets for transfer (re-wrapped with DPAPI on first start) |
 | `app/` | Portable `Jotdex.Server.exe` when the kit was created from the portable build |
 | `Restore-Jotdex.ps1` | Guided restore on the new PC |
 | `README-MOVE.txt` | Plain-English steps |
@@ -34,7 +52,7 @@ If you created the kit while running `dotnet run` (dev), the ZIP may omit `app\`
 .\scripts\create-move-kit.ps1 -VaultPath C:\JotdexVault
 ```
 
-Treat move-kit ZIPs that include `appdata\auth` as secrets.
+Treat move-kit ZIPs that include `appdata\auth` or `appdata\secrets\secrets-portable.json` as secrets.
 
 ## Data-only backup ZIP
 

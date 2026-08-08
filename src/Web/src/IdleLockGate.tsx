@@ -38,16 +38,19 @@ type Props = {
   minutes: number
   /** When false (no password), never show the lock overlay. */
   authAvailable: boolean
+  totpEnabled?: boolean
   onLockedChange?: (locked: boolean) => void
 }
 
 /**
  * Full-screen lock after N minutes of no pointer/keyboard activity (and when the
- * tab stays hidden for that long). Unlock with the Jotdex password only.
+ * tab stays hidden for that long). Unlock with the Jotdex password (and TOTP if enabled).
  */
-export function IdleLockGate({ enabled, minutes, authAvailable, onLockedChange }: Props) {
+export function IdleLockGate({ enabled, minutes, authAvailable, totpEnabled = false, onLockedChange }: Props) {
   const [locked, setLocked] = useState(false)
   const [password, setPassword] = useState('')
+  const [totpCode, setTotpCode] = useState('')
+  const [needsTotp, setNeedsTotp] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const lastActiveRef = useRef(Date.now())
@@ -60,9 +63,11 @@ export function IdleLockGate({ enabled, minutes, authAvailable, onLockedChange }
   const lock = useCallback(() => {
     setLocked(true)
     setPassword('')
+    setTotpCode('')
+    setNeedsTotp(!!totpEnabled)
     setError(null)
     onLockedChange?.(true)
-  }, [onLockedChange])
+  }, [onLockedChange, totpEnabled])
 
   useEffect(() => {
     if (!enabled || !authAvailable) {
@@ -115,14 +120,24 @@ export function IdleLockGate({ enabled, minutes, authAvailable, onLockedChange }
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'same-origin',
-        body: JSON.stringify({ password }),
+        body: JSON.stringify({
+          password,
+          totpCode: needsTotp || totpCode.trim() ? totpCode.trim() : undefined,
+        }),
       })
       const data = await res.json()
+      if (data.requiresTotp) {
+        setNeedsTotp(true)
+        setError(null)
+        return
+      }
       if (!res.ok || !data.success) {
         setError(data.error ?? 'Incorrect password')
         return
       }
       setPassword('')
+      setTotpCode('')
+      setNeedsTotp(false)
       setLocked(false)
       lastActiveRef.current = Date.now()
       onLockedChange?.(false)
@@ -150,12 +165,27 @@ export function IdleLockGate({ enabled, minutes, authAvailable, onLockedChange }
               onChange={(e) => setPassword(e.target.value)}
               autoComplete="current-password"
               required
-              autoFocus
+              autoFocus={!needsTotp}
             />
           </label>
+          {needsTotp && (
+            <label>
+              Authenticator code
+              <input
+                type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                value={totpCode}
+                onChange={(e) => setTotpCode(e.target.value)}
+                placeholder="6-digit or recovery code"
+                required
+                autoFocus
+              />
+            </label>
+          )}
           {error && <p className="error">{error}</p>}
           <button type="submit" className="primary" disabled={busy}>
-            {busy ? 'Unlocking…' : 'Unlock'}
+            {busy ? 'Unlocking…' : needsTotp ? 'Verify & unlock' : 'Unlock'}
           </button>
         </form>
       </div>
