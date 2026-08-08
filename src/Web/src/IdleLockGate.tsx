@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
+import { PhosphorStreams } from './PhosphorStreams'
+
 
 const STORAGE_ENABLED = 'jotdex.idleLockEnabled'
 const STORAGE_MINUTES = 'jotdex.idleLockMinutes'
@@ -134,8 +136,9 @@ export function IdleLockGate({ enabled, minutes, authAvailable, onLockedChange }
   if (!locked) return null
 
   return (
-    <div className="idle-lock-overlay" role="dialog" aria-modal="true" aria-label="Jotdex is locked">
-      <div className="idle-lock-card">
+    <div className="idle-lock-overlay auth-stage" role="dialog" aria-modal="true" aria-label="Jotdex is locked">
+      <PhosphorStreams />
+      <div className="idle-lock-card auth-stage-card">
         <h1>Jotdex locked</h1>
         <p>Enter your password to continue. Notes stay on this PC — this only unlocks the app.</p>
         <form className="auth-form" onSubmit={(e) => void unlock(e)}>

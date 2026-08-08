@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react'
+import { PhosphorStreams } from './PhosphorStreams'
+
 
 type BrowseEntry = { name: string; path: string; type: string }
 
@@ -309,8 +311,9 @@ export function LoginScreen({ onLoggedIn }: LoginProps) {
   }
 
   return (
-    <div className="setup-screen">
-      <div className="setup-card">
+    <div className="setup-screen auth-stage">
+      <PhosphorStreams />
+      <div className="setup-card auth-stage-card">
         <h1>Jotdex</h1>
         <p>Enter your password to open your vault.</p>
         <form className="auth-form" onSubmit={(e) => void submit(e)}>

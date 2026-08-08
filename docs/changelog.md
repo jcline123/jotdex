@@ -7,6 +7,13 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 
 ---
 
+## 2026-08-07 — Phosphor lock/login backdrop
+
+**Wanted a Swordfish-ish tech feel on the password screen without cluttering the form**
+- Soft teal code streams (canvas) behind Unlock and Login only; form card stays frosted and readable. Respects `prefers-reduced-motion`.
+
+---
+
 ## 2026-08-07 — Mirror schedule stuck + first-run wizard (`5b1fb28`)
 
 **15‑minute mirror looked idle; first-run wizard no longer appeared**
