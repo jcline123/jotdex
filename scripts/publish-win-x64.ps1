@@ -76,8 +76,8 @@ Jotdex portable build
 1. Prefer a local-disk vault folder (not iCloud), e.g. C:\JotdexVault
 2. Double-click start-portable.cmd  (binds http://127.0.0.1:5180 by default)
 3. Open the URL in a browser
-4. Complete first-run: vault path, admin account, network bind/port
-5. App data is stored in .\data beside this exe
+4. First-run: choose vault path, optional password (no username), network bind/port
+5. App data is stored in .\data beside this exe (password hash under data\auth if set)
 
 LAN access: use Settings → Network (LAN + port), then restart.
 Or pass: Jotdex.Server.exe --urls http://0.0.0.0:5180

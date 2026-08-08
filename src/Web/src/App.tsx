@@ -1481,16 +1481,6 @@ function App() {
     }
   }, [])
 
-  if (auth && auth.setupRequired) {
-    return (
-      <FirstRunWizard
-        onComplete={() => {
-          void loadAuth().then(() => loadVault())
-        }}
-      />
-    )
-  }
-
   if (auth && auth.authRequired && !auth.authenticated) {
     return (
       <LoginScreen
@@ -1501,70 +1491,15 @@ function App() {
     )
   }
 
-  if (vault && !vault.configured) {
+  // Password is optional, so setupRequired is rarely true — still use the full wizard when
+  // no vault is bound (vault + optional password + network), not only the thin folder picker.
+  if ((auth && auth.setupRequired) || (vault && !vault.configured)) {
     return (
-      <>
-        <main className="setup-screen">
-          <p className="brand">Jotdex</p>
-          <h1>Point Jotdex at your notes folder</h1>
-          <p className="lede">
-            Choose the folder that holds your Markdown vault (notebooks as folders, notes as .md files). Prefer local disk — not iCloud — for the live vault.
-          </p>
-          <button
-            type="button"
-            className="primary"
-            onClick={() => {
-              setSettingsOpen(true)
-              void openBrowse()
-            }}
-          >
-            Choose vault folder
-          </button>
-          {error && <p className="err">{error}</p>}
-        </main>
-        {settingsOpen && (
-          <div className="modal-backdrop" onClick={() => setSettingsOpen(false)} role="presentation">
-            <div className="modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Vault settings">
-              <h2>Vault location</h2>
-              <p className="lede">Pick the folder that contains your .md notes.</p>
-              <label className="field">
-                Path
-                <input value={vaultPathInput} onChange={(e) => setVaultPathInput(e.target.value)} placeholder="C:\JotdexVault" />
-              </label>
-              <div className="modal-actions">
-                <button type="button" className="primary" onClick={() => void applyVaultPath(vaultPathInput)}>
-                  Use this folder
-                </button>
-                <button type="button" className="ghost" onClick={() => setSettingsOpen(false)}>
-                  Cancel
-                </button>
-              </div>
-              <div className="browser">
-                <div className="browser-bar">
-                  <button type="button" className="ghost" disabled={!browseParent} onClick={() => browseParent && void openBrowse(browseParent)}>
-                    Up
-                  </button>
-                  <code>{browsePath || 'Drives'}</code>
-                  {browsePath && (
-                    <button type="button" className="ghost" onClick={() => void applyVaultPath(browsePath)}>
-                      Select current
-                    </button>
-                  )}
-                </div>
-                <ul>
-                  {browseEntries.map((e) => (
-                    <li key={e.path}>
-                      <button type="button" onClick={() => void openBrowse(e.path)}>
-                        {e.type === 'drive' ? e.name : `📁 ${e.name}`}
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-          </div>
-        )}
-      </>
+      <FirstRunWizard
+        onComplete={() => {
+          void loadAuth().then(() => loadVault())
+        }}
+      />
     )
   }
 

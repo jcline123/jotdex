@@ -107,6 +107,10 @@ export function FirstRunWizard({ onComplete }: Props) {
       setError('Passwords do not match.')
       return false
     }
+    if (password.length < 6) {
+      setError('Password must be at least 6 characters.')
+      return false
+    }
     setBusy(true)
     try {
       const res = await fetch('/api/auth/setup', {
@@ -117,12 +121,12 @@ export function FirstRunWizard({ onComplete }: Props) {
       })
       const data = await res.json()
       if (!res.ok || !data.success) {
-        setError(data.error ?? 'Setup failed')
+        setError(data.error ?? 'Could not set password')
         return false
       }
       return true
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Setup failed')
+      setError(e instanceof Error ? e.message : 'Could not set password')
       return false
     } finally {
       setBusy(false)
@@ -189,10 +193,13 @@ export function FirstRunWizard({ onComplete }: Props) {
 
         {step === 1 && (
           <>
-            <p>Optional: set a password to protect this vault. You can also skip and set one later in Settings → Security.</p>
+            <p>
+              Optional: set a password (no username). Leave blank to skip — you can add or remove it later in Settings →
+              Security.
+            </p>
             <div className="auth-form">
               <label>
-                Password
+                Password (at least 6 characters)
                 <input
                   type="password"
                   value={password}
@@ -254,7 +261,13 @@ export function FirstRunWizard({ onComplete }: Props) {
             </button>
           )}
           <button type="button" className="primary" disabled={busy} onClick={() => void next()}>
-            {busy ? 'Saving…' : step === 2 ? 'Finish setup' : 'Continue'}
+            {busy
+              ? 'Saving…'
+              : step === 2
+                ? 'Finish setup'
+                : step === 1 && !password.trim() && !confirm.trim()
+                  ? 'Skip password'
+                  : 'Continue'}
           </button>
         </div>
       </div>

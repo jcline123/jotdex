@@ -141,7 +141,11 @@ public sealed class VaultMirrorService : IVaultMirrorService
         {
             Directory.CreateDirectory(dest);
             var source = _paths.VaultRoot;
-            var result = await Task.Run(() => RunRobocopy(source, dest), ct).ConfigureAwait(false);
+            // Hard cap so a stuck iCloud/robocopy cannot block the 15‑minute schedule forever.
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            timeoutCts.CancelAfter(TimeSpan.FromMinutes(12));
+            var result = await Task.Run(() => RunRobocopy(source, dest, timeoutCts.Token), timeoutCts.Token)
+                .ConfigureAwait(false);
             lock (_gate)
             {
                 if (result.Success)
@@ -161,6 +165,13 @@ public sealed class VaultMirrorService : IVaultMirrorService
                 _logger.LogWarning("Vault mirror failed: {Error}", result.Error);
 
             return result;
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            const string msg = "Mirror timed out after 12 minutes (often iCloud lag). Will retry on the next interval.";
+            lock (_gate) _lastError = msg;
+            _logger.LogWarning("{Msg}", msg);
+            return (false, msg);
         }
         catch (Exception ex)
         {
@@ -202,17 +213,24 @@ public sealed class VaultMirrorService : IVaultMirrorService
         }
     }
 
-    private static (bool Success, string? Error) RunRobocopy(string source, string dest)
+    private static (bool Success, string? Error) RunRobocopy(string source, string dest, CancellationToken ct) =>
+        RunRobocopyCore(source, dest, ct, retryOnAccessDenied: true);
+
+    private static (bool Success, string? Error) RunRobocopyCore(string source, string dest, CancellationToken ct, bool retryOnAccessDenied)
     {
-        // Prior mirrors often copied the ReadOnly attribute onto cloud destinations; clear it
-        // so /MIR can overwrite (otherwise ERROR 5 → robocopy exit 8/9).
+        // Clear ReadOnly on dest with a short budget — full unbounded walks hang on iCloud.
+        // /A-:R only applies after a successful copy, so existing ReadOnly dest files still fail.
         try
         {
-            ClearReadOnlyAttributes(dest);
+            ClearReadOnlyAttributes(dest, TimeSpan.FromSeconds(45), ct);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch
         {
-            /* best-effort; robocopy will report remaining failures */
+            /* best-effort */
         }
 
         var psi = new ProcessStartInfo
@@ -223,13 +241,14 @@ public sealed class VaultMirrorService : IVaultMirrorService
                 source,
                 dest,
                 "/MIR",
-                // Data + timestamps only — do not stamp ReadOnly onto the mirror
                 "/COPY:DT",
                 "/DCOPY:T",
                 "/A-:R",
-                "/R:5",
-                "/W:3",
+                "/R:2",
+                "/W:2",
                 "/NP",
+                "/NFL",
+                "/NDL",
                 "/XD", ".git"
             },
             CreateNoWindow = true,
@@ -239,28 +258,130 @@ public sealed class VaultMirrorService : IVaultMirrorService
         };
 
         using var proc = Process.Start(psi) ?? throw new InvalidOperationException("Could not start robocopy.");
-        var stdout = proc.StandardOutput.ReadToEnd();
-        var stderr = proc.StandardError.ReadToEnd();
-        proc.WaitForExit();
+        var stdoutTask = proc.StandardOutput.ReadToEndAsync(ct);
+        var stderrTask = proc.StandardError.ReadToEndAsync(ct);
 
-        // robocopy: 0–7 = success/partial copy; >=8 = failure
-        if (proc.ExitCode >= 8)
+        try
         {
-            var detail = SummarizeRobocopyOutput(stdout, stderr);
-            var msg = $"robocopy failed with exit code {proc.ExitCode}";
-            if (!string.IsNullOrWhiteSpace(detail))
-                msg += ": " + detail;
-            return (false, msg);
+            while (!proc.WaitForExit(500))
+            {
+                ct.ThrowIfCancellationRequested();
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            try
+            {
+                if (!proc.HasExited) proc.Kill(entireProcessTree: true);
+            }
+            catch
+            {
+                /* ignore */
+            }
+
+            throw;
         }
 
-        return (true, null);
+        string stdout;
+        string stderr;
+        try
+        {
+            stdout = stdoutTask.GetAwaiter().GetResult();
+            stderr = stderrTask.GetAwaiter().GetResult();
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch
+        {
+            stdout = "";
+            stderr = "";
+        }
+
+        if (proc.ExitCode < 8)
+            return (true, null);
+
+        if (retryOnAccessDenied)
+        {
+            var denied = ExtractAccessDeniedSourcePaths(stdout + "\n" + stderr);
+            if (denied.Count > 0)
+            {
+                var destRoot = Path.GetFullPath(dest).TrimEnd('\\', '/');
+                foreach (var srcPath in denied)
+                {
+                    try
+                    {
+                        var rel = Path.GetRelativePath(source, srcPath);
+                        if (rel.StartsWith("..", StringComparison.Ordinal)) continue;
+                        var destPath = Path.GetFullPath(Path.Combine(dest, rel));
+                        if (!destPath.StartsWith(destRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
+                            && !string.Equals(destPath, destRoot, StringComparison.OrdinalIgnoreCase))
+                            continue;
+                        if (File.Exists(destPath))
+                            File.Delete(destPath);
+                    }
+                    catch
+                    {
+                        /* ignore */
+                    }
+                }
+
+                ct.ThrowIfCancellationRequested();
+                return RunRobocopyCore(source, dest, ct, retryOnAccessDenied: false);
+            }
+        }
+
+        var detail = SummarizeRobocopyOutput(stdout, stderr);
+        var msg = $"robocopy failed with exit code {proc.ExitCode}";
+        if (!string.IsNullOrWhiteSpace(detail))
+            msg += ": " + detail;
+        return (false, msg);
     }
 
-    private static void ClearReadOnlyAttributes(string root)
+    private static List<string> ExtractAccessDeniedSourcePaths(string output)
+    {
+        var paths = new List<string>();
+        foreach (var line in (output ?? "").Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            if (!line.Contains("ERROR 5", StringComparison.OrdinalIgnoreCase) &&
+                !line.Contains("Access is denied", StringComparison.OrdinalIgnoreCase))
+                continue;
+            // Robocopy: "ERROR 5 (0x00000005) Copying File C:\path\file.png"
+            const string marker = "Copying File ";
+            var idx = line.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+            if (idx < 0) continue;
+            var path = line[(idx + marker.Length)..].Trim();
+            if (path.Length > 0 && Path.IsPathRooted(path))
+                paths.Add(path);
+        }
+        return paths.Distinct(StringComparer.OrdinalIgnoreCase).Take(40).ToList();
+    }
+
+    private static void ClearReadOnlyAttributes(string root, TimeSpan budget, CancellationToken ct)
     {
         if (!Directory.Exists(root)) return;
-        foreach (var path in Directory.EnumerateFileSystemEntries(root, "*", SearchOption.AllDirectories))
+        var sw = Stopwatch.StartNew();
+        var opts = new EnumerationOptions
         {
+            RecurseSubdirectories = true,
+            IgnoreInaccessible = true
+        };
+
+        IEnumerable<string> entries;
+        try
+        {
+            entries = Directory.EnumerateFileSystemEntries(root, "*", opts);
+        }
+        catch
+        {
+            return;
+        }
+
+        foreach (var path in entries)
+        {
+            ct.ThrowIfCancellationRequested();
+            if (sw.Elapsed >= budget) return;
             try
             {
                 var attrs = File.GetAttributes(path);
@@ -287,7 +408,6 @@ public sealed class VaultMirrorService : IVaultMirrorService
             .ToList();
         if (lines.Count == 0)
         {
-            // Fall back to a short tail so the UI isn't empty
             lines = combined
                 .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                 .TakeLast(8)
@@ -358,13 +478,21 @@ public sealed class VaultMirrorHostedService : BackgroundService
 
             if (settings.Enabled && !string.IsNullOrWhiteSpace(settings.DestinationPath))
             {
-                try
+                var status = _mirror.GetStatus();
+                if (status.Running)
                 {
-                    await _mirror.RunNowAsync(stoppingToken);
+                    _logger.LogInformation("Skipping scheduled mirror — previous run still in progress");
                 }
-                catch (Exception ex)
+                else
                 {
-                    _logger.LogWarning(ex, "Scheduled vault mirror failed");
+                    try
+                    {
+                        await _mirror.RunNowAsync(stoppingToken);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Scheduled vault mirror failed");
+                    }
                 }
             }
 
