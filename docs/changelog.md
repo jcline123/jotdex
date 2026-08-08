@@ -7,6 +7,13 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 
 ---
 
+## 2026-08-08 — Home landing instead of auto-opening a note
+
+**Unlock used to dump you into a random first note; first impression should orient, not surprise**
+- Right pane shows a non-editable home: recently viewed / created / updated, open to-dos, and quick actions. Click **Jotdex** in the top bar to return home.
+
+---
+
 ## 2026-08-08 — Collapsed Todos ticker polish (`5ed51e9`)
 
 **Label sat at the top of the strip (unlike Folders/Notes), and the loop jumped when it wrapped**

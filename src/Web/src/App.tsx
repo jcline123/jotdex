@@ -19,6 +19,8 @@ import { copyJotdexAiPrompt } from './jotdexAiPrompt'
 import { IdleLockGate, loadIdleLockEnabled, loadIdleLockMinutes, saveIdleLockPrefs } from './IdleLockGate'
 import { TodosRail } from './TodosRail'
 import { getNotificationPermission, promptTodoNotifications, type NotifyPermission } from './todoReminders'
+import { HomeLanding } from './HomeLanding'
+import { rememberViewedNote } from './recentNotes'
 
 
 function countRemoteImages(markdown: string): number {
@@ -42,6 +44,7 @@ type NoteSummary = {
   folderPath: string
   tags: string[]
   modified?: string
+  created?: string
   hasAttachments: boolean
 }
 
@@ -223,7 +226,7 @@ function App() {
   const [templateMenu, setTemplateMenu] = useState(false)
   const [templateMenuPos, setTemplateMenuPos] = useState<{ top: number; left: number } | null>(null)
   const templateBtnRef = useRef<HTMLButtonElement>(null)
-  const [mobilePane, setMobilePane] = useState<'folders' | 'notes' | 'editor' | 'todos'>('notes')
+  const [mobilePane, setMobilePane] = useState<'folders' | 'notes' | 'editor' | 'todos'>('editor')
   const [todosCollapsed, setTodosCollapsed] = useState(() => {
     try {
       return localStorage.getItem('jotdex.todosCollapsed') === '1'
@@ -369,16 +372,16 @@ function App() {
       .then((r) => r.json())
       .then((data: NoteSummary[]) => {
         setNotes(data)
-        if (data.length && !selectedId) setSelectedId(data[0].id)
       })
       .catch((e: Error) => setError(e.message))
-  }, [folder, vault, selectedId])
+  }, [folder, vault])
 
   useEffect(() => {
     if (!selectedId) {
       setNote(null)
       return
     }
+    rememberViewedNote(selectedId)
     fetch(`/api/notes/${selectedId}`)
       .then(async (r) => {
         if (!r.ok) throw new Error(`Note ${r.status}`)
@@ -1676,7 +1679,25 @@ function App() {
     <div className="app">
       <header className="topbar">
         <div className="topbar-brand">
-          <span className="brand">Jotdex</span>
+          <span
+            className="brand brand-home"
+            role="button"
+            tabIndex={0}
+            title="Home"
+            onClick={() => {
+              setSelectedId(null)
+              setMobilePane('editor')
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                setSelectedId(null)
+                setMobilePane('editor')
+              }
+            }}
+          >
+            Jotdex
+          </span>
           {vault?.configured && (
             <span className="vault-pill">{vault.name} · {vault.noteCount}</span>
           )}
@@ -2553,7 +2574,32 @@ function App() {
               </div>
             </div>
           )}
-          {!note && <p className="muted">Select a note or search above</p>}
+          {!note && !selectedId && (
+            <HomeLanding
+              vaultName={vault?.name}
+              noteCount={vault?.noteCount}
+              folderCount={vault?.folderCount}
+              onOpenNote={(id) => {
+                setSelectedId(id)
+                setMobilePane('editor')
+              }}
+              onNewNote={() => void createNote()}
+              onFocusSearch={() => searchRef.current?.focus()}
+              onOpenTodos={() => {
+                if (narrowLayout) {
+                  setMobilePane('todos')
+                  return
+                }
+                setTodosCollapsed(false)
+                try {
+                  localStorage.setItem('jotdex.todosCollapsed', '0')
+                } catch {
+                  /* ignore */
+                }
+              }}
+            />
+          )}
+          {!note && selectedId && <p className="muted">Loading note…</p>}
           {note && (
             <>
               <div className="note-head">
@@ -2819,10 +2865,9 @@ function App() {
         <button
           type="button"
           className={mobilePane === 'editor' ? 'on' : ''}
-          disabled={!selectedId}
-          onClick={() => selectedId && setMobilePane('editor')}
+          onClick={() => setMobilePane('editor')}
         >
-          Note
+          {selectedId ? 'Note' : 'Home'}
         </button>
         <button
           type="button"
