@@ -150,7 +150,17 @@ public sealed class LocalAuthService : ILocalAuthService
                 }
 
                 if (!VerifyTotpOrRecovery(store, user, totpOrRecoveryCode.Trim()))
-                    return FailAfterAttempt(store, user, "Invalid authenticator or recovery code.");
+                {
+                    var fail = FailAfterAttempt(store, user, "Invalid authenticator or recovery code.");
+                    return new AuthResult
+                    {
+                        Success = false,
+                        RequiresTotp = !fail.LockedOut,
+                        LockedOut = fail.LockedOut,
+                        RetryAfterSeconds = fail.RetryAfterSeconds,
+                        Error = fail.Error
+                    };
+                }
             }
 
             if (result == PasswordVerificationResult.SuccessRehashNeeded)

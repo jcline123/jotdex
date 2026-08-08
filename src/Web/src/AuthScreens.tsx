@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { PhosphorStreams } from './PhosphorStreams'
 
 
@@ -317,28 +317,46 @@ type LoginProps = {
 export function LoginScreen({ onLoggedIn }: LoginProps) {
   const [password, setPassword] = useState('')
   const [totpCode, setTotpCode] = useState('')
-  const [needsTotp, setNeedsTotp] = useState(false)
+  /** Password accepted; show authenticator step only (common MFA pattern). */
+  const [mfaStep, setMfaStep] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const totpInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (!mfaStep) return
+    const el = totpInputRef.current
+    if (!el) return
+    window.setTimeout(() => {
+      el.focus({ preventScroll: false })
+      el.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    }, 50)
+  }, [mfaStep])
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
     setBusy(true)
     try {
+      const code = totpCode.trim()
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'same-origin',
         body: JSON.stringify({
           password,
-          totpCode: needsTotp || totpCode.trim() ? totpCode.trim() : undefined,
+          totpCode: mfaStep && code ? code : undefined,
         }),
       })
       const data = await res.json()
       if (data.requiresTotp) {
-        setNeedsTotp(true)
-        setError(null)
+        if (!mfaStep) {
+          setMfaStep(true)
+          setTotpCode('')
+          setError(null)
+        } else {
+          setError(data.error ?? 'Invalid authenticator or recovery code.')
+        }
         return
       }
       if (!res.ok || !data.success) {
@@ -358,23 +376,29 @@ export function LoginScreen({ onLoggedIn }: LoginProps) {
       <PhosphorStreams />
       <div className="setup-card auth-stage-card">
         <h1>Jotdex</h1>
-        <p>Enter your password to open your vault.</p>
+        <p>
+          {mfaStep
+            ? 'Enter the code from your authenticator app (or a recovery code).'
+            : 'Enter your password to open your vault.'}
+        </p>
         <form className="auth-form" onSubmit={(e) => void submit(e)}>
-          <label>
-            Password
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete="current-password"
-              required
-              autoFocus={!needsTotp}
-            />
-          </label>
-          {needsTotp && (
+          {!mfaStep ? (
             <label>
+              Password
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete="current-password"
+                required
+                autoFocus
+              />
+            </label>
+          ) : (
+            <label className="auth-totp-field">
               Authenticator code
               <input
+                ref={totpInputRef}
                 type="text"
                 inputMode="numeric"
                 autoComplete="one-time-code"
@@ -382,13 +406,13 @@ export function LoginScreen({ onLoggedIn }: LoginProps) {
                 onChange={(e) => setTotpCode(e.target.value)}
                 placeholder="6-digit or recovery code"
                 required
-                autoFocus
+                enterKeyHint="done"
               />
             </label>
           )}
           {error && <p className="error">{error}</p>}
           <button type="submit" disabled={busy}>
-            {busy ? 'Unlocking…' : needsTotp ? 'Verify & unlock' : 'Unlock'}
+            {busy ? (mfaStep ? 'Verifying…' : 'Checking…') : mfaStep ? 'Verify & unlock' : 'Continue'}
           </button>
         </form>
       </div>

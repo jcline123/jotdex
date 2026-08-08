@@ -38,6 +38,7 @@ type Props = {
   minutes: number
   /** When false (no password), never show the lock overlay. */
   authAvailable: boolean
+  /** Kept for callers; MFA is revealed after password, not shown up front. */
   totpEnabled?: boolean
   onLockedChange?: (locked: boolean) => void
 }
@@ -46,11 +47,11 @@ type Props = {
  * Full-screen lock after N minutes of no pointer/keyboard activity (and when the
  * tab stays hidden for that long). Unlock with the Jotdex password (and TOTP if enabled).
  */
-export function IdleLockGate({ enabled, minutes, authAvailable, totpEnabled = false, onLockedChange }: Props) {
+export function IdleLockGate({ enabled, minutes, authAvailable, onLockedChange }: Props) {
   const [locked, setLocked] = useState(false)
   const [password, setPassword] = useState('')
   const [totpCode, setTotpCode] = useState('')
-  const [needsTotp, setNeedsTotp] = useState(false)
+  const [mfaStep, setMfaStep] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const lastActiveRef = useRef(Date.now())
@@ -64,10 +65,10 @@ export function IdleLockGate({ enabled, minutes, authAvailable, totpEnabled = fa
     setLocked(true)
     setPassword('')
     setTotpCode('')
-    setNeedsTotp(!!totpEnabled)
+    setMfaStep(false)
     setError(null)
     onLockedChange?.(true)
-  }, [onLockedChange, totpEnabled])
+  }, [onLockedChange])
 
   useEffect(() => {
     if (!enabled || !authAvailable) {
@@ -116,19 +117,25 @@ export function IdleLockGate({ enabled, minutes, authAvailable, totpEnabled = fa
     setError(null)
     setBusy(true)
     try {
+      const code = totpCode.trim()
       const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'same-origin',
         body: JSON.stringify({
           password,
-          totpCode: needsTotp || totpCode.trim() ? totpCode.trim() : undefined,
+          totpCode: mfaStep && code ? code : undefined,
         }),
       })
       const data = await res.json()
       if (data.requiresTotp) {
-        setNeedsTotp(true)
-        setError(null)
+        if (!mfaStep) {
+          setMfaStep(true)
+          setTotpCode('')
+          setError(null)
+        } else {
+          setError(data.error ?? 'Invalid authenticator or recovery code.')
+        }
         return
       }
       if (!res.ok || !data.success) {
@@ -137,7 +144,7 @@ export function IdleLockGate({ enabled, minutes, authAvailable, totpEnabled = fa
       }
       setPassword('')
       setTotpCode('')
-      setNeedsTotp(false)
+      setMfaStep(false)
       setLocked(false)
       lastActiveRef.current = Date.now()
       onLockedChange?.(false)
@@ -155,21 +162,26 @@ export function IdleLockGate({ enabled, minutes, authAvailable, totpEnabled = fa
       <PhosphorStreams />
       <div className="idle-lock-card auth-stage-card">
         <h1>Jotdex locked</h1>
-        <p>Enter your password to continue. Notes stay on this PC — this only unlocks the app.</p>
+        <p>
+          {mfaStep
+            ? 'Enter the code from your authenticator app (or a recovery code).'
+            : 'Enter your password to continue. Notes stay on this PC — this only unlocks the app.'}
+        </p>
         <form className="auth-form" onSubmit={(e) => void unlock(e)}>
-          <label>
-            Password
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              autoComplete="current-password"
-              required
-              autoFocus={!needsTotp}
-            />
-          </label>
-          {needsTotp && (
+          {!mfaStep ? (
             <label>
+              Password
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete="current-password"
+                required
+                autoFocus
+              />
+            </label>
+          ) : (
+            <label className="auth-totp-field">
               Authenticator code
               <input
                 type="text"
@@ -185,7 +197,7 @@ export function IdleLockGate({ enabled, minutes, authAvailable, totpEnabled = fa
           )}
           {error && <p className="error">{error}</p>}
           <button type="submit" className="primary" disabled={busy}>
-            {busy ? 'Unlocking…' : needsTotp ? 'Verify & unlock' : 'Unlock'}
+            {busy ? (mfaStep ? 'Verifying…' : 'Checking…') : mfaStep ? 'Verify & unlock' : 'Continue'}
           </button>
         </form>
       </div>

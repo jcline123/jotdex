@@ -287,6 +287,7 @@ function App() {
   const [settingsTab, setSettingsTab] = useState<
     'vault' | 'network' | 'security' | 'notifications' | 'backup' | 'updates' | 'advanced'
   >('vault')
+  const settingsPanelRef = useRef<HTMLDivElement>(null)
   const [updateInfo, setUpdateInfo] = useState<{
     success?: boolean
     error?: string
@@ -1961,13 +1962,18 @@ function App() {
                   key={id}
                   type="button"
                   className={settingsTab === id ? 'on' : ''}
-                  onClick={() => setSettingsTab(id)}
+                  onClick={() => {
+                    setSettingsTab(id)
+                    requestAnimationFrame(() => {
+                      if (settingsPanelRef.current) settingsPanelRef.current.scrollTop = 0
+                    })
+                  }}
                 >
                   {label}
                 </button>
               ))}
             </nav>
-            <div className="settings-tab-panel">
+            <div className="settings-tab-panel" ref={settingsPanelRef}>
             {settingsTab === 'vault' && (
               <>
             <h2 className="settings-section settings-section-first">Vault location</h2>

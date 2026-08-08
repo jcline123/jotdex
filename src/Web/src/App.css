@@ -1400,14 +1400,17 @@ button {
 .setup-screen.auth-stage {
   max-width: none;
   margin: 0;
-  padding: 1.5rem;
+  padding: max(1rem, env(safe-area-inset-top, 0px)) 1.25rem max(1rem, env(safe-area-inset-bottom, 0px));
   min-height: 100vh;
   min-height: 100dvh;
   display: flex;
   align-items: center;
   justify-content: center;
   position: relative;
-  overflow: hidden;
+  /* Allow scroll when keyboard / MFA fields grow the card (was overflow:hidden — clipped TOTP on phones). */
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   background: #060a10;
 }
 
@@ -1424,6 +1427,8 @@ button {
   position: relative;
   z-index: 1;
   width: min(24rem, 100%);
+  flex: 0 0 auto;
+  margin: auto 0;
   padding: 1.75rem 1.5rem;
   border-radius: 12px;
   border: 1px solid rgba(56, 160, 150, 0.22);
@@ -1432,6 +1437,10 @@ button {
   box-shadow:
     0 18px 48px rgba(0, 0, 0, 0.5),
     0 0 0 1px rgba(8, 12, 18, 0.4);
+}
+
+.auth-totp-field {
+  scroll-margin: 4rem;
 }
 
 .setup-screen .lede,
@@ -1469,6 +1478,7 @@ button {
   border: 1px solid var(--border);
   background: var(--bg);
   color: var(--text);
+  font-size: 16px; /* avoid iOS zoom-on-focus */
 }
 
 .auth-form button {
@@ -1499,9 +1509,11 @@ button {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 1.5rem;
+  padding: max(1rem, env(safe-area-inset-top, 0px)) 1.25rem max(1rem, env(safe-area-inset-bottom, 0px));
   background: #060a10;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .idle-lock-card {
@@ -1618,9 +1630,11 @@ button {
 
 .settings-modal {
   width: min(48rem, 96vw);
-  max-height: 88vh;
+  max-height: min(88vh, 88dvh);
+  height: min(88vh, 88dvh);
   display: flex;
   flex-direction: column;
+  overflow: hidden; /* scroll only .settings-tab-panel — nested modal scroll fought mobile Safari */
 }
 
 .settings-modal-head {
@@ -1629,6 +1643,7 @@ button {
   justify-content: space-between;
   gap: 0.75rem;
   margin-bottom: 0.75rem;
+  flex: 0 0 auto;
 }
 
 .settings-modal-head h2 {
@@ -1642,6 +1657,7 @@ button {
   padding-bottom: 0.75rem;
   margin-bottom: 0.75rem;
   border-bottom: 1px solid var(--border);
+  flex: 0 0 auto;
 }
 
 .settings-tabs button {
@@ -1669,6 +1685,8 @@ button {
   flex: 1 1 auto;
   min-height: 0;
   padding-right: 0.15rem;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
 }
 
 .settings-steps {
@@ -2590,9 +2608,55 @@ button {
     border-radius: 12px;
   }
 
+  .settings-modal {
+    width: calc(100vw - 0.5rem);
+    height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 0.5rem);
+    max-height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 0.5rem);
+    margin: 0.25rem;
+    border-radius: 12px;
+  }
+
+  .settings-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .settings-tabs::-webkit-scrollbar {
+    display: none;
+  }
+
+  .settings-tabs button {
+    flex: 0 0 auto;
+    font-size: 0.8rem;
+    padding: 0.45rem 0.65rem;
+  }
+
+  .settings-tab-panel {
+    padding-bottom: max(1rem, env(safe-area-inset-bottom, 0px));
+  }
+
+  .setup-screen.auth-stage,
+  .idle-lock-overlay {
+    align-items: flex-start;
+    justify-content: center;
+  }
+
+  .auth-stage-card,
+  .idle-lock-card {
+    margin-top: max(1.5rem, 8vh);
+    margin-bottom: 2rem;
+  }
+
+  .setup-card h1 {
+    font-size: 2rem;
+  }
+
   .modal-backdrop {
     align-items: flex-start;
     padding: 0;
+    overflow: hidden;
   }
 
   .quick-open {

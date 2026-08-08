@@ -7,7 +7,12 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 
 ---
 
-## 2026-08-08 — LAN firewall UAC helper (`b9031e6`)
+## 2026-08-08 — Mobile login MFA + settings scroll (`v1.1.1`)
+
+**Phone login showed password but clipped the authenticator field (overflow:hidden + keyboard)**
+- Auth stage scrolls; MFA is a second step after password (field swaps, not both at once). Settings modal uses a single scroll pane with a fixed height so tabs don’t fight Safari.
+
+---
 
 **LAN worked on the server but other PCs were often blocked by Windows Firewall**
 - Saving LAN (Settings, first-run wizard) prompts UAC via `Ensure-JotdexFirewall.ps1` for HTTP/HTTPS allow rules. Decline or no-admin still keeps LAN enabled and shows a manual-port warning. Same helper from Setup/Restore/install-service and portable publish.
