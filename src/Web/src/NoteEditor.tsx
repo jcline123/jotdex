@@ -248,6 +248,27 @@ function replaceImageSrc(editor: Editor, fromSrc: string, toSrc: string, alt?: s
   if (changed) editor.view.dispatch(tr)
 }
 
+function findScrollParent(el: HTMLElement | null): HTMLElement | Window {
+  let node = el?.parentElement ?? null
+  while (node) {
+    const style = getComputedStyle(node)
+    const oy = style.overflowY
+    if ((oy === 'auto' || oy === 'scroll' || oy === 'overlay') && node.scrollHeight > node.clientHeight + 1) {
+      return node
+    }
+    node = node.parentElement
+  }
+  return window
+}
+
+function loadEditorChromePinned(): boolean {
+  try {
+    return localStorage.getItem('jotdex.editorChromePinned') === '1'
+  } catch {
+    return false
+  }
+}
+
 export function NoteEditor({
   noteId,
   noteStem,
@@ -270,6 +291,11 @@ export function NoteEditor({
   const [findStatus, setFindStatus] = useState('')
   const [wikiSuggest, setWikiSuggest] = useState<WikiSuggestState>(null)
   const [wikiIndex, setWikiIndex] = useState(0)
+  const [chromePinned, setChromePinned] = useState(loadEditorChromePinned)
+  const [chromeScrolled, setChromeScrolled] = useState(false)
+  const [chromePeek, setChromePeek] = useState(false)
+  const chromeRef = useRef<HTMLDivElement>(null)
+  const rootRef = useRef<HTMLDivElement>(null)
   const findInputRef = useRef<HTMLInputElement>(null)
   const findOpenRef = useRef(false)
   findOpenRef.current = findOpen
@@ -737,11 +763,80 @@ export function NoteEditor({
     editor.setEditable(editable)
   }, [editable, editor])
 
+  useEffect(() => {
+    const chrome = chromeRef.current
+    if (!chrome) return
+    // Pop-out has its own Auto/Pin chrome behavior
+    if (chrome.closest('.popout-app')) return
+
+    const scroller = findScrollParent(chrome)
+    const readTop = () =>
+      scroller === window ? window.scrollY : (scroller as HTMLElement).scrollTop
+
+    const onScroll = () => {
+      const top = readTop()
+      const away = top > 56
+      setChromeScrolled(away)
+      if (!away) setChromePeek(false)
+    }
+
+    onScroll()
+    scroller.addEventListener('scroll', onScroll, { passive: true })
+    return () => scroller.removeEventListener('scroll', onScroll)
+  }, [editor, noteId])
+
   if (!editor) return null
 
+  const chromeAuto = !chromePinned
+  const chromeCollapsed = chromeAuto && chromeScrolled && !chromePeek
+
   return (
-    <div className="rich-editor">
-      <div className="editor-chrome">
+    <div
+      ref={rootRef}
+      className={`rich-editor${chromeAuto ? ' chrome-autohide' : ' chrome-pinned'}${chromeScrolled ? ' is-scrolled' : ''}${chromePeek ? ' chrome-peek' : ''}`}
+    >
+      <div
+        ref={chromeRef}
+        className={`editor-chrome${chromeCollapsed ? ' is-collapsed' : ''}`}
+        onMouseLeave={() => {
+          if (chromeAuto && chromeScrolled) setChromePeek(false)
+        }}
+      >
+        <div className="editor-chrome-peek">
+          <button
+            type="button"
+            className="chrome-peek-toggle"
+            title={chromeCollapsed ? 'Show formatting tools' : 'Formatting tools'}
+            onClick={() => {
+              if (chromeAuto && chromeScrolled) setChromePeek((v) => !v)
+            }}
+          >
+            {chromeCollapsed ? 'Formatting ▾' : 'Formatting'}
+          </button>
+          <button
+            type="button"
+            className={`ghost chrome-pin-btn${chromePinned ? ' on' : ''}`}
+            title={
+              chromePinned
+                ? 'Pinned — formatting bar stays open while you scroll'
+                : 'Auto — collapses while you scroll; hover or tap to expand. Expands again at the top of the note.'
+            }
+            onClick={() => {
+              setChromePinned((v) => {
+                const next = !v
+                try {
+                  localStorage.setItem('jotdex.editorChromePinned', next ? '1' : '0')
+                } catch {
+                  /* ignore */
+                }
+                if (next) setChromePeek(false)
+                return next
+              })
+            }}
+          >
+            {chromePinned ? 'Pinned' : 'Auto'}
+          </button>
+        </div>
       <div className="editor-chrome-inner">
       <div className="editor-toolbar" role="toolbar" aria-label="Formatting">
         <button

@@ -1087,6 +1087,90 @@ button {
   background: linear-gradient(180deg, var(--bg) 70%, color-mix(in srgb, var(--bg) 88%, transparent));
 }
 
+.editor-chrome-peek {
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  min-height: 1.6rem;
+}
+
+.editor-chrome-peek .chrome-peek-toggle {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.75rem;
+  letter-spacing: 0.02em;
+  padding: 0.15rem 0.2rem;
+  cursor: pointer;
+}
+
+.editor-chrome-peek .chrome-peek-toggle:hover {
+  color: var(--text);
+}
+
+.editor-chrome-peek .chrome-pin-btn {
+  padding: 0.15rem 0.45rem;
+  font-size: 0.72rem;
+  border-radius: 6px;
+  min-height: 0;
+  line-height: 1.2;
+}
+
+.editor-chrome-peek .chrome-pin-btn.on {
+  color: var(--text);
+  background: var(--accent-soft);
+  border-color: var(--border);
+}
+
+/* Main editor: collapse formatting while scrolled (unless Pinned). Pop-out keeps its own rules. */
+.app:not(.popout-app) .rich-editor.chrome-autohide .editor-chrome-peek,
+.app:not(.popout-app) .rich-editor.chrome-pinned .editor-chrome-peek {
+  display: flex;
+}
+
+.app:not(.popout-app) .rich-editor.chrome-autohide.is-scrolled:not(.chrome-peek) .editor-chrome-inner {
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
+  margin: 0;
+  transition: max-height 0.2s ease, opacity 0.15s ease;
+}
+
+.app:not(.popout-app) .rich-editor.chrome-autohide.is-scrolled .editor-chrome {
+  gap: 0.2rem;
+  padding-bottom: 0.25rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg-elevated);
+  margin: 0 0 0.35rem;
+  padding: 0.2rem 0.4rem;
+}
+
+.app:not(.popout-app) .rich-editor.chrome-autohide.is-scrolled .editor-chrome:hover .editor-chrome-inner,
+.app:not(.popout-app) .rich-editor.chrome-autohide.is-scrolled .editor-chrome:focus-within .editor-chrome-inner,
+.app:not(.popout-app) .rich-editor.chrome-autohide.is-scrolled.chrome-peek .editor-chrome-inner {
+  max-height: 22rem;
+  opacity: 1;
+  overflow: auto;
+  pointer-events: auto;
+  padding-bottom: 0.15rem;
+}
+
+.app:not(.popout-app) .rich-editor.chrome-autohide.is-scrolled .editor-chrome:hover .editor-toolbar,
+.app:not(.popout-app) .rich-editor.chrome-autohide.is-scrolled .editor-chrome:focus-within .editor-toolbar,
+.app:not(.popout-app) .rich-editor.chrome-autohide.is-scrolled.chrome-peek .editor-toolbar {
+  border-color: transparent;
+  background: transparent;
+  padding: 0.2rem 0;
+}
+
+.app:not(.popout-app) .rich-editor.chrome-autohide:not(.is-scrolled) .chrome-peek-toggle,
+.app:not(.popout-app) .rich-editor.chrome-pinned .chrome-peek-toggle {
+  cursor: default;
+}
+
 .editor-chrome-inner {
   display: flex;
   flex-direction: column;

@@ -7,6 +7,13 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 
 ---
 
+## 2026-08-08 — Collapsing format toolbar while scrolling
+
+**Sticky formatting bar ate mobile/desktop reading space mid-note**
+- Main editor formatting chrome auto-collapses after you scroll down (expands again at the top, or on hover/tap). **Pinned** keeps it open — same idea as pop-out Auto/Pin.
+
+---
+
 ## 2026-08-08 — Denser mobile note chrome (`c73a8be`)
 
 **Phone note view had huge gaps under the title/path and empty space beside the editor**
