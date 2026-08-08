@@ -7,6 +7,14 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 
 ---
 
+## 2026-08-08 — Vault-backed Todos + collapsible columns (`85137eb`)
+
+**Wanted glanceable to-dos, more editor width, undo on mis-clicks, and a clear Chrome notification path**
+- Open items in vault-root `Todos.md`; done items disappear with a 30s Undo. Desktop rail + mobile tab; Folders/Notes/Todos columns collapse. First Add (and Settings) prompts for browser notifications.
+- Portable build republished to `artifacts\win-x64`.
+
+---
+
 ## 2026-08-08 — Prompt notifications on first to-do
 
 **Finding the Settings allow button is easy to miss; first Add is a natural user gesture for Chrome’s prompt**
