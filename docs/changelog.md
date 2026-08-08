@@ -7,10 +7,11 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 
 ---
 
-## 2026-08-07 — Phosphor lock/login backdrop
+## 2026-08-07 — Phosphor lock/login backdrop (`eeabf49`)
 
 **Wanted a Swordfish-ish tech feel on the password screen without cluttering the form**
 - Soft teal code streams (canvas) behind Unlock and Login only; form card stays frosted and readable. Respects `prefers-reduced-motion`.
+- Portable build republished to `artifacts\win-x64`.
 
 ---
 
