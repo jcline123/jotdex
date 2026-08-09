@@ -250,15 +250,19 @@ function replaceImageSrc(editor: Editor, fromSrc: string, toSrc: string, alt?: s
 
 function findScrollParent(el: HTMLElement | null): HTMLElement | Window {
   let node = el?.parentElement ?? null
+  let fallback: HTMLElement | Window = window
   while (node) {
     const style = getComputedStyle(node)
     const oy = style.overflowY
-    if ((oy === 'auto' || oy === 'scroll' || oy === 'overlay') && node.scrollHeight > node.clientHeight + 1) {
-      return node
+    if (oy === 'auto' || oy === 'scroll' || oy === 'overlay') {
+      // Prefer an overflow container even when content does not currently overflow —
+      // short notes can start/stop scrolling as the toolbar collapses.
+      fallback = node
+      if (node.scrollHeight > node.clientHeight + 1) return node
     }
     node = node.parentElement
   }
-  return window
+  return fallback
 }
 
 function loadEditorChromePinned(): boolean {
@@ -773,11 +777,19 @@ export function NoteEditor({
     const readTop = () =>
       scroller === window ? window.scrollY : (scroller as HTMLElement).scrollTop
 
+    // Hysteresis: collapsing the toolbar shortens the page. On short notes that makes
+    // scrollTop snap back under the collapse threshold and the bar thrash. Stay collapsed
+    // until near the top; only collapse after a clearer scroll.
+    const COLLAPSE_AT = 72
+    const EXPAND_AT = 16
+
     const onScroll = () => {
       const top = readTop()
-      const away = top > 56
-      setChromeScrolled(away)
-      if (!away) setChromePeek(false)
+      setChromeScrolled((prev) => {
+        if (prev) return top > EXPAND_AT
+        return top > COLLAPSE_AT
+      })
+      if (top <= EXPAND_AT) setChromePeek(false)
     }
 
     onScroll()
@@ -839,6 +851,30 @@ export function NoteEditor({
         </div>
       <div className="editor-chrome-inner">
       <div className="editor-toolbar" role="toolbar" aria-label="Formatting">
+        <button
+          type="button"
+          className={`ghost chrome-pin-btn toolbar-chrome-pin${chromePinned ? ' on' : ''}`}
+          title={
+            chromePinned
+              ? 'Pinned — formatting bar stays open while you scroll'
+              : 'Auto — collapses while you scroll; hover or tap Formatting to expand. Expands again near the top.'
+          }
+          onClick={() => {
+            setChromePinned((v) => {
+              const next = !v
+              try {
+                localStorage.setItem('jotdex.editorChromePinned', next ? '1' : '0')
+              } catch {
+                /* ignore */
+              }
+              if (next) setChromePeek(false)
+              return next
+            })
+          }}
+        >
+          {chromePinned ? 'Pinned' : 'Auto'}
+        </button>
+        <span className="sep toolbar-chrome-pin-sep" />
         <button
           type="button"
           className={editor.isActive('heading', { level: 1 }) ? 'on' : ''}

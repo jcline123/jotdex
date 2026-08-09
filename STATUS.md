@@ -1,6 +1,6 @@
 # Jotdex STATUS
 
-**Active milestone:** Post-1.1.2 polish (features shipped)  
+**Active milestone:** Post-1.1.3 polish  
 **Last updated:** 2026-08-09
 
 ## In progress

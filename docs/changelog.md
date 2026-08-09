@@ -7,7 +7,20 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 
 ---
 
-## 2026-08-09 — v1.1.2 (trash, note todos, capture, home hide)
+## 2026-08-09 — v1.1.3 (note chrome density)
+
+**Tighter note header + stable formatting bar on short notes**
+- Portable release **1.1.3**. Actions no longer leave a large empty band beside the title; Auto toolbar uses scroll hysteresis so it stops thrashing on short notes.
+
+---
+
+## 2026-08-09 — Note head density + toolbar scroll thrash
+
+**Title/actions row left a large empty band**
+- Actions no longer flex-grow into half the pane; tighter title/button padding.
+
+**Short notes made the formatting bar collapse/expand while scrolling the last line**
+- Collapse shortens the page so scrollTop bounced under the threshold. Scroll uses hysteresis (collapse at 72px, expand only under 16px).
 
 **Ship trash browser, vault task rail edits, capture, and home/list hygiene**
 - Portable release bumps to **1.1.2** (`fc460fd`, tag `v1.1.2`). Trash is opened from the notes header (removed from the always-on mobile tab bar). Standalone `Todos.md` stays out of notes/home lists via `/api/notes/by-path`. From-notes todos support priority/due/remind; rail refreshes after note trash.
