@@ -1,11 +1,17 @@
 # Jotdex STATUS
 
-**Active milestone:** Post-1.1.3 polish  
+**Active milestone:** Post-1.1.4 polish  
 **Last updated:** 2026-08-09
 
 ## In progress
 
 - (none)
+
+## Highlights (v1.1.4)
+
+- **Clip page** fetches title/summary into a new or open note (server-side; curl on Windows for Cloudflare)
+- Bookmarklet → Save web clip modal (no separate Capture screen); Settings → Capture for install
+- Lock screen copy tightened
 
 ## Highlights (v1.1.2)
 

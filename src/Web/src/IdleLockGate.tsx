@@ -165,7 +165,7 @@ export function IdleLockGate({ enabled, minutes, authAvailable, onLockedChange }
         <p>
           {mfaStep
             ? 'Enter the code from your authenticator app (or a recovery code).'
-            : 'Enter your password to continue. Notes stay on this PC — this only unlocks the app.'}
+            : 'Enter your password to continue.'}
         </p>
         <form className="auth-form" onSubmit={(e) => void unlock(e)}>
           {!mfaStep ? (

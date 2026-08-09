@@ -2989,6 +2989,20 @@ html.popout-mode #root {
 }
 .capture-card { width: min(32rem, 100%); }
 .capture-card h1 { margin: 0 0 0.5rem; font-size: 1.6rem; }
+.capture-card .brand {
+  margin: 0 0 0.35rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+}
+.capture-card select,
+.capture-card input[type='text'],
+.capture-card input:not([type]),
+.capture-card input[type='url'],
+.capture-card input[type='password'] {
+  width: 100%;
+  box-sizing: border-box;
+}
 .capture-card textarea {
   padding: 0.55rem 0.7rem;
   border-radius: 8px;
@@ -2999,21 +3013,62 @@ html.popout-mode #root {
   font-size: 16px;
   resize: vertical;
   min-height: 8rem;
+  width: 100%;
+  box-sizing: border-box;
 }
+.capture-steps {
+  margin: 0.75rem 0 1rem;
+  padding-left: 1.25rem;
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+.capture-steps li { margin-bottom: 0.35rem; }
+.settings-capture-steps { max-width: 40rem; }
 .capture-bookmarklet { margin-top: 1.75rem; padding-top: 1rem; border-top: 1px solid var(--border); }
 .capture-bookmarklet h2 { margin: 0 0 0.5rem; font-size: 1rem; }
-.capture-bookmarklet-link {
-  display: inline-block;
-  margin-top: 0.5rem;
-  padding: 0.55rem 0.85rem;
-  border-radius: 8px;
-  background: var(--accent-soft);
-  color: var(--accent);
-  font-weight: 600;
-  text-decoration: none;
-  border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+.capture-bookmarklet-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  margin: 0.75rem 0;
 }
-.fav-star { color: #e6b84d; }
+.capture-bookmarklet-link {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.4rem 0.75rem;
+  border-radius: 8px;
+  border: 1px dashed var(--border);
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 600;
+}
+.capture-bookmarklet-raw textarea {
+  min-height: 4.5rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+.clip-save-modal {
+  width: min(32rem, 100%);
+  max-height: min(90vh, 40rem);
+  overflow: auto;
+}
+.clip-save-modal .modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.35rem;
+}
+.clip-save-modal .modal-head h2 {
+  margin: 0;
+  font-size: 1.15rem;
+}
+.clip-save-lede {
+  margin: 0 0 0.75rem;
+}
 
 .history-diff { margin-top: 0.75rem; border-top: 1px solid var(--border); padding-top: 0.5rem; }
 .history-diff-head { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem; }

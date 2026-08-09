@@ -5,7 +5,14 @@ import './App.css'
 import { NoteEditor, type NoteCatalogItem } from './NoteEditor'
 import { joinFrontMatter, sameMarkdown, setFavoriteInMarkdown, splitFrontMatter } from './frontMatter'
 import { looksUnsafeForVisual } from './unsafeMarkdown'
-import { CaptureScreen } from './CaptureScreen'
+import { ClipSaveModal } from './ClipSaveModal'
+import {
+  buildClipBookmarklet,
+  loadClipDefaultFolder,
+  parseClipHash,
+  saveClipDefaultFolder,
+  type ClipPayload,
+} from './jotdexBookmarklet'
 import { FirstRunWizard, LoginScreen } from './AuthScreens'
 import { TrashPane } from './TrashPane'
 import { extractOutline } from './outline'
@@ -304,9 +311,15 @@ function App() {
 
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [settingsTab, setSettingsTab] = useState<
-    'vault' | 'network' | 'security' | 'notifications' | 'backup' | 'updates' | 'advanced'
+    'vault' | 'network' | 'security' | 'notifications' | 'backup' | 'updates' | 'advanced' | 'capture'
   >('vault')
   const settingsPanelRef = useRef<HTMLDivElement>(null)
+  const [clipDefaultFolder, setClipDefaultFolder] = useState(() => loadClipDefaultFolder())
+  const [clipFolderOptions, setClipFolderOptions] = useState<{ path: string; label: string }[]>([
+    { path: 'Inbox', label: 'Inbox' },
+  ])
+  const [clipCopied, setClipCopied] = useState(false)
+  const [pendingClip, setPendingClip] = useState<ClipPayload | null>(null)
   const [updateInfo, setUpdateInfo] = useState<{
     success?: boolean
     error?: string
@@ -424,6 +437,19 @@ function App() {
       return undefined
     }
   }, [])
+
+  useEffect(() => {
+    if (!vault?.configured) return
+    if (auth?.authRequired && !auth.authenticated) return
+    const payload = parseClipHash(window.location.hash || '')
+    if (!payload) return
+    setPendingClip(payload)
+    try {
+      window.history.replaceState(null, '', window.location.pathname + window.location.search)
+    } catch {
+      /* ignore */
+    }
+  }, [vault?.configured, auth?.authenticated, auth?.authRequired])
 
   useEffect(() => {
     if (!vault?.configured) return
@@ -1465,6 +1491,117 @@ function App() {
     setSelectedId(data.id)
   }
 
+  async function fetchPageInfo(url: string): Promise<{
+    title?: string
+    description?: string
+    textExcerpt?: string
+    finalUrl?: string
+  } | null> {
+    const res = await fetch('/api/fetch-page', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url }),
+    })
+    const data = await res.json().catch(() => null)
+    if (!res.ok || !data?.success) return null
+    return data
+  }
+
+  function pageInfoToMarkdown(opts: {
+    url: string
+    title?: string
+    description?: string
+    textExcerpt?: string
+    asNewNoteBody?: boolean
+  }): string {
+    const linkTitle = opts.title?.trim() || opts.url
+    const lines: string[] = []
+    if (opts.asNewNoteBody) {
+      // Title is already the note H1 from clip/create — body starts with source.
+    } else if (opts.title?.trim()) {
+      lines.push(`## ${opts.title.trim()}`, '')
+    }
+    lines.push(`> Source: [${linkTitle}](${opts.url})`, '')
+    if (opts.description?.trim()) {
+      lines.push(opts.description.trim(), '')
+    }
+    if (opts.textExcerpt?.trim()) {
+      lines.push(opts.textExcerpt.trim(), '')
+    }
+    return lines.join('\n')
+  }
+
+  async function createNoteFromUrl() {
+    setTemplateMenu(false)
+    const url = window.prompt('Page URL to save as a new note')
+    if (!url?.trim()) return
+    setNetworkHint('Fetching page…')
+    const info = await fetchPageInfo(url.trim())
+    setNetworkHint(null)
+    const finalUrl = (info?.finalUrl || url).trim()
+    let title = info?.title?.trim() || ''
+    if (!title) {
+      try {
+        title = new URL(finalUrl).hostname.replace(/^www\./, '')
+      } catch {
+        title = 'Web clip'
+      }
+    }
+    if (!info && !window.confirm('Could not fetch page info. Save with the URL only?')) return
+    title = window.prompt('Note title', title) || title
+    const dest = window.prompt('Folder (blank = Inbox)', folder || loadClipDefaultFolder())
+    if (dest === null) return
+    const folderDest = dest.trim() || 'Inbox'
+    const body = pageInfoToMarkdown({
+      url: finalUrl,
+      title: info?.title,
+      description: info?.description,
+      textExcerpt: info?.textExcerpt,
+      asNewNoteBody: true,
+    })
+    const res = await fetch('/api/clip', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: title.trim(),
+        sourceUrl: finalUrl,
+        folder: folderDest,
+        text: body,
+      }),
+    })
+    const data = await res.json()
+    if (!res.ok || !data.success) {
+      setError(data.error ?? 'Could not create note from URL')
+      return
+    }
+    saveClipDefaultFolder(folderDest)
+    await loadVault()
+    setSelectedId(data.noteId)
+    setMobilePane('editor')
+  }
+
+  async function insertUrlIntoNote() {
+    if (!note) return
+    const url = window.prompt('Page URL to pull into this note')
+    if (!url?.trim()) return
+    setNetworkHint('Fetching page…')
+    const info = await fetchPageInfo(url.trim())
+    setNetworkHint(null)
+    if (!info && !window.confirm('Could not fetch page info. Insert the URL only?')) return
+    const finalUrl = (info?.finalUrl || url).trim()
+    const block =
+      '\n\n' +
+      pageInfoToMarkdown({
+        url: finalUrl,
+        title: info?.title,
+        description: info?.description,
+        textExcerpt: info?.textExcerpt,
+      })
+    setDraft((d) => (d.endsWith('\n') ? d + block.trimStart() : d + block))
+  }
+
   async function trashNote() {
     if (!selectedId) return
     if (!window.confirm('Move this note to trash?')) return
@@ -1683,13 +1820,12 @@ function App() {
 
   const pathOnly = typeof window !== 'undefined' ? window.location.pathname.replace(/\/+$/, '') || '/' : '/'
   if (pathOnly === '/capture') {
-    return (
-      <CaptureScreen
-        onOpenNote={(id) => {
-          window.location.href = `/?note=${encodeURIComponent(id)}`
-        }}
-      />
-    )
+    // Old capture URL — send people to the main app (bookmarklet now uses /#clip=…).
+    if (typeof window !== 'undefined') {
+      const hash = window.location.hash || ''
+      window.location.replace('/' + (hash.startsWith('#clip=') ? hash : ''))
+    }
+    return <p className="muted">Opening Jotdex…</p>
   }
 
   // Password is optional, so setupRequired is rarely true — still use the full wizard when
@@ -1997,6 +2133,19 @@ function App() {
 
       {aiPromptHint && <p className="ai-prompt-toast">{aiPromptHint}</p>}
 
+      {pendingClip && (
+        <ClipSaveModal
+          initial={pendingClip}
+          onClose={() => setPendingClip(null)}
+          onSaved={(id) => {
+            setPendingClip(null)
+            void loadVault().then(() => {
+              setSelectedId(id)
+              setMobilePane('editor')
+            })
+          }}
+        />
+      )}
       {settingsOpen && (
         <div className="modal-backdrop" onClick={() => setSettingsOpen(false)} role="presentation">
           <div className="modal settings-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Settings">
@@ -2012,6 +2161,7 @@ function App() {
                   ['vault', 'Vault'],
                   ['network', 'Network'],
                   ['security', 'Security'],
+                  ['capture', 'Capture'],
                   ['notifications', 'Notifications'],
                   ['backup', 'Backup'],
                   ['updates', 'Updates'],
@@ -2496,6 +2646,107 @@ function App() {
                 </label>
               </>
             )}
+              </>
+            )}
+
+            {settingsTab === 'capture' && (
+              <>
+                <h2 className="settings-section settings-section-first">Save pages from the web</h2>
+                <p className="lede">Two ways to get a link into Jotdex — pick whichever fits the moment.</p>
+
+                <h3 className="settings-subhead">1. Bookmark on your bookmarks bar (one-time setup)</h3>
+                <p className="muted">
+                  After you install it once, everyday use is: open any website, click that bookmark, and Jotdex opens
+                  with the page title, URL, and any selected text. The Copy button is only for installing the bookmark —
+                  you do not paste URLs into Settings each time you clip.
+                </p>
+                <ol className="capture-steps settings-capture-steps">
+                  <li>Stay signed in to Jotdex in this browser.</li>
+                  <li>
+                    Click <strong>Copy bookmarklet</strong>, then Bookmarks → Add bookmark → paste into the URL field
+                    and name it “Save to Jotdex”. (Chrome often blocks dragging <code>javascript:</code> links.)
+                  </li>
+                  <li>
+                    Later, on any webpage, click <strong>Save to Jotdex</strong> on the bookmarks bar. Allow the pop-up
+                    once if asked.
+                  </li>
+                  <li>Pick a folder if you want, then Save.</li>
+                </ol>
+                <label className="field">
+                  Default folder for clips
+                  <select
+                    value={clipDefaultFolder}
+                    onChange={(e) => {
+                      const v = e.target.value
+                      setClipDefaultFolder(v)
+                      saveClipDefaultFolder(v || 'Inbox')
+                    }}
+                    onFocus={() => {
+                      void fetch('/api/tree', { credentials: 'same-origin' })
+                        .then((r) => r.json())
+                        .then((tree: { relativePath?: string; children?: unknown[] }) => {
+                          const acc: { path: string; label: string }[] = []
+                          const walk = (n: { relativePath?: string; children?: unknown[] }) => {
+                            const p = (n.relativePath || '').replace(/\\/g, '/')
+                            if (p) acc.push({ path: p, label: p })
+                            for (const c of (n.children as typeof n[]) || []) walk(c)
+                          }
+                          walk(tree)
+                          if (!acc.some((f) => f.path.toLowerCase() === 'inbox')) {
+                            acc.unshift({ path: 'Inbox', label: 'Inbox' })
+                          }
+                          acc.sort((a, b) => a.label.localeCompare(b.label))
+                          setClipFolderOptions(acc)
+                        })
+                        .catch(() => {
+                          /* keep Inbox */
+                        })
+                    }}
+                  >
+                    <option value="">Vault root</option>
+                    {clipFolderOptions.map((f) => (
+                      <option key={f.path} value={f.path}>
+                        {f.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div className="modal-actions">
+                  <button
+                    type="button"
+                    className="primary"
+                    onClick={() => {
+                      void navigator.clipboard.writeText(buildClipBookmarklet(window.location.origin)).then(
+                        () => {
+                          setClipCopied(true)
+                          window.setTimeout(() => setClipCopied(false), 2000)
+                        },
+                        () => setError('Could not copy bookmarklet'),
+                      )
+                    }}
+                  >
+                    {clipCopied ? 'Copied — paste into a new bookmark URL' : 'Copy bookmarklet (install once)'}
+                  </button>
+                </div>
+                <label className="field">
+                  Bookmarklet URL (install only)
+                  <textarea
+                    readOnly
+                    rows={3}
+                    value={buildClipBookmarklet(typeof window !== 'undefined' ? window.location.origin : '')}
+                    onFocus={(e) => e.currentTarget.select()}
+                  />
+                </label>
+
+                <h3 className="settings-subhead">2. From inside Jotdex</h3>
+                <p className="muted">
+                  <strong>New note ▾ → Clip page…</strong> fetches a page’s title and summary into a new note. On an open
+                  note, use <strong>Clip page</strong> to pull the same into that note.
+                </p>
+                <p className="muted">
+                  Tip: if the bookmark does nothing, allow pop-ups for your Jotdex address and confirm you are still
+                  signed in. Re-copy the bookmarklet after changing Jotdex’s address or port.
+                </p>
               </>
             )}
 
@@ -3296,6 +3547,10 @@ function App() {
                             <span>{t.description}</span>
                           </button>
                         ))}
+                        <button type="button" role="menuitem" onClick={() => void createNoteFromUrl()}>
+                          <strong>Clip page…</strong>
+                          <span>Fetch a page’s title and summary as a new note</span>
+                        </button>
                       </div>,
                       document.body,
                     )}
@@ -3419,6 +3674,14 @@ function App() {
                     }}
                   >
                     {showSource ? 'Visual' : 'Source'}
+                  </button>
+                  <button
+                    type="button"
+                    className="ghost"
+                    title="Fetch a page’s title and summary into this note"
+                    onClick={() => void insertUrlIntoNote()}
+                  >
+                    Clip page
                   </button>
                   <button
                     type="button"

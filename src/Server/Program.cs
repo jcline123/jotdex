@@ -126,6 +126,7 @@ builder.Services.AddSingleton<INoteCommandService, NoteCommandService>();
 builder.Services.AddSingleton<IVaultTaskService, VaultTaskService>();
 builder.Services.AddSingleton<IFolderCommandService, FolderCommandService>();
 builder.Services.AddSingleton<SafeRemoteImageClient>();
+builder.Services.AddSingleton<SafeRemotePageClient>();
 builder.Services.AddSingleton<IImageLocalizer, ImageLocalizer>();
 builder.Services.AddSingleton<IPreservePageService, PreservePageService>();
 builder.Services.AddSingleton<IStaticExportService, StaticExportService>();
@@ -387,12 +388,16 @@ app.MapPost("/api/clip", async (HttpRequest request, INoteCommandService command
     if (body is null) return Results.BadRequest(new { error = "Invalid body" });
 
     var text = body.Text ?? body.Markdown ?? "";
-    if (string.IsNullOrWhiteSpace(text) && string.IsNullOrWhiteSpace(body.Html))
-        return Results.BadRequest(new { error = "text or html required" });
+    if (string.IsNullOrWhiteSpace(text) && string.IsNullOrWhiteSpace(body.Html) &&
+        string.IsNullOrWhiteSpace(body.SourceUrl))
+        return Results.BadRequest(new { error = "text, html, or sourceUrl required" });
 
     var title = string.IsNullOrWhiteSpace(body.Title)
         ? $"Capture {DateTime.Now:yyyy-MM-dd HH:mm}"
         : body.Title.Trim();
+
+    var folder = (body.Folder ?? "Inbox").Replace('\\', '/').Trim().Trim('/');
+    var folderArg = folder;
 
     var sb = new StringBuilder();
     sb.Append("# ").Append(title).AppendLine().AppendLine();
@@ -400,6 +405,8 @@ app.MapPost("/api/clip", async (HttpRequest request, INoteCommandService command
         sb.Append("> Source: ").Append(body.SourceUrl.Trim()).AppendLine().AppendLine();
     if (!string.IsNullOrWhiteSpace(text))
         sb.AppendLine(text.Trim());
+    else if (!string.IsNullOrWhiteSpace(body.SourceUrl) && string.IsNullOrWhiteSpace(body.Html))
+        sb.AppendLine(body.SourceUrl.Trim());
     if (!string.IsNullOrWhiteSpace(body.Html))
     {
         sb.AppendLine().AppendLine("<details><summary>Clipped HTML</summary>").AppendLine();
@@ -409,9 +416,26 @@ app.MapPost("/api/clip", async (HttpRequest request, INoteCommandService command
         sb.AppendLine("</details>");
     }
 
-    var note = commands.Create("Inbox", title, sb.ToString());
-    if (note is null) return Results.BadRequest(new { error = "Could not create Inbox note" });
-    return Results.Json(new { success = true, noteId = note.Id, relativePath = note.RelativePath });
+    var note = commands.Create(folderArg, title, sb.ToString());
+    if (note is null) return Results.BadRequest(new { error = "Could not create note (check folder path)" });
+    return Results.Json(new { success = true, noteId = note.Id, relativePath = note.RelativePath, folder = folderArg });
+});
+
+app.MapPost("/api/fetch-page", async (HttpRequest request, SafeRemotePageClient pages, CancellationToken ct) =>
+{
+    var body = await request.ReadFromJsonAsync<FetchPageBody>();
+    if (string.IsNullOrWhiteSpace(body?.Url)) return Results.BadRequest(new { error = "url required" });
+    var result = await pages.FetchAsync(body.Url, ct);
+    return result.Success
+        ? Results.Json(new
+        {
+            success = true,
+            title = result.Title,
+            description = result.Description,
+            textExcerpt = result.TextExcerpt,
+            finalUrl = result.FinalUrl ?? body.Url
+        })
+        : Results.BadRequest(new { success = false, error = result.Error ?? "Fetch failed" });
 });
 
 app.MapGet("/api/tasks", (IVaultTaskService tasks) => Results.Json(new { items = tasks.ListOpenTasks() }));
@@ -832,6 +856,13 @@ internal sealed class ClipBody
     public string? Markdown { get; set; }
     public string? Html { get; set; }
     public string? SourceUrl { get; set; }
+    /// <summary>Vault-relative folder (e.g. Inbox). Empty = vault root.</summary>
+    public string? Folder { get; set; }
+}
+
+internal sealed class FetchPageBody
+{
+    public string? Url { get; set; }
 }
 
 internal sealed class MoveKitBody

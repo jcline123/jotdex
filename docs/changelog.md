@@ -7,7 +7,29 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 
 ---
 
-## 2026-08-09 — v1.1.3 (note chrome density)
+## 2026-08-09 — Clip page + Capture polish (1.1.4)
+
+**Portable release 1.1.4**
+- Tag `v1.1.4` — Clip page fetch, Capture modal/bookmarklet cleanup, lock-screen copy.
+
+**“From URL” only pasted the link / unclear name**
+- Renamed to **Clip page** (new-note menu + open-note action). Fetches the page server-side (SSRF-safe) and inserts title, description, and a plain-text excerpt — browsers cannot read arbitrary sites from the client due to CORS.
+- On Windows, page fetch prefers `curl.exe` when present because Cloudflare often challenges .NET `HttpClient`; if fetch still fails, offers URL-only fallback.
+
+---
+
+**Separate Capture top-level screen was confusing**
+- Bookmarklet opens the main app with a “Save web clip” modal. In-app: New note ▾ → Clip page…, and Clip page on an open note. Settings → Capture is install instructions only.
+
+---
+
+**Lock screen had casual product copy**
+- Removed “Notes stay on this PC…” from the idle lock prompt.
+
+**Bookmarklet that `fetch`es `/api/clip` from other sites cannot work with SameSite cookies**
+- Clip flow now opens same-origin `/capture` with title/URL/selection in the URL hash; user confirms folder and saves. Settings → Capture explains Copy-paste setup (Chrome strips dragged `javascript:` links).
+
+---
 
 **Tighter note header + stable formatting bar on short notes**
 - Portable release **1.1.3** (`3d4ac22`, tag `v1.1.3`). Actions no longer leave a large empty band beside the title; Auto toolbar uses scroll hysteresis so it stops thrashing on short notes.
