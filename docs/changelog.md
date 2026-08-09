@@ -10,7 +10,7 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 ## 2026-08-09 — v1.1.2 (trash, note todos, capture, home hide)
 
 **Ship trash browser, vault task rail edits, capture, and home/list hygiene**
-- Portable release bumps to **1.1.2**. Trash is opened from the notes header (removed from the always-on mobile tab bar). Standalone `Todos.md` stays out of notes/home lists via `/api/notes/by-path`. From-notes todos support priority/due/remind; rail refreshes after note trash.
+- Portable release bumps to **1.1.2** (`fc460fd`, tag `v1.1.2`). Trash is opened from the notes header (removed from the always-on mobile tab bar). Standalone `Todos.md` stays out of notes/home lists via `/api/notes/by-path`. From-notes todos support priority/due/remind; rail refreshes after note trash.
 
 ---
 
