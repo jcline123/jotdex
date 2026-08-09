@@ -10,7 +10,7 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 ## 2026-08-09 — Clip page + Capture polish (1.1.4)
 
 **Portable release 1.1.4**
-- Tag `v1.1.4` — Clip page fetch, Capture modal/bookmarklet cleanup, lock-screen copy.
+- Tag `v1.1.4` (`59f6d58`) — Clip page fetch, Capture modal/bookmarklet cleanup, lock-screen copy.
 
 **“From URL” only pasted the link / unclear name**
 - Renamed to **Clip page** (new-note menu + open-note action). Fetches the page server-side (SSRF-safe) and inserts title, description, and a plain-text excerpt — browsers cannot read arbitrary sites from the client due to CORS.
