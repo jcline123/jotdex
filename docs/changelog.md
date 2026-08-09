@@ -10,7 +10,7 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 ## 2026-08-09 — v1.1.3 (note chrome density)
 
 **Tighter note header + stable formatting bar on short notes**
-- Portable release **1.1.3**. Actions no longer leave a large empty band beside the title; Auto toolbar uses scroll hysteresis so it stops thrashing on short notes.
+- Portable release **1.1.3** (`3d4ac22`, tag `v1.1.3`). Actions no longer leave a large empty band beside the title; Auto toolbar uses scroll hysteresis so it stops thrashing on short notes.
 
 ---
 
