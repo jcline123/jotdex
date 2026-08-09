@@ -25,6 +25,23 @@ type Props = {
   fill?: boolean
   collapsed?: boolean
   onToggleCollapsed?: () => void
+  onOpenNote?: (noteId: string) => void
+  /** Bump when notes are trashed/restored/saved so From notes stays in sync. */
+  refreshKey?: number
+  /** After a note-backed task is rewritten on disk, reload that note if open. */
+  onNoteTasksChanged?: (noteId: string) => void
+}
+
+type VaultTask = {
+  id: string
+  noteId: string
+  noteTitle: string
+  noteRelativePath: string
+  text: string
+  due?: string | null
+  priority?: string
+  remind?: string | null
+  standaloneTodosMd?: boolean
 }
 
 type PendingUndo = {
@@ -32,20 +49,14 @@ type PendingUndo = {
   expiresAt: number
 }
 
+type Selection =
+  | { kind: 'local'; id: string }
+  | { kind: 'vault'; id: string }
+
 async function findOrCreateTodosNote(): Promise<NoteDetail> {
-  const list = (await fetch('/api/notes', { credentials: 'same-origin' }).then((r) => r.json())) as {
-    id: string
-    title: string
-    relativePath: string
-  }[]
-  const existing = list.find(
-    (n) => n.relativePath === 'Todos.md' || n.relativePath.replace(/\\/g, '/') === 'Todos.md',
-  )
-  if (existing) {
-    const note = (await fetch(`/api/notes/${existing.id}`, { credentials: 'same-origin' }).then((r) =>
-      r.json(),
-    )) as NoteDetail
-    return note
+  const byPath = await fetch('/api/notes/by-path?path=Todos.md', { credentials: 'same-origin' })
+  if (byPath.ok) {
+    return (await byPath.json()) as NoteDetail
   }
   const created = await fetch('/api/notes', {
     method: 'POST',
@@ -66,8 +77,21 @@ async function findOrCreateTodosNote(): Promise<NoteDetail> {
   return note
 }
 
-export function TodosRail({ fill, collapsed, onToggleCollapsed }: Props) {
+function normalizePriority(p?: string | null): TodoPriority {
+  if (p === 'low' || p === 'normal' || p === 'high' || p === 'critical') return p
+  return 'normal'
+}
+
+export function TodosRail({
+  fill,
+  collapsed,
+  onToggleCollapsed,
+  onOpenNote,
+  refreshKey = 0,
+  onNoteTasksChanged,
+}: Props) {
   const [items, setItems] = useState<TodoItem[]>([])
+  const [vaultTasks, setVaultTasks] = useState<VaultTask[]>([])
   const [noteId, setNoteId] = useState<string | null>(null)
   const [etag, setEtag] = useState('')
   const [markdownBase, setMarkdownBase] = useState('')
@@ -77,7 +101,7 @@ export function TodosRail({ fill, collapsed, onToggleCollapsed }: Props) {
   markdownRef.current = markdownBase
   const [error, setError] = useState<string | null>(null)
   const [draft, setDraft] = useState('')
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [selection, setSelection] = useState<Selection | null>(null)
   const [busy, setBusy] = useState(false)
   const [pendingUndo, setPendingUndo] = useState<PendingUndo | null>(null)
   const [undoLeftSec, setUndoLeftSec] = useState(0)
@@ -85,6 +109,7 @@ export function TodosRail({ fill, collapsed, onToggleCollapsed }: Props) {
   itemsRef.current = items
   const saveTimer = useRef<number | null>(null)
   const undoTimer = useRef<number | null>(null)
+  const vaultSaveTimer = useRef<number | null>(null)
 
   const persist = useCallback(
     async (next: TodoItem[], baseMarkdown: string, id: string, expectedEtag: string) => {
@@ -128,6 +153,13 @@ export function TodosRail({ fill, collapsed, onToggleCollapsed }: Props) {
       setEtag(note.etag)
       setMarkdownBase(note.markdown)
       setItems(sortTodos(parseTodosMarkdown(note.markdown)))
+      try {
+        const taskData = await fetch('/api/tasks', { credentials: 'same-origin' }).then((r) => r.json())
+        const raw = Array.isArray(taskData.items) ? (taskData.items as VaultTask[]) : []
+        setVaultTasks(raw.filter((t) => !t.standaloneTodosMd))
+      } catch {
+        setVaultTasks([])
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not load todos')
     } finally {
@@ -138,6 +170,12 @@ export function TodosRail({ fill, collapsed, onToggleCollapsed }: Props) {
   useEffect(() => {
     void reload()
   }, [reload])
+
+  useEffect(() => {
+    if (refreshKey === 0) return
+    const t = window.setTimeout(() => void reload(), 250)
+    return () => window.clearTimeout(t)
+  }, [refreshKey, reload])
 
   useEffect(() => {
     return startTodoReminderLoop(() => itemsRef.current)
@@ -162,10 +200,20 @@ export function TodosRail({ fill, collapsed, onToggleCollapsed }: Props) {
     return () => {
       if (undoTimer.current) window.clearTimeout(undoTimer.current)
       if (saveTimer.current) window.clearTimeout(saveTimer.current)
+      if (vaultSaveTimer.current) window.clearTimeout(vaultSaveTimer.current)
     }
   }, [])
 
-  const selected = items.find((t) => t.id === selectedId) ?? null
+  // Drop selection if the task vanished (e.g. note deleted).
+  useEffect(() => {
+    if (!selection) return
+    if (selection.kind === 'local' && !items.some((t) => t.id === selection.id)) setSelection(null)
+    if (selection.kind === 'vault' && !vaultTasks.some((t) => t.id === selection.id)) setSelection(null)
+  }, [items, vaultTasks, selection])
+
+  const selectedLocal = selection?.kind === 'local' ? (items.find((t) => t.id === selection.id) ?? null) : null
+  const selectedVault =
+    selection?.kind === 'vault' ? (vaultTasks.find((t) => t.id === selection.id) ?? null) : null
 
   function maybeAskNotifications(nextRemind: string | undefined) {
     if (!nextRemind || nextRemind === 'off') return
@@ -185,20 +233,37 @@ export function TodosRail({ fill, collapsed, onToggleCollapsed }: Props) {
     }
     setDraft('')
     queueSave(sortTodos([item, ...items]))
-    setSelectedId(item.id)
-    // First open item: ask the browser now (user gesture) so Chrome shows Allow/Block.
-    // Settings still re-prompts if they switch browsers or previously blocked/skipped.
+    setSelection({ kind: 'local', id: item.id })
     if (isFirst) void promptTodoNotifications({ force: true })
   }
 
   function completeTodo(id: string) {
     const item = items.find((t) => t.id === id)
     if (!item) return
-    if (selectedId === id) setSelectedId(null)
+    if (selection?.kind === 'local' && selection.id === id) setSelection(null)
     if (undoTimer.current) window.clearTimeout(undoTimer.current)
     setPendingUndo({ item, expiresAt: Date.now() + UNDO_MS })
     undoTimer.current = window.setTimeout(() => setPendingUndo(null), UNDO_MS)
     queueSave(items.filter((t) => t.id !== id))
+  }
+
+  async function completeVaultTask(id: string) {
+    try {
+      const res = await fetch('/api/tasks/complete', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+      })
+      const data = await res.json()
+      if (!res.ok || !data.success) throw new Error(data.error ?? 'Could not complete task')
+      if (selection?.kind === 'vault' && selection.id === id) setSelection(null)
+      if (typeof data.noteId === 'string' && data.noteId) onNoteTasksChanged?.(data.noteId)
+      else if (data.noteId != null) onNoteTasksChanged?.(String(data.noteId))
+      await reload()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not complete task')
+    }
   }
 
   function undoComplete() {
@@ -207,17 +272,77 @@ export function TodosRail({ fill, collapsed, onToggleCollapsed }: Props) {
     const restored = pendingUndo.item
     setPendingUndo(null)
     queueSave(sortTodos([restored, ...itemsRef.current]))
-    setSelectedId(restored.id)
+    setSelection({ kind: 'local', id: restored.id })
   }
 
-  function updateSelected(patch: Partial<TodoItem>) {
-    if (!selected) return
+  function updateSelectedLocal(patch: Partial<TodoItem>) {
+    if (!selectedLocal) return
     if (patch.remind !== undefined) maybeAskNotifications(patch.remind)
-    queueSave(sortTodos(items.map((t) => (t.id === selected.id ? { ...t, ...patch } : t))))
+    queueSave(sortTodos(items.map((t) => (t.id === selectedLocal.id ? { ...t, ...patch } : t))))
+  }
+
+  function queueVaultUpdate(id: string, patch: { text?: string; priority?: string; due?: string | null; remind?: string }) {
+    setVaultTasks((prev) =>
+      prev.map((t) => {
+        if (t.id !== id) return t
+        return {
+          ...t,
+          text: patch.text ?? t.text,
+          priority: patch.priority ?? t.priority,
+          due: patch.due === undefined ? t.due : patch.due,
+          remind: patch.remind === undefined ? t.remind : patch.remind,
+        }
+      }),
+    )
+    if (vaultSaveTimer.current) window.clearTimeout(vaultSaveTimer.current)
+    vaultSaveTimer.current = window.setTimeout(() => {
+      void (async () => {
+        try {
+          const body: Record<string, string> = { id }
+          if (patch.text !== undefined) body.text = patch.text
+          if (patch.priority !== undefined) body.priority = patch.priority
+          if (patch.due !== undefined) body.due = patch.due ?? ''
+          if (patch.remind !== undefined) body.remind = patch.remind === 'off' ? 'off' : patch.remind
+          const res = await fetch('/api/tasks/update', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+          })
+          const data = await res.json()
+          if (!res.ok || !data.success) throw new Error(data.error ?? 'Could not update task')
+          if (typeof data.noteId === 'string' && data.noteId) onNoteTasksChanged?.(data.noteId)
+          else if (data.noteId != null) onNoteTasksChanged?.(String(data.noteId))
+          await reload()
+        } catch (e) {
+          setError(e instanceof Error ? e.message : 'Could not update task')
+          await reload()
+        }
+      })()
+    }, 320)
+  }
+
+  function updateSelectedVault(patch: {
+    text?: string
+    priority?: TodoPriority
+    due?: string | null
+    remind?: string
+  }) {
+    if (!selectedVault) return
+    if (patch.remind !== undefined) maybeAskNotifications(patch.remind)
+    queueVaultUpdate(selectedVault.id, {
+      text: patch.text,
+      priority: patch.priority,
+      due: patch.due === undefined ? undefined : patch.due,
+      remind: patch.remind,
+    })
   }
 
   if (collapsed && !fill) {
-    const titles = items.map((t) => t.title.trim()).filter(Boolean)
+    const titles = [
+      ...items.map((t) => t.title.trim()),
+      ...vaultTasks.map((t) => t.text.trim()),
+    ].filter(Boolean)
     const durationSec = Math.max(14, titles.length * 5)
     return (
       <aside
@@ -236,7 +361,6 @@ export function TodosRail({ fill, collapsed, onToggleCollapsed }: Props) {
         {titles.length > 0 && (
           <div className="todos-ticker" aria-hidden>
             <div className="todos-ticker-track" style={{ animationDuration: `${durationSec}s` }}>
-              {/* Two identical groups: -50% translate lands on the seam with no jump. */}
               {[0, 1].map((copy) => (
                 <div key={copy} className="todos-ticker-group">
                   {titles.map((title, i) => (
@@ -257,11 +381,13 @@ export function TodosRail({ fill, collapsed, onToggleCollapsed }: Props) {
     )
   }
 
+  const openCount = items.length + vaultTasks.length
+
   return (
     <aside className={`pane todos${fill ? ' todos-fill' : ''}`}>
       <div className="todos-head">
         <div className="todos-head-main">
-          <h2>Todos{items.length ? ` · ${items.length}` : ''}</h2>
+          <h2>Todos{openCount ? ` · ${openCount}` : ''}</h2>
           {!fill && onToggleCollapsed && (
             <button type="button" className="ghost pane-collapse-btn" onClick={onToggleCollapsed} title="Collapse todos">
               ⟩
@@ -288,33 +414,88 @@ export function TodosRail({ fill, collapsed, onToggleCollapsed }: Props) {
       </div>
 
       {error && <p className="todos-error">{error}</p>}
-      {busy && items.length === 0 && <p className="muted todos-empty">Loading…</p>}
-      {!busy && items.length === 0 && !pendingUndo && (
-        <p className="muted todos-empty">Nothing open — add something above.</p>
-      )}
+      {busy && items.length === 0 && vaultTasks.length === 0 && <p className="muted todos-empty">Loading…</p>}
 
-      <ul className="todos-list">
-        {items.map((t) => (
-          <li key={t.id}>
-            <div className={`todos-row priority-${t.priority}${selectedId === t.id ? ' on' : ''}`}>
-              <input
-                type="checkbox"
-                checked={false}
-                aria-label={`Complete ${t.title}`}
-                onChange={() => completeTodo(t.id)}
-              />
-              <button type="button" className="todos-row-main" onClick={() => setSelectedId(t.id)}>
-                <span className="todos-title">{t.title}</span>
-                <span className="todos-meta">
-                  <span className={`todos-pri pri-${t.priority}`}>{t.priority}</span>
-                  {formatDueLabel(t.due) && <span className="todos-due">{formatDueLabel(t.due)}</span>}
-                  {t.remind !== 'off' && <span className="todos-remind">remind</span>}
-                </span>
-              </button>
-            </div>
-          </li>
-        ))}
-      </ul>
+      <div className="todos-scroll">
+        {!busy && items.length === 0 && vaultTasks.length === 0 && !pendingUndo && (
+          <p className="muted todos-empty">Nothing open — add something above, or check a box in a note.</p>
+        )}
+
+        {items.length > 0 && (
+          <ul className="todos-list">
+            {items.map((t) => (
+              <li key={t.id}>
+                <div
+                  className={`todos-row priority-${t.priority}${
+                    selection?.kind === 'local' && selection.id === t.id ? ' on' : ''
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={false}
+                    aria-label={`Complete ${t.title}`}
+                    onChange={() => completeTodo(t.id)}
+                  />
+                  <button
+                    type="button"
+                    className="todos-row-main"
+                    onClick={() => setSelection({ kind: 'local', id: t.id })}
+                  >
+                    <span className="todos-title">{t.title}</span>
+                    <span className="todos-meta">
+                      <span className={`todos-pri pri-${t.priority}`}>{t.priority}</span>
+                      {formatDueLabel(t.due) && <span className="todos-due">{formatDueLabel(t.due)}</span>}
+                      {t.remind !== 'off' && <span className="todos-remind">remind</span>}
+                    </span>
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {vaultTasks.length > 0 && (
+          <>
+            <h3 className="todos-section-label">From notes</h3>
+            <ul className="todos-list">
+              {vaultTasks.map((t) => {
+                const pri = normalizePriority(t.priority)
+                return (
+                  <li key={t.id}>
+                    <div
+                      className={`todos-row priority-${pri}${
+                        selection?.kind === 'vault' && selection.id === t.id ? ' on' : ''
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={false}
+                        aria-label={`Complete ${t.text}`}
+                        onChange={() => void completeVaultTask(t.id)}
+                      />
+                      <button
+                        type="button"
+                        className="todos-row-main"
+                        onClick={() => setSelection({ kind: 'vault', id: t.id })}
+                      >
+                        <span className="todos-title">{t.text}</span>
+                        <span className="todos-meta">
+                          <span className={`todos-pri pri-${pri}`}>{pri}</span>
+                          {formatDueLabel(t.due ?? null) && (
+                            <span className="todos-due">{formatDueLabel(t.due ?? null)}</span>
+                          )}
+                          {t.remind && t.remind !== 'off' && <span className="todos-remind">remind</span>}
+                        </span>
+                        <span className="todos-note-link muted">{t.noteTitle}</span>
+                      </button>
+                    </div>
+                  </li>
+                )
+              })}
+            </ul>
+          </>
+        )}
+      </div>
 
       {pendingUndo && (
         <div className="todos-undo" role="status">
@@ -328,26 +509,26 @@ export function TodosRail({ fill, collapsed, onToggleCollapsed }: Props) {
         </div>
       )}
 
-      {selected && (
+      {selectedLocal && (
         <div className="todos-detail">
           <div className="todos-detail-head">
             <strong>Edit</strong>
-            <button type="button" className="ghost" onClick={() => setSelectedId(null)}>
+            <button type="button" className="ghost" onClick={() => setSelection(null)}>
               Close
             </button>
           </div>
           <label className="field">
             Title
-            <input value={selected.title} onChange={(e) => updateSelected({ title: e.target.value })} />
+            <input value={selectedLocal.title} onChange={(e) => updateSelectedLocal({ title: e.target.value })} />
           </label>
           <label className="field">
             Priority
             <select
-              value={selected.priority}
+              value={selectedLocal.priority}
               onChange={(e) => {
                 const priority = e.target.value as TodoPriority
-                if (priority === 'critical') updateSelected({ priority, remind: 'every:30m' })
-                else updateSelected({ priority })
+                if (priority === 'critical') updateSelectedLocal({ priority, remind: 'every:30m' })
+                else updateSelectedLocal({ priority })
               }}
             >
               <option value="low">Low</option>
@@ -360,9 +541,9 @@ export function TodosRail({ fill, collapsed, onToggleCollapsed }: Props) {
             Due
             <input
               type="datetime-local"
-              value={dueToLocalInput(selected.due)}
+              value={dueToLocalInput(selectedLocal.due)}
               onChange={(e) =>
-                updateSelected({
+                updateSelectedLocal({
                   due: e.target.value ? new Date(e.target.value).toISOString() : null,
                 })
               }
@@ -371,16 +552,16 @@ export function TodosRail({ fill, collapsed, onToggleCollapsed }: Props) {
           <label className="field">
             Reminder
             <select
-              value={remindSelectValue(selected)}
+              value={remindSelectValue(selectedLocal)}
               onChange={(e) => {
                 const v = e.target.value
-                if (v === 'off') updateSelected({ remind: 'off' })
-                else if (v === 'critical') updateSelected({ priority: 'critical', remind: 'every:30m' })
-                else if (v === 'every:30m') updateSelected({ remind: 'every:30m' })
-                else if (v === 'every:60m') updateSelected({ remind: 'every:60m' })
+                if (v === 'off') updateSelectedLocal({ remind: 'off' })
+                else if (v === 'critical') updateSelectedLocal({ priority: 'critical', remind: 'every:30m' })
+                else if (v === 'every:30m') updateSelectedLocal({ remind: 'every:30m' })
+                else if (v === 'every:60m') updateSelectedLocal({ remind: 'every:60m' })
                 else if (v === 'once-due') {
-                  if (selected.due) updateSelected({ remind: `once:${selected.due}` })
-                  else updateSelected({ remind: `once:${new Date().toISOString()}` })
+                  if (selectedLocal.due) updateSelectedLocal({ remind: `once:${selectedLocal.due}` })
+                  else updateSelectedLocal({ remind: `once:${new Date().toISOString()}` })
                 }
               }}
             >
@@ -395,9 +576,89 @@ export function TodosRail({ fill, collapsed, onToggleCollapsed }: Props) {
             Reminders use browser notifications while this tab is open. Chrome is asked when you add your first to-do
             (or from Settings). Away catch-up: one alert per to-do.
           </p>
-          <button type="button" className="ghost" onClick={() => completeTodo(selected.id)}>
+          <button type="button" className="ghost" onClick={() => completeTodo(selectedLocal.id)}>
             Mark done
           </button>
+        </div>
+      )}
+
+      {selectedVault && (
+        <div className="todos-detail">
+          <div className="todos-detail-head">
+            <strong>Edit · from note</strong>
+            <button type="button" className="ghost" onClick={() => setSelection(null)}>
+              Close
+            </button>
+          </div>
+          <label className="field">
+            Title
+            <input
+              value={selectedVault.text}
+              onChange={(e) => updateSelectedVault({ text: e.target.value })}
+            />
+          </label>
+          <label className="field">
+            Priority
+            <select
+              value={normalizePriority(selectedVault.priority)}
+              onChange={(e) => {
+                const priority = e.target.value as TodoPriority
+                if (priority === 'critical') updateSelectedVault({ priority, remind: 'every:30m' })
+                else updateSelectedVault({ priority })
+              }}
+            >
+              <option value="low">Low</option>
+              <option value="normal">Normal</option>
+              <option value="high">High</option>
+              <option value="critical">Critical (every 30m)</option>
+            </select>
+          </label>
+          <label className="field">
+            Due
+            <input
+              type="datetime-local"
+              value={dueToLocalInput(selectedVault.due ?? null)}
+              onChange={(e) =>
+                updateSelectedVault({
+                  due: e.target.value ? new Date(e.target.value).toISOString() : null,
+                })
+              }
+            />
+          </label>
+          <label className="field">
+            Reminder
+            <select
+              value={vaultRemindSelectValue(selectedVault)}
+              onChange={(e) => {
+                const v = e.target.value
+                if (v === 'off') updateSelectedVault({ remind: 'off' })
+                else if (v === 'critical') updateSelectedVault({ priority: 'critical', remind: 'every:30m' })
+                else if (v === 'every:30m') updateSelectedVault({ remind: 'every:30m' })
+                else if (v === 'every:60m') updateSelectedVault({ remind: 'every:60m' })
+                else if (v === 'once-due') {
+                  if (selectedVault.due) updateSelectedVault({ remind: `once:${selectedVault.due}` })
+                  else updateSelectedVault({ remind: `once:${new Date().toISOString()}` })
+                }
+              }}
+            >
+              <option value="off">Off</option>
+              <option value="once-due">Once at due time</option>
+              <option value="every:30m">Every 30 minutes</option>
+              <option value="every:60m">Every 60 minutes</option>
+              <option value="critical">Critical preset (30m)</option>
+            </select>
+          </label>
+          <p className="muted todos-hint">
+            Saved into the note as a checklist comment. Open the note to see it in context.
+          </p>
+          <div className="todos-detail-actions">
+            <button type="button" className="ghost" onClick={() => onOpenNote?.(selectedVault.noteId)}>
+              Open note
+            </button>
+            <button type="button" className="ghost" onClick={() => void completeVaultTask(selectedVault.id)}>
+              Mark done
+            </button>
+          </div>
         </div>
       )}
     </aside>
@@ -418,5 +679,15 @@ function remindSelectValue(t: TodoItem): string {
   if (t.remind === 'every:30m' && t.priority === 'critical') return 'critical'
   if (t.remind === 'every:30m') return 'every:30m'
   if (t.remind === 'every:60m') return 'every:60m'
+  return 'off'
+}
+
+function vaultRemindSelectValue(t: VaultTask): string {
+  const remind = t.remind || 'off'
+  if (remind === 'off') return 'off'
+  if (remind.startsWith('once:')) return 'once-due'
+  if (remind === 'every:30m' && normalizePriority(t.priority) === 'critical') return 'critical'
+  if (remind === 'every:30m') return 'every:30m'
+  if (remind === 'every:60m') return 'every:60m'
   return 'off'
 }

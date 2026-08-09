@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { formatDueLabel, parseTodosMarkdown, sortTodos, type TodoItem } from './todosMarkdown'
 import { loadRecentNoteIds } from './recentNotes'
+import { isStandaloneTodosNote } from './systemNotes'
 
 export type HomeNote = {
   id: string
@@ -41,21 +42,27 @@ function formatWhen(value?: string): string {
   return d.toLocaleDateString([], { month: 'short', day: 'numeric' })
 }
 
+function visibleHomeNotes(all: HomeNote[], hiddenIds: Set<string>): HomeNote[] {
+  return all.filter((n) => !isStandaloneTodosNote(n.relativePath) && !hiddenIds.has(n.id))
+}
+
 async function fetchAllNotes(): Promise<HomeNote[]> {
   const res = await fetch('/api/notes', { credentials: 'same-origin' })
   if (!res.ok) return []
   return (await res.json()) as HomeNote[]
 }
 
+async function fetchTodosNoteId(): Promise<string | null> {
+  const byPath = await fetch('/api/notes/by-path?path=Todos.md', { credentials: 'same-origin' })
+  if (!byPath.ok) return null
+  const note = (await byPath.json()) as { id?: string }
+  return typeof note.id === 'string' ? note.id : null
+}
+
 async function fetchOpenTodos(): Promise<TodoItem[]> {
-  const list = await fetchAllNotes()
-  const existing = list.find(
-    (n) => n.relativePath === 'Todos.md' || n.relativePath.replace(/\\/g, '/') === 'Todos.md',
-  )
-  if (!existing) return []
-  const note = await fetch(`/api/notes/${existing.id}`, { credentials: 'same-origin' }).then((r) =>
-    r.json(),
-  )
+  const byPath = await fetch('/api/notes/by-path?path=Todos.md', { credentials: 'same-origin' })
+  if (!byPath.ok) return []
+  const note = await byPath.json()
   return sortTodos(parseTodosMarkdown(String(note.markdown ?? ''))).slice(0, 8)
 }
 
@@ -77,9 +84,15 @@ export function HomeLanding({
     setBusy(true)
     void (async () => {
       try {
-        const [all, openTodos] = await Promise.all([fetchAllNotes(), fetchOpenTodos()])
+        const [all, openTodos, todosId] = await Promise.all([
+          fetchAllNotes(),
+          fetchOpenTodos(),
+          fetchTodosNoteId(),
+        ])
         if (cancelled) return
-        setNotes(all.filter((n) => n.relativePath.replace(/\\/g, '/') !== 'Todos.md'))
+        const hiddenIds = new Set<string>()
+        if (todosId) hiddenIds.add(todosId)
+        setNotes(visibleHomeNotes(all, hiddenIds))
         setTodos(openTodos)
       } catch {
         if (!cancelled) {

@@ -919,8 +919,8 @@ export function NoteEditor({
         <button type="button" className={editor.isActive('orderedList') ? 'on' : ''} onClick={() => editor.chain().focus().toggleOrderedList().run()}>
           1.
         </button>
-        <button type="button" className={editor.isActive('taskList') ? 'on' : ''} onClick={() => editor.chain().focus().toggleTaskList().run()}>
-          Tasks
+        <button type="button" className={editor.isActive('taskList') ? 'on' : ''} onClick={() => editor.chain().focus().toggleTaskList().run()} title="Turn selection into a checklist todo (appears under Todos → From notes)">
+          Todo
         </button>
         <button
           type="button"

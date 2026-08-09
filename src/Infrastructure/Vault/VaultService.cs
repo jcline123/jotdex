@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using Jotdex.Core.Vault;
 using Microsoft.Extensions.Logging;
 
@@ -129,7 +130,8 @@ public sealed class VaultService : IVaultService
                         Tags = FrontMatterParser.ParseTags(fm.Fields),
                         Modified = FrontMatterParser.ParseDate(fm.Fields, "modified") ?? File.GetLastWriteTimeUtc(full),
                         Created = FrontMatterParser.ParseDate(fm.Fields, "created"),
-                        HasAttachments = noteAttachments.Count > 0
+                        HasAttachments = noteAttachments.Count > 0,
+                        Favorite = IsFavoriteField(fm.Fields)
                     },
                     full,
                     text,
@@ -197,7 +199,7 @@ public sealed class VaultService : IVaultService
         return BuildTree(s.Folders);
     }
 
-    public IReadOnlyList<NoteSummary> ListNotes(string? folderRelativePath)
+    public IReadOnlyList<NoteSummary> ListNotes(string? folderRelativePath, bool includeStandaloneTodosMd = false)
     {
         var s = Snapshot;
         var folder = (folderRelativePath ?? "").Replace('\\', '/').Trim('/');
@@ -207,8 +209,21 @@ public sealed class VaultService : IVaultService
                 ? true
                 : n.FolderPath.Equals(folder, StringComparison.OrdinalIgnoreCase) ||
                   n.FolderPath.StartsWith(folder + "/", StringComparison.OrdinalIgnoreCase))
-            .OrderBy(n => n.Title, StringComparer.OrdinalIgnoreCase)
+            .Where(n => includeStandaloneTodosMd || !IsStandaloneTodosNote(n.RelativePath))
+            .OrderByDescending(n => n.Favorite)
+            .ThenByDescending(n => n.Modified ?? n.Created ?? DateTimeOffset.MinValue)
+            .ThenBy(n => n.Title, StringComparer.OrdinalIgnoreCase)
             .ToList();
+    }
+
+    private static bool IsStandaloneTodosNote(string relativePath)
+    {
+        var rel = (relativePath ?? "").Replace('\\', '/').Trim('/');
+        if (rel.Equals("Todos.md", StringComparison.OrdinalIgnoreCase)) return true;
+        // Orphan duplicates from create-while-hidden race
+        if (Regex.IsMatch(rel, @"^Todos \(\d+\)\.md$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+            return true;
+        return false;
     }
 
     public NoteDetail? GetNote(Guid id)
@@ -233,6 +248,17 @@ public sealed class VaultService : IVaultService
             Attachments = note.Attachments,
             HtmlSidecars = note.Sidecars
         };
+    }
+
+    public NoteDetail? GetNoteByRelativePath(string relativePath)
+    {
+        var want = (relativePath ?? "").Replace('\\', '/').Trim('/');
+        if (string.IsNullOrEmpty(want)) return null;
+        var s = Snapshot;
+        var match = s.Notes.Values.FirstOrDefault(n =>
+            n.Summary.RelativePath.Replace('\\', '/').Trim('/')
+                .Equals(want, StringComparison.OrdinalIgnoreCase));
+        return match is null ? null : GetNote(match.Summary.Id);
     }
 
     private static string RewriteAssetUrls(string html, IReadOnlyList<AttachmentInfo> attachments)
@@ -343,6 +369,16 @@ public sealed class VaultService : IVaultService
         string ETag,
         IReadOnlyList<AttachmentInfo> Attachments,
         IReadOnlyList<HtmlSidecar> Sidecars);
+
+    private static bool IsFavoriteField(IReadOnlyDictionary<string, string?> fields)
+    {
+        if (!fields.TryGetValue("favorite", out var v) && !fields.TryGetValue("favourite", out v))
+            return false;
+        if (string.IsNullOrWhiteSpace(v)) return false;
+        return v.Equals("true", StringComparison.OrdinalIgnoreCase) ||
+               v.Equals("yes", StringComparison.OrdinalIgnoreCase) ||
+               v.Equals("1", StringComparison.OrdinalIgnoreCase);
+    }
 
     private sealed record IndexedAttachment(AttachmentInfo Info, string AbsolutePath);
 

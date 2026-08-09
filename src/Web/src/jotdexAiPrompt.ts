@@ -20,9 +20,17 @@ Return ONLY the note body as Markdown I can paste into Jotdex. Do not wrap the w
 ## Lists
 - Bullets: \`- item\`
 - Numbered: \`1. item\`
-- Checkboxes / tasks:
+- Checkboxes / tasks (open items appear in the Todos rail with a link back to this note):
   \`- [ ] todo\`
   \`- [x] done\`
+  Optional metadata: \`- [ ] Call vendor <!-- jotdex-task id="optional-uuid" due="2026-08-20T15:00:00.000Z" priority="high" remind="every:30m" -->\`
+  (priority: low|normal|high|critical; due is ISO-8601; remind: off | once:ISO | every:30m | every:60m). Metadata can also be set from the Todos rail.
+
+## Front matter (optional YAML)
+Jotdex may keep \`id\`, \`title\`, \`created\`, \`modified\`, \`tags\`. Favorite notes use:
+\`\`\`yaml
+favorite: true
+\`\`\`
 
 ## Code boxes (important)
 Use fenced blocks with a language tag. PowerShell is common for IT notes:

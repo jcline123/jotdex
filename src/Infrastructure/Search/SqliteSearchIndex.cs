@@ -82,6 +82,7 @@ public sealed class SqliteSearchIndex : ISearchIndex, IVaultRescanObserver, IDis
                 var detail = Vault.GetNote(summary.Id);
                 if (detail is null) continue;
                 var body = Jotdex.Infrastructure.Vault.FrontMatterParser.Parse(detail.Markdown).Body;
+                var attText = AttachmentTextExtractor.Extract(Vault, detail.Attachments);
                 var doc = NoteTextExtractor.FromIndexed(
                     detail.Id,
                     detail.Title,
@@ -91,7 +92,8 @@ public sealed class SqliteSearchIndex : ISearchIndex, IVaultRescanObserver, IDis
                     body,
                     detail.Attachments.Select(a => a.FileName),
                     detail.Modified,
-                    detail.Attachments.Count > 0);
+                    detail.Attachments.Count > 0,
+                    attText);
 
                 InsertDocument(tx, doc);
             }

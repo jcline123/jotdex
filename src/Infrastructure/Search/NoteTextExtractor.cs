@@ -56,12 +56,14 @@ public static partial class NoteTextExtractor
         string markdownBody,
         IEnumerable<string> attachmentNames,
         DateTimeOffset? modified,
-        bool hasAttachments)
+        bool hasAttachments,
+        string? attachmentText = null)
     {
         Extract(markdownBody, out var headings, out var body, out var code);
         var tagText = string.Join(' ', tags);
         var att = string.Join(' ', attachmentNames);
-        var combined = string.Join('\n', title, folderPath, tagText, headings, body, code, att);
+        var attBody = attachmentText ?? "";
+        var combined = string.Join('\n', title, folderPath, tagText, headings, body, code, att, attBody);
         return new NoteSearchDocument
         {
             NoteId = id,
@@ -70,7 +72,7 @@ public static partial class NoteTextExtractor
             FolderPath = folderPath,
             Tags = tagText,
             Headings = headings,
-            Body = body,
+            Body = string.IsNullOrEmpty(attBody) ? body : body + "\n" + attBody,
             Code = code,
             AttachmentNames = att,
             CombinedLiteral = combined,

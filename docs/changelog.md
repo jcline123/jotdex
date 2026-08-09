@@ -7,7 +7,44 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 
 ---
 
-## 2026-08-08 — Mobile login MFA + settings scroll (`v1.1.1`)
+## 2026-08-09 — v1.1.2 (trash, note todos, capture, home hide)
+
+**Ship trash browser, vault task rail edits, capture, and home/list hygiene**
+- Portable release bumps to **1.1.2**. Trash is opened from the notes header (removed from the always-on mobile tab bar). Standalone `Todos.md` stays out of notes/home lists via `/api/notes/by-path`. From-notes todos support priority/due/remind; rail refreshes after note trash.
+
+---
+
+## 2026-08-09 — Note-task edit + trash sync
+
+**Deleting a note left stale “From notes” todos**
+- Todos rail reloads when notes are trashed/restored/saved (`refreshKey`).
+
+**Could not set priority/due on checklist todos from the rail**
+- `POST /api/tasks/update` writes `<!-- jotdex-task … -->` metadata into the source note; rail edit panel matches standalone todos (priority, due, remind, title).
+
+---
+
+## 2026-08-09 — Trash close, Todos rail scroll, hide Todos.md
+
+**Standalone Todos rail went empty after hiding Todos.md**
+- `/api/notes` no longer lists `Todos.md`, so the rail’s list lookup created/loaded the wrong note. Lookup is now `GET /api/notes/by-path?path=Todos.md`.
+
+**Trash rail would not leave after Collapse**
+- Opening trash also set `mobilePane` to `trash`, so clearing `showTrash` alone left the pane mounted. Close now clears both and uses a labeled Close control.
+
+**“From notes” sat on top of vault tasks**
+- Two `.todos-list` flex children each tried to grow; one scroll region now wraps standalone + from-notes sections.
+
+**Todos.md appeared in the date-sorted notes list**
+- Standalone `Todos.md` is filtered from `/api/notes` (and the client list) because the Todos rail is the UI for that file.
+
+**Notes title bled under the collapse control**
+- Rail-head title truncates in flex before the button instead of painting underneath it.
+
+**Roadmap slice after Dev Startup fix**
+- Trash browser (list/restore/as-copy/delete); notes sorted newest-first with favorites; vault-wide open `- [ ]` tasks in Todos with note links; `/capture` + `/api/clip` bookmarklet; history Compare diff; FTS indexes text attachment contents (txt/log/json/csv/html sidecars).
+
+---
 
 **Phone login showed password but clipped the authenticator field (overflow:hidden + keyboard)**
 - Auth stage scrolls; MFA is a second step after password (field swaps, not both at once). Settings modal uses a single scroll pane with a fixed height so tabs don’t fight Safari.

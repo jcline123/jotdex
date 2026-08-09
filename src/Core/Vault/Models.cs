@@ -28,6 +28,7 @@ public sealed class NoteSummary
     public DateTimeOffset? Modified { get; init; }
     public DateTimeOffset? Created { get; init; }
     public bool HasAttachments { get; init; }
+    public bool Favorite { get; init; }
 }
 
 public sealed class NoteDetail
@@ -81,8 +82,9 @@ public interface IVaultService
 {
     VaultInfo GetInfo();
     FolderNode GetTree();
-    IReadOnlyList<NoteSummary> ListNotes(string? folderRelativePath);
+    IReadOnlyList<NoteSummary> ListNotes(string? folderRelativePath, bool includeStandaloneTodosMd = false);
     NoteDetail? GetNote(Guid id);
+    NoteDetail? GetNoteByRelativePath(string relativePath);
     AttachmentInfo? GetAttachment(string attachmentId);
     Stream OpenAttachmentStream(string attachmentId);
     void Rescan();

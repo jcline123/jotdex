@@ -3,9 +3,11 @@ import { createPortal } from 'react-dom'
 import DOMPurify from 'dompurify'
 import './App.css'
 import { NoteEditor, type NoteCatalogItem } from './NoteEditor'
-import { joinFrontMatter, sameMarkdown, splitFrontMatter } from './frontMatter'
+import { joinFrontMatter, sameMarkdown, setFavoriteInMarkdown, splitFrontMatter } from './frontMatter'
 import { looksUnsafeForVisual } from './unsafeMarkdown'
+import { CaptureScreen } from './CaptureScreen'
 import { FirstRunWizard, LoginScreen } from './AuthScreens'
+import { TrashPane } from './TrashPane'
 import { extractOutline } from './outline'
 import {
   NOTE_TEMPLATES,
@@ -21,6 +23,8 @@ import { TodosRail } from './TodosRail'
 import { getNotificationPermission, promptTodoNotifications, type NotifyPermission } from './todoReminders'
 import { HomeLanding } from './HomeLanding'
 import { rememberViewedNote } from './recentNotes'
+import { isStandaloneTodosNote } from './systemNotes'
+import { diffLines } from './diffLines'
 
 
 function countRemoteImages(markdown: string): number {
@@ -46,6 +50,7 @@ type NoteSummary = {
   modified?: string
   created?: string
   hasAttachments: boolean
+  favorite?: boolean
 }
 
 type NoteDetail = {
@@ -185,6 +190,10 @@ function App() {
     { snapshotId: string; createdUtc: string; summary?: string; preview?: string; sizeBytes?: number }[]
   >([])
   const [historyOpen, setHistoryOpen] = useState(false)
+  const [historyDiff, setHistoryDiff] = useState<{
+    snapshotId: string
+    lines: { type: 'same' | 'add' | 'del'; text: string }[]
+  } | null>(null)
   const saveTimer = useRef<number | null>(null)
   const [conflictDisk, setConflictDisk] = useState<NoteDetail | null>(null)
   const [sourceForced, setSourceForced] = useState<string | null>(null)
@@ -227,7 +236,10 @@ function App() {
   const [templateMenu, setTemplateMenu] = useState(false)
   const [templateMenuPos, setTemplateMenuPos] = useState<{ top: number; left: number } | null>(null)
   const templateBtnRef = useRef<HTMLButtonElement>(null)
-  const [mobilePane, setMobilePane] = useState<'folders' | 'notes' | 'editor' | 'todos'>('editor')
+  const [mobilePane, setMobilePane] = useState<'folders' | 'notes' | 'editor' | 'todos' | 'trash'>('editor')
+  const [showTrash, setShowTrash] = useState(false)
+  const [tasksRefreshKey, setTasksRefreshKey] = useState(0)
+  const bumpTasksRefresh = useCallback(() => setTasksRefreshKey((k) => k + 1), [])
   const [todosCollapsed, setTodosCollapsed] = useState(() => {
     try {
       return localStorage.getItem('jotdex.todosCollapsed') === '1'
@@ -261,6 +273,13 @@ function App() {
   const popoutNoteId = useMemo(() => {
     try {
       return new URLSearchParams(window.location.search).get('popout')
+    } catch {
+      return null
+    }
+  }, [])
+  const deepLinkNoteId = useMemo(() => {
+    try {
+      return new URLSearchParams(window.location.search).get('note')
     } catch {
       return null
     }
@@ -412,7 +431,7 @@ function App() {
     fetch(`/api/notes${q}`)
       .then((r) => r.json())
       .then((data: NoteSummary[]) => {
-        setNotes(data)
+        setNotes(data.filter((n) => !isStandaloneTodosNote(n.relativePath)))
       })
       .catch((e: Error) => setError(e.message))
   }, [folder, vault])
@@ -422,13 +441,13 @@ function App() {
       setNote(null)
       return
     }
-    rememberViewedNote(selectedId)
     fetch(`/api/notes/${selectedId}`)
       .then(async (r) => {
         if (!r.ok) throw new Error(`Note ${r.status}`)
         return r.json() as Promise<NoteDetail>
       })
       .then((n) => {
+        if (!isStandaloneTodosNote(n.relativePath)) rememberViewedNote(selectedId)
         setNote(n)
         const split = splitFrontMatter(n.markdown)
         setFrontMatter(split.frontMatter)
@@ -578,6 +597,7 @@ function App() {
         setSaveStatus('saved')
         setConflictDisk(null)
         setError(null)
+        setTasksRefreshKey((k) => k + 1)
 
         // If the user typed something meaningfully different while we saved,
         // let the normal debounce pick it up — do not chain rapid saves here.
@@ -631,6 +651,20 @@ function App() {
       if (saveTimer.current) window.clearTimeout(saveTimer.current)
     }
   }, [draft, note, frontMatter, saveNote])
+
+  async function toggleFavorite() {
+    if (!note || !selectedId) return
+    const full = joinFrontMatter(frontMatterRef.current, draftRef.current)
+    const nextFav = !/favorite\s*:\s*(true|yes|1)/i.test(frontMatterRef.current)
+    const next = setFavoriteInMarkdown(full, nextFav)
+    const { frontMatter: fm, body } = splitFrontMatter(next)
+    frontMatterRef.current = fm
+    setFrontMatter(fm)
+    setDraft(body)
+    draftRef.current = body
+    await saveNote(body, etagRef.current, true)
+    void loadVault()
+  }
 
   // Flush pending edits when the window/tab closes or hides (pop-out and main).
   // keepalive lets the PUT finish after the window is gone (Chrome + Safari).
@@ -707,6 +741,12 @@ function App() {
     setBacklinksOpen(false)
     setBacklinks([])
   }, [selectedId])
+
+  useEffect(() => {
+    if (!deepLinkNoteId) return
+    setSelectedId(deepLinkNoteId)
+    setMobilePane('editor')
+  }, [deepLinkNoteId])
 
   useEffect(() => {
     if (!popoutNoteId) return
@@ -870,6 +910,14 @@ function App() {
     draftRef.current = next
     setEditorEpoch((e) => e + 1)
     setSaveStatus('editing')
+  }
+
+  async function compareSnapshot(snapshotId: string) {
+    if (!selectedId || !note) return
+    const snap = await fetch(`/api/notes/${selectedId}/history/${snapshotId}`).then((r) => r.json())
+    const oldMd = (snap.markdown as string) ?? ''
+    const current = joinFrontMatter(frontMatterRef.current, draftRef.current)
+    setHistoryDiff({ snapshotId, lines: diffLines(oldMd, current) })
   }
 
   async function restoreSnapshot(snapshotId: string) {
@@ -1430,7 +1478,8 @@ function App() {
     await loadVault()
     const q = folder ? `?folder=${encodeURIComponent(folder)}` : ''
     const list = (await fetch(`/api/notes${q}`).then((r) => r.json())) as NoteSummary[]
-    setNotes(list)
+    setNotes(list.filter((n) => !isStandaloneTodosNote(n.relativePath)))
+    bumpTasksRefresh()
   }
 
   async function renameNote() {
@@ -1627,6 +1676,17 @@ function App() {
       <LoginScreen
         onLoggedIn={() => {
           void loadAuth().then(() => loadVault())
+        }}
+      />
+    )
+  }
+
+  const pathOnly = typeof window !== 'undefined' ? window.location.pathname.replace(/\/+$/, '') || '/' : '/'
+  if (pathOnly === '/capture') {
+    return (
+      <CaptureScreen
+        onOpenNote={(id) => {
+          window.location.href = `/?note=${encodeURIComponent(id)}`
         }}
       />
     )
@@ -3107,7 +3167,18 @@ function App() {
                 Move
               </button>
               <button type="button" className="ghost" disabled={!folder} onClick={() => void deleteFolder()}>
-                Trash
+                Trash folder
+              </button>
+              <button
+                type="button"
+                className="ghost"
+                onClick={() => {
+                  setShowTrash(true)
+                  setNotesCollapsed(false)
+                  setMobilePane('trash')
+                }}
+              >
+                Open trash
               </button>
             </div>
             {tree && (
@@ -3120,6 +3191,7 @@ function App() {
                 onSelect={(p) => {
                   setFolder(p)
                   setSelectedId(null)
+                  setShowTrash(false)
                   setMobilePane('notes')
                 }}
               />
@@ -3127,7 +3199,19 @@ function App() {
           </aside>
         )}
 
-        {notesCollapsed && !narrowLayout ? (
+        {showTrash || mobilePane === 'trash' ? (
+          <TrashPane
+            fill={narrowLayout && mobilePane === 'trash'}
+            onRestored={() => {
+              void loadVault()
+              bumpTasksRefresh()
+            }}
+            onCollapse={() => {
+              setShowTrash(false)
+              setMobilePane('notes')
+            }}
+          />
+        ) : notesCollapsed && !narrowLayout ? (
           <section className="pane middle pane-rail-collapsed">
             <button
               type="button"
@@ -3167,6 +3251,17 @@ function App() {
                 </button>
               </div>
               <div className="pane-tools">
+                <button
+                  type="button"
+                  className="ghost"
+                  title="Show trash"
+                  onClick={() => {
+                    setShowTrash(true)
+                    setMobilePane('trash')
+                  }}
+                >
+                  Trash
+                </button>
                 <div className="template-wrap">
                   <button type="button" className="ghost" onClick={() => void createNote()}>
                     New note
@@ -3218,7 +3313,10 @@ function App() {
                       setMobilePane('editor')
                     }}
                   >
-                    <span className="note-title">{n.title}</span>
+                    <span className="note-title">
+                      {n.favorite ? <span className="fav-star" aria-hidden>★ </span> : null}
+                      {n.title}
+                    </span>
                     <span className="note-path">{n.folderPath || '/'}</span>
                   </button>
                 </li>
@@ -3238,6 +3336,21 @@ function App() {
                 </button>
                 <button type="button" className="ghost" onClick={overwriteDisk}>
                   Overwrite disk
+                </button>
+                <button
+                  type="button"
+                  className="ghost"
+                  onClick={() => {
+                    if (!conflictDisk) return
+                    const current = joinFrontMatter(frontMatterRef.current, draftRef.current)
+                    setHistoryDiff({
+                      snapshotId: 'conflict',
+                      lines: diffLines(conflictDisk.markdown, current),
+                    })
+                    setHistoryOpen(true)
+                  }}
+                >
+                  Compare
                 </button>
                 <button type="button" className="ghost" onClick={() => { setSaveStatus('editing'); setError(null) }}>
                   Keep editing
@@ -3287,6 +3400,14 @@ function App() {
                 </div>
                 <div className="actions">
                   <span className={`save-chip ${saveStatus}`}>{saveStatus}</span>
+                  <button
+                    type="button"
+                    className="ghost"
+                    title={/favorite\s*:\s*(true|yes|1)/i.test(frontMatter) ? 'Remove favorite' : 'Favorite'}
+                    onClick={() => void toggleFavorite()}
+                  >
+                    {/favorite\s*:\s*(true|yes|1)/i.test(frontMatter) ? '★ Favorited' : '☆ Favorite'}
+                  </button>
                   <button
                     type="button"
                     className="ghost"
@@ -3488,12 +3609,33 @@ function App() {
                             {h.summary && <span className="history-summary">{h.summary}</span>}
                             {h.preview && <span className="history-preview">{h.preview}</span>}
                           </div>
+                          <button type="button" className="ghost" onClick={() => void compareSnapshot(h.snapshotId)}>
+                            Compare
+                          </button>
                           <button type="button" className="ghost" onClick={() => void restoreSnapshot(h.snapshotId)}>
                             Restore
                           </button>
                         </li>
                       ))}
                     </ul>
+                  )}
+                  {historyDiff && (
+                    <div className="history-diff">
+                      <div className="history-diff-head">
+                        <strong>Compare to current</strong>
+                        <button type="button" className="ghost" onClick={() => setHistoryDiff(null)}>
+                          Close
+                        </button>
+                      </div>
+                      <pre className="history-diff-body">
+                        {historyDiff.lines.map((line, i) => (
+                          <div key={i} className={`diff-line diff-${line.type}`}>
+                            {line.type === 'add' ? '+ ' : line.type === 'del' ? '- ' : '  '}
+                            {line.text}
+                          </div>
+                        ))}
+                      </pre>
+                    </div>
                   )}
                 </div>
               )}
@@ -3504,6 +3646,36 @@ function App() {
         <TodosRail
           fill={mobilePane === 'todos'}
           collapsed={mobilePane === 'todos' ? false : todosCollapsed}
+          refreshKey={tasksRefreshKey}
+          onNoteTasksChanged={(noteId) => {
+            if (selectedId !== noteId) return
+            const pending = joinFrontMatter(frontMatterRef.current, draftRef.current)
+            if (!sameMarkdown(pending, baselineRef.current)) return
+            void fetch(`/api/notes/${noteId}`, { credentials: 'same-origin' })
+              .then(async (r) => {
+                if (!r.ok) return
+                return r.json() as Promise<NoteDetail>
+              })
+              .then((n) => {
+                if (!n) return
+                setNote(n)
+                const split = splitFrontMatter(n.markdown)
+                setFrontMatter(split.frontMatter)
+                setDraft(split.body)
+                setEtag(n.etag)
+                etagRef.current = n.etag
+                draftRef.current = split.body
+                frontMatterRef.current = split.frontMatter
+                baselineRef.current = joinFrontMatter(split.frontMatter, split.body)
+              })
+              .catch(() => {
+                /* ignore */
+              })
+          }}
+          onOpenNote={(id) => {
+            setSelectedId(id)
+            setMobilePane('editor')
+          }}
           onToggleCollapsed={() => {
             setTodosCollapsed((c) => {
               const next = !c
@@ -3528,8 +3700,11 @@ function App() {
         </button>
         <button
           type="button"
-          className={mobilePane === 'notes' ? 'on' : ''}
-          onClick={() => setMobilePane('notes')}
+          className={mobilePane === 'notes' || mobilePane === 'trash' ? 'on' : ''}
+          onClick={() => {
+            setShowTrash(false)
+            setMobilePane('notes')
+          }}
         >
           Notes
         </button>

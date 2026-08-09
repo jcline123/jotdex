@@ -123,6 +123,7 @@ builder.Services.AddSingleton<ISearchIndex>(sp => sp.GetRequiredService<SqliteSe
 builder.Services.AddSingleton<IVaultRescanObserver>(sp => sp.GetRequiredService<SqliteSearchIndex>());
 builder.Services.AddSingleton<INoteHistoryService, NoteHistoryService>();
 builder.Services.AddSingleton<INoteCommandService, NoteCommandService>();
+builder.Services.AddSingleton<IVaultTaskService, VaultTaskService>();
 builder.Services.AddSingleton<IFolderCommandService, FolderCommandService>();
 builder.Services.AddSingleton<SafeRemoteImageClient>();
 builder.Services.AddSingleton<IImageLocalizer, ImageLocalizer>();
@@ -131,6 +132,7 @@ builder.Services.AddSingleton<IStaticExportService, StaticExportService>();
 builder.Services.AddSingleton<INoteShareExportService, NoteShareExportService>();
 builder.Services.AddSingleton<IIntegrityScanService, IntegrityScanService>();
 builder.Services.AddSingleton<IMaintenanceService, MaintenanceService>();
+builder.Services.AddSingleton<ITrashBrowserService, TrashBrowserService>();
 builder.Services.AddSingleton<IFirewallLanService, FirewallLanService>();
 builder.Services.AddSingleton<IBackupBundleService, BackupBundleService>();
 builder.Services.AddSingleton<IMoveKitService, MoveKitService>();
@@ -251,6 +253,14 @@ app.MapGet("/api/notes", (IVaultService vault, IVaultPathGuard paths, string? fo
     return Results.Json(vault.ListNotes(folder));
 });
 
+app.MapGet("/api/notes/by-path", (IVaultService vault, IVaultPathGuard paths, string? path) =>
+{
+    if (!paths.IsConfigured) return Results.NotFound(new { error = "Vault not configured" });
+    if (string.IsNullOrWhiteSpace(path)) return Results.BadRequest(new { error = "path required" });
+    var note = vault.GetNoteByRelativePath(path);
+    return note is null ? Results.NotFound() : Results.Json(note);
+});
+
 app.MapGet("/api/notes/index", (INoteLinkService links, IVaultPathGuard paths) =>
 {
     if (!paths.IsConfigured) return Results.NotFound(new { error = "Vault not configured" });
@@ -355,20 +365,95 @@ app.MapGet("/api/admin/logs", (FileLoggerProvider logs, int? lines) =>
     });
 });
 
-app.MapGet("/api/admin/autostart", () =>
+app.MapGet("/api/admin/autostart", (IHostEnvironment env) =>
 {
-    var info = AutostartHelper.GetStatus();
+    var info = AutostartHelper.GetStatus(env.ContentRootPath);
     return Results.Json(info);
 });
 
-app.MapPost("/api/admin/autostart", async (HttpRequest request) =>
+app.MapPost("/api/admin/autostart", async (HttpRequest request, IHostEnvironment env) =>
 {
     var body = await request.ReadFromJsonAsync<AutostartBody>();
     var enable = body?.Enabled ?? true;
-    var (ok, error, status) = AutostartHelper.SetUserStartupShortcut(enable);
+    var (ok, error, status) = AutostartHelper.SetUserStartupShortcut(enable, env.ContentRootPath);
     return ok
         ? Results.Json(new { success = true, status })
         : Results.BadRequest(new { success = false, error });
+});
+
+app.MapPost("/api/clip", async (HttpRequest request, INoteCommandService commands) =>
+{
+    var body = await request.ReadFromJsonAsync<ClipBody>();
+    if (body is null) return Results.BadRequest(new { error = "Invalid body" });
+
+    var text = body.Text ?? body.Markdown ?? "";
+    if (string.IsNullOrWhiteSpace(text) && string.IsNullOrWhiteSpace(body.Html))
+        return Results.BadRequest(new { error = "text or html required" });
+
+    var title = string.IsNullOrWhiteSpace(body.Title)
+        ? $"Capture {DateTime.Now:yyyy-MM-dd HH:mm}"
+        : body.Title.Trim();
+
+    var sb = new StringBuilder();
+    sb.Append("# ").Append(title).AppendLine().AppendLine();
+    if (!string.IsNullOrWhiteSpace(body.SourceUrl))
+        sb.Append("> Source: ").Append(body.SourceUrl.Trim()).AppendLine().AppendLine();
+    if (!string.IsNullOrWhiteSpace(text))
+        sb.AppendLine(text.Trim());
+    if (!string.IsNullOrWhiteSpace(body.Html))
+    {
+        sb.AppendLine().AppendLine("<details><summary>Clipped HTML</summary>").AppendLine();
+        sb.AppendLine("```html");
+        sb.AppendLine(body.Html.Trim());
+        sb.AppendLine("```");
+        sb.AppendLine("</details>");
+    }
+
+    var note = commands.Create("Inbox", title, sb.ToString());
+    if (note is null) return Results.BadRequest(new { error = "Could not create Inbox note" });
+    return Results.Json(new { success = true, noteId = note.Id, relativePath = note.RelativePath });
+});
+
+app.MapGet("/api/tasks", (IVaultTaskService tasks) => Results.Json(new { items = tasks.ListOpenTasks() }));
+
+app.MapPost("/api/tasks/complete", async (HttpRequest request, IVaultTaskService tasks) =>
+{
+    var body = await request.ReadFromJsonAsync<TrashIdBody>();
+    if (string.IsNullOrWhiteSpace(body?.Id)) return Results.BadRequest(new { error = "id required" });
+    var result = tasks.Complete(body.Id);
+    return result.Success ? Results.Json(result) : Results.BadRequest(result);
+});
+
+app.MapPost("/api/tasks/update", async (HttpRequest request, IVaultTaskService tasks) =>
+{
+    var body = await request.ReadFromJsonAsync<TaskUpdateBody>();
+    if (string.IsNullOrWhiteSpace(body?.Id)) return Results.BadRequest(new { error = "id required" });
+    var result = tasks.Update(body.Id, new VaultTaskUpdate
+    {
+        Text = body.Text,
+        Priority = body.Priority,
+        Due = body.Due,
+        Remind = body.Remind
+    });
+    return result.Success ? Results.Json(result) : Results.BadRequest(result);
+});
+
+app.MapGet("/api/trash", (ITrashBrowserService trash) => Results.Json(new { items = trash.List() }));
+
+app.MapPost("/api/trash/restore", async (HttpRequest request, ITrashBrowserService trash) =>
+{
+    var body = await request.ReadFromJsonAsync<TrashRestoreBody>();
+    if (body?.Id is null) return Results.BadRequest(new { error = "id required" });
+    var result = trash.Restore(body.Id, body.AsCopy);
+    return result.Success ? Results.Json(result) : Results.BadRequest(result);
+});
+
+app.MapPost("/api/trash/delete", async (HttpRequest request, ITrashBrowserService trash) =>
+{
+    var body = await request.ReadFromJsonAsync<TrashIdBody>();
+    if (body?.Id is null) return Results.BadRequest(new { error = "id required" });
+    var result = trash.DeletePermanent(body.Id);
+    return result.Success ? Results.Json(result) : Results.BadRequest(result);
 });
 
 app.MapPost("/api/admin/trash/empty", (IMaintenanceService maintenance, HttpRequest request) =>
@@ -718,6 +803,35 @@ internal sealed class VaultSettingsBody
 internal sealed class AutostartBody
 {
     public bool Enabled { get; set; } = true;
+}
+
+internal sealed class TrashRestoreBody
+{
+    public string? Id { get; set; }
+    public bool AsCopy { get; set; }
+}
+
+internal sealed class TrashIdBody
+{
+    public string? Id { get; set; }
+}
+
+internal sealed class TaskUpdateBody
+{
+    public string? Id { get; set; }
+    public string? Text { get; set; }
+    public string? Priority { get; set; }
+    public string? Due { get; set; }
+    public string? Remind { get; set; }
+}
+
+internal sealed class ClipBody
+{
+    public string? Title { get; set; }
+    public string? Text { get; set; }
+    public string? Markdown { get; set; }
+    public string? Html { get; set; }
+    public string? SourceUrl { get; set; }
 }
 
 internal sealed class MoveKitBody

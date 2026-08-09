@@ -20,6 +20,39 @@ export function joinFrontMatter(frontMatter: string, body: string): string {
   return `${frontMatter}\n\n${b}`
 }
 
+/** Set or clear `favorite: true` in YAML front matter (creates a minimal FM block if needed). */
+export function setFavoriteInMarkdown(markdown: string, favorite: boolean): string {
+  const { frontMatter, body } = splitFrontMatter(markdown)
+  if (!frontMatter) {
+    if (!favorite) return markdown
+    return `---\nfavorite: true\n---\n\n${markdown.replace(/^\r?\n/, '')}`
+  }
+  const lines = frontMatter.split(/\r?\n/)
+  const out: string[] = []
+  let saw = false
+  for (const line of lines) {
+    if (/^favorite\s*:/i.test(line) || /^favourite\s*:/i.test(line)) {
+      saw = true
+      if (favorite) out.push('favorite: true')
+      continue
+    }
+    out.push(line)
+  }
+  if (favorite && !saw) {
+    // insert before closing ---
+    const close = out.findIndex((l, i) => i > 0 && l.trim() === '---')
+    if (close > 0) out.splice(close, 0, 'favorite: true')
+    else out.push('favorite: true')
+  }
+  return joinFrontMatter(out.join('\n'), body)
+}
+
+export function isFavoriteFrontMatter(markdown: string): boolean {
+  const { frontMatter } = splitFrontMatter(markdown)
+  return /^favorite\s*:\s*(true|yes|1)\s*$/im.test(frontMatter) ||
+    /^favourite\s*:\s*(true|yes|1)\s*$/im.test(frontMatter)
+}
+
 /** Compare docs ignoring TipTap/Markdown cosmetic differences (newlines, trailing space). */
 export function normalizeMarkdown(markdown: string): string {
   return markdown
