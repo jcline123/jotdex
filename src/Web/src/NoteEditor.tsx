@@ -21,6 +21,7 @@ import { Color } from '@tiptap/extension-color'
 import { CodeBlockView } from './CodeBlockView'
 import { ImageView } from './ImageView'
 import { applyHeadingToSelection } from './headingSelection'
+import { normalizeBlockSelection } from './selectionUtils'
 import { Callout, type CalloutType } from './callout'
 import { HeadingFold } from './headingFold'
 import { WikiLinkSuggest, type WikiSuggestState } from './wikiLinkSuggest'
@@ -850,7 +851,16 @@ export function NoteEditor({
           </button>
         </div>
       <div className="editor-chrome-inner">
-      <div className="editor-toolbar" role="toolbar" aria-label="Formatting">
+      <div
+        className="editor-toolbar"
+        role="toolbar"
+        aria-label="Formatting"
+        onMouseDown={(e) => {
+          // Keep the editor selection intact while clicking toolbar buttons
+          // (selects still need focus for their dropdowns).
+          if ((e.target as HTMLElement).closest('button')) e.preventDefault()
+        }}
+      >
         <button
           type="button"
           className={`ghost chrome-pin-btn toolbar-chrome-pin${chromePinned ? ' on' : ''}`}
@@ -900,13 +910,34 @@ export function NoteEditor({
           H3
         </button>
         <span className="sep" />
-        <button type="button" className={editor.isActive('bold') ? 'on' : ''} onClick={() => editor.chain().focus().toggleBold().run()}>
+        <button
+          type="button"
+          className={editor.isActive('bold') ? 'on' : ''}
+          onClick={() => {
+            normalizeBlockSelection(editor)
+            editor.chain().focus().toggleBold().run()
+          }}
+        >
           Bold
         </button>
-        <button type="button" className={editor.isActive('italic') ? 'on' : ''} onClick={() => editor.chain().focus().toggleItalic().run()}>
+        <button
+          type="button"
+          className={editor.isActive('italic') ? 'on' : ''}
+          onClick={() => {
+            normalizeBlockSelection(editor)
+            editor.chain().focus().toggleItalic().run()
+          }}
+        >
           Italic
         </button>
-        <button type="button" className={editor.isActive('code') ? 'on' : ''} onClick={() => editor.chain().focus().toggleCode().run()}>
+        <button
+          type="button"
+          className={editor.isActive('code') ? 'on' : ''}
+          onClick={() => {
+            normalizeBlockSelection(editor)
+            editor.chain().focus().toggleCode().run()
+          }}
+        >
           Code
         </button>
         <label className="toolbar-select" title="Text color for the selection">
@@ -916,6 +947,7 @@ export function NoteEditor({
             value={editor.getAttributes('textStyle').color ?? ''}
             onChange={(e) => {
               const v = e.target.value
+              normalizeBlockSelection(editor)
               if (!v) editor.chain().focus().unsetColor().run()
               else editor.chain().focus().setColor(v).run()
             }}
@@ -934,6 +966,7 @@ export function NoteEditor({
             value={editor.getAttributes('textStyle').fontSize ?? ''}
             onChange={(e) => {
               const v = e.target.value
+              normalizeBlockSelection(editor)
               if (!v || v === '1em') {
                 editor.chain().focus().unsetMark('textStyle').run()
               } else {
@@ -949,20 +982,45 @@ export function NoteEditor({
           </select>
         </label>
         <span className="sep" />
-        <button type="button" className={editor.isActive('bulletList') ? 'on' : ''} onClick={() => editor.chain().focus().toggleBulletList().run()}>
+        <button
+          type="button"
+          className={editor.isActive('bulletList') ? 'on' : ''}
+          onClick={() => {
+            normalizeBlockSelection(editor)
+            editor.chain().focus().toggleBulletList().run()
+          }}
+        >
           List
         </button>
-        <button type="button" className={editor.isActive('orderedList') ? 'on' : ''} onClick={() => editor.chain().focus().toggleOrderedList().run()}>
+        <button
+          type="button"
+          className={editor.isActive('orderedList') ? 'on' : ''}
+          onClick={() => {
+            normalizeBlockSelection(editor)
+            editor.chain().focus().toggleOrderedList().run()
+          }}
+        >
           1.
         </button>
-        <button type="button" className={editor.isActive('taskList') ? 'on' : ''} onClick={() => editor.chain().focus().toggleTaskList().run()} title="Turn selection into a checklist todo (appears under Todos → From notes)">
+        <button
+          type="button"
+          className={editor.isActive('taskList') ? 'on' : ''}
+          onClick={() => {
+            normalizeBlockSelection(editor)
+            editor.chain().focus().toggleTaskList().run()
+          }}
+          title="Turn selection into a checklist todo (appears under Todos → From notes)"
+        >
           Todo
         </button>
         <button
           type="button"
           className={editor.isActive('codeBlock') ? 'on' : ''}
           title="Insert a code box (PowerShell, shell, etc.)"
-          onClick={() => editor.chain().focus().toggleCodeBlock({ language: 'powershell' }).run()}
+          onClick={() => {
+            normalizeBlockSelection(editor)
+            editor.chain().focus().toggleCodeBlock({ language: 'powershell' }).run()
+          }}
         >
           Code box
         </button>

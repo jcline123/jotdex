@@ -1,11 +1,16 @@
 # Jotdex STATUS
 
-**Active milestone:** Post-1.1.6 polish  
+**Active milestone:** Post-1.1.7 polish  
 **Last updated:** 2026-08-10
 
 ## In progress
 
 - (none)
+
+## Highlights (v1.1.7)
+
+- Toolbar formatting only affects selected text (trims invisible selection overhang into neighbouring blocks)
+- Heading on a full line toggles the block instead of splitting (no leftover empty paragraphs)
 
 ## Highlights (v1.1.6)
 

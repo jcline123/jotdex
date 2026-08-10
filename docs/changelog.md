@@ -7,6 +7,18 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 
 ---
 
+## 2026-08-10 — Formatting applies to what you selected (1.1.7)
+
+**Portable release 1.1.7**
+- Tag `v1.1.7` — selection-accurate toolbar formatting.
+
+**Toolbar formatting sometimes hit neighbouring text or left empty lines**
+- Triple-click/drag selections silently extend to the start of the next block, so Todo/List/heading converted paragraphs the user never selected. All block and mark commands now trim that overhang first (`selectionUtils.normalizeBlockSelection`).
+- Heading-on-selection no longer splits when the selection covers the whole line (the split left empty paragraphs = "space above"); selection whitespace is trimmed before splitting.
+- Toolbar buttons preventDefault on mousedown so clicking them can't disturb the selection.
+
+---
+
 ## 2026-08-10 — Idle lock always shows lock screen (1.1.6)
 
 **Portable release 1.1.6**
