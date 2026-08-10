@@ -7,6 +7,20 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 
 ---
 
+## 2026-08-10 — Collapsed rails + inline rename (1.1.5)
+
+**Portable release 1.1.5**
+- Tag `v1.1.5` — collapsed rail Add note / folder label, inline note title rename.
+
+**Note title is now click-to-rename**
+- Clicking the title in the note header edits it inline (Enter/blur saves, Escape cancels); uses the same rename/move API as the Rename button, which stays.
+
+**Collapsed folders/notes rails felt empty**
+- Folders rail shows the selected folder name (short label) toward the top; Notes rail has a compact **Add note** action that opens a modal with a folder dropdown (defaults to the current folder, still changeable). Creating from the collapsed rail leaves the list collapsed.
+- Collapsed rail labels share Folders/Notes type; hover soft-highlights the whole rail (Add note gets an extra full-width press cue).
+
+---
+
 ## 2026-08-09 — Clip page + Capture polish (1.1.4)
 
 **Portable release 1.1.4**

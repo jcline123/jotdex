@@ -1,11 +1,16 @@
 # Jotdex STATUS
 
-**Active milestone:** Post-1.1.4 polish  
-**Last updated:** 2026-08-09
+**Active milestone:** Post-1.1.5 polish  
+**Last updated:** 2026-08-10
 
 ## In progress
 
 - (none)
+
+## Highlights (v1.1.5)
+
+- Collapsed folders/notes rails: selected folder label, Add note with folder picker (rail stays collapsed)
+- Click note title in the editor header to rename inline
 
 ## Highlights (v1.1.4)
 

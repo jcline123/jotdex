@@ -6,6 +6,7 @@ import { NoteEditor, type NoteCatalogItem } from './NoteEditor'
 import { joinFrontMatter, sameMarkdown, setFavoriteInMarkdown, splitFrontMatter } from './frontMatter'
 import { looksUnsafeForVisual } from './unsafeMarkdown'
 import { ClipSaveModal } from './ClipSaveModal'
+import { NewNoteModal, folderRailShortLabel } from './NewNoteModal'
 import {
   buildClipBookmarklet,
   loadClipDefaultFolder,
@@ -268,6 +269,9 @@ function App() {
       return false
     }
   })
+  const [newNoteModalOpen, setNewNoteModalOpen] = useState(false)
+  const [titleEditing, setTitleEditing] = useState(false)
+  const [titleDraft, setTitleDraft] = useState('')
   const [narrowLayout, setNarrowLayout] = useState(() => {
     try {
       return window.matchMedia('(max-width: 900px)').matches
@@ -1622,11 +1626,18 @@ function App() {
   async function renameNote() {
     if (!selectedId || !note) return
     const title = window.prompt('Rename note to', note.title)
-    if (title === null || !title.trim() || title.trim() === note.title) return
+    if (title === null) return
+    await applyRename(title)
+  }
+
+  async function applyRename(rawTitle: string) {
+    if (!selectedId || !note) return
+    const title = rawTitle.trim()
+    if (!title || title === note.title) return
     const res = await fetch(`/api/notes/${selectedId}/move`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title: title.trim(), folder: note.folderPath }),
+      body: JSON.stringify({ title, folder: note.folderPath }),
     })
     const data = await res.json()
     if (!res.ok || !data.success) {
@@ -2141,6 +2152,22 @@ function App() {
             setPendingClip(null)
             void loadVault().then(() => {
               setSelectedId(id)
+              setMobilePane('editor')
+            })
+          }}
+        />
+      )}
+      {newNoteModalOpen && (
+        <NewNoteModal
+          tree={tree}
+          defaultFolder={folder}
+          onClose={() => setNewNoteModalOpen(false)}
+          onCreated={(id, folderPath) => {
+            setNewNoteModalOpen(false)
+            setFolder(folderPath)
+            void loadVault().then(() => {
+              setSelectedId(id)
+              setShowTrash(false)
               setMobilePane('editor')
             })
           }}
@@ -3369,7 +3396,13 @@ function App() {
           .join(' ')}
       >
         {foldersCollapsed && !narrowLayout ? (
-          <aside className="pane left pane-rail-collapsed">
+          <aside className="pane left pane-rail-collapsed rail-collapsed-stack">
+            <div
+              className="rail-collapsed-meta"
+              title={folder ? folder.replace(/\\/g, '/') : 'All notes'}
+            >
+              {folderRailShortLabel(folder)}
+            </div>
             <button
               type="button"
               className="pane-collapsed-tab"
@@ -3463,7 +3496,15 @@ function App() {
             }}
           />
         ) : notesCollapsed && !narrowLayout ? (
-          <section className="pane middle pane-rail-collapsed">
+          <section className="pane middle pane-rail-collapsed rail-collapsed-stack">
+            <button
+              type="button"
+              className="rail-collapsed-action"
+              title="Add a note (choose folder)"
+              onClick={() => setNewNoteModalOpen(true)}
+            >
+              Add note
+            </button>
             <button
               type="button"
               className="pane-collapsed-tab"
@@ -3650,7 +3691,40 @@ function App() {
                   >
                     ← Notes
                   </button>
-                  <h1>{note.title}</h1>
+                  {titleEditing ? (
+                    <input
+                      className="note-title-edit"
+                      value={titleDraft}
+                      autoFocus
+                      onChange={(e) => setTitleDraft(e.target.value)}
+                      onFocus={(e) => e.currentTarget.select()}
+                      onBlur={() => {
+                        setTitleEditing(false)
+                        void applyRename(titleDraft)
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
+                          e.currentTarget.blur()
+                        } else if (e.key === 'Escape') {
+                          e.preventDefault()
+                          setTitleDraft(note.title)
+                          setTitleEditing(false)
+                        }
+                      }}
+                    />
+                  ) : (
+                    <h1
+                      className="note-title-clickable"
+                      title="Click to rename"
+                      onClick={() => {
+                        setTitleDraft(note.title)
+                        setTitleEditing(true)
+                      }}
+                    >
+                      {note.title}
+                    </h1>
+                  )}
                   <p className="note-path">{note.relativePath}</p>
                 </div>
                 <div className="actions">
