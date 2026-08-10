@@ -1,11 +1,15 @@
 # Jotdex STATUS
 
-**Active milestone:** Post-1.1.5 polish  
+**Active milestone:** Post-1.1.6 polish  
 **Last updated:** 2026-08-10
 
 ## In progress
 
 - (none)
+
+## Highlights (v1.1.6)
+
+- Idle lock always shows the lock screen (no half-open UI after timeout / 401)
 
 ## Highlights (v1.1.5)
 

@@ -7,6 +7,16 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 
 ---
 
+## 2026-08-10 — Idle lock always shows lock screen (1.1.6)
+
+**Portable release 1.1.6**
+- Tag `v1.1.6` — idle lock returns to full lock screen; session signed out on lock; 401 forces lock UI.
+
+**After idle, the app still looked open and clicks failed**
+- First interaction past the idle limit now locks immediately instead of resetting the timer. Lock signs out the session and portals a full-screen lock UI; HTTP 401 also forces the same lock screen when a password is set.
+
+---
+
 ## 2026-08-10 — Collapsed rails + inline rename (1.1.5)
 
 **Portable release 1.1.5**

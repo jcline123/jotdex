@@ -1652,6 +1652,8 @@ button {
   overflow-x: hidden;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+  pointer-events: auto;
+  touch-action: none;
 }
 
 .idle-lock-card {

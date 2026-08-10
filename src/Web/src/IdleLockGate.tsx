@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
+import { createPortal } from 'react-dom'
 import { PhosphorStreams } from './PhosphorStreams'
-
 
 const STORAGE_ENABLED = 'jotdex.idleLockEnabled'
 const STORAGE_MINUTES = 'jotdex.idleLockMinutes'
+export const AUTH_REQUIRED_EVENT = 'jotdex:auth-required'
 
 export function loadIdleLockEnabled(): boolean {
   try {
@@ -33,6 +34,15 @@ export function saveIdleLockPrefs(enabled: boolean, minutes: number) {
   }
 }
 
+/** Notify the lock gate that the session is gone (e.g. HTTP 401). */
+export function signalAuthRequired() {
+  try {
+    window.dispatchEvent(new Event(AUTH_REQUIRED_EVENT))
+  } catch {
+    /* ignore */
+  }
+}
+
 type Props = {
   enabled: boolean
   minutes: number
@@ -45,7 +55,8 @@ type Props = {
 
 /**
  * Full-screen lock after N minutes of no pointer/keyboard activity (and when the
- * tab stays hidden for that long). Unlock with the Jotdex password (and TOTP if enabled).
+ * tab stays hidden for that long). Also locks on session 401. Unlock with the
+ * Jotdex password (and TOTP if enabled).
  */
 export function IdleLockGate({ enabled, minutes, authAvailable, onLockedChange }: Props) {
   const [locked, setLocked] = useState(false)
@@ -56,29 +67,50 @@ export function IdleLockGate({ enabled, minutes, authAvailable, onLockedChange }
   const [busy, setBusy] = useState(false)
   const lastActiveRef = useRef(Date.now())
   const hiddenSinceRef = useRef<number | null>(null)
+  const lockedRef = useRef(false)
+  const minutesRef = useRef(minutes)
+
+  useEffect(() => {
+    minutesRef.current = minutes
+  }, [minutes])
+
+  useEffect(() => {
+    lockedRef.current = locked
+  }, [locked])
 
   const markActive = useCallback(() => {
     lastActiveRef.current = Date.now()
   }, [])
 
   const lock = useCallback(() => {
+    if (lockedRef.current) return
+    lockedRef.current = true
     setLocked(true)
     setPassword('')
     setTotpCode('')
     setMfaStep(false)
     setError(null)
     onLockedChange?.(true)
+    // Drop the cookie so the UI lock matches server auth (clicks can't half-work).
+    void fetch('/api/auth/logout', { method: 'POST', credentials: 'same-origin' }).catch(() => {
+      /* ignore */
+    })
   }, [onLockedChange])
 
+  // Idle timer + activity (only when idle lock is enabled).
   useEffect(() => {
-    if (!enabled || !authAvailable) {
-      setLocked(false)
-      onLockedChange?.(false)
-      return
-    }
+    if (!enabled || !authAvailable) return
+
+    const limitMs = () => Math.max(1, minutesRef.current) * 60_000
 
     const onActivity = () => {
-      if (!locked) markActive()
+      if (lockedRef.current) return
+      // First click after idle must lock — do not reset the timer and leave the UI open.
+      if (Date.now() - lastActiveRef.current >= limitMs()) {
+        lock()
+        return
+      }
+      markActive()
     }
     const events: (keyof WindowEventMap)[] = ['pointerdown', 'keydown', 'mousemove', 'wheel', 'touchstart']
     for (const ev of events) window.addEventListener(ev, onActivity, { passive: true })
@@ -86,31 +118,75 @@ export function IdleLockGate({ enabled, minutes, authAvailable, onLockedChange }
     const onVis = () => {
       if (document.visibilityState === 'hidden') {
         hiddenSinceRef.current = Date.now()
+        return
+      }
+      const since = hiddenSinceRef.current
+      hiddenSinceRef.current = null
+      if (lockedRef.current) return
+      const limit = limitMs()
+      if ((since != null && Date.now() - since >= limit) || Date.now() - lastActiveRef.current >= limit) {
+        lock()
       } else {
-        const since = hiddenSinceRef.current
-        hiddenSinceRef.current = null
-        const limitMs = Math.max(1, minutes) * 60_000
-        if (since != null && Date.now() - since >= limitMs) {
-          lock()
-        } else {
-          markActive()
-        }
+        markActive()
       }
     }
     document.addEventListener('visibilitychange', onVis)
 
     const tick = window.setInterval(() => {
-      if (locked) return
-      const limitMs = Math.max(1, minutes) * 60_000
-      if (Date.now() - lastActiveRef.current >= limitMs) lock()
-    }, 5_000)
+      if (lockedRef.current) return
+      if (Date.now() - lastActiveRef.current >= limitMs()) lock()
+    }, 2_000)
 
     return () => {
       for (const ev of events) window.removeEventListener(ev, onActivity)
       document.removeEventListener('visibilitychange', onVis)
       window.clearInterval(tick)
     }
-  }, [enabled, authAvailable, minutes, locked, lock, markActive, onLockedChange])
+  }, [enabled, authAvailable, lock, markActive])
+
+  // Session expired / 401 → always show lock when a password exists.
+  useEffect(() => {
+    if (!authAvailable) return
+
+    const onAuthRequired = () => lock()
+    window.addEventListener(AUTH_REQUIRED_EVENT, onAuthRequired)
+
+    const origFetch = window.fetch.bind(window)
+    window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+      const res = await origFetch(input, init)
+      if (res.status !== 401) return res
+      const url =
+        typeof input === 'string'
+          ? input
+          : input instanceof URL
+            ? input.href
+            : input.url
+      if (
+        url.includes('/api/') &&
+        !url.includes('/api/auth/login') &&
+        !url.includes('/api/auth/status') &&
+        !url.includes('/api/auth/logout') &&
+        !url.includes('/api/health')
+      ) {
+        signalAuthRequired()
+      }
+      return res
+    }
+
+    return () => {
+      window.removeEventListener(AUTH_REQUIRED_EVENT, onAuthRequired)
+      window.fetch = origFetch
+    }
+  }, [authAvailable, lock])
+
+  // If password is removed, clear the overlay.
+  useEffect(() => {
+    if (!authAvailable && locked) {
+      lockedRef.current = false
+      setLocked(false)
+      onLockedChange?.(false)
+    }
+  }, [authAvailable, locked, onLockedChange])
 
   async function unlock(e: FormEvent) {
     e.preventDefault()
@@ -145,6 +221,7 @@ export function IdleLockGate({ enabled, minutes, authAvailable, onLockedChange }
       setPassword('')
       setTotpCode('')
       setMfaStep(false)
+      lockedRef.current = false
       setLocked(false)
       lastActiveRef.current = Date.now()
       onLockedChange?.(false)
@@ -157,7 +234,7 @@ export function IdleLockGate({ enabled, minutes, authAvailable, onLockedChange }
 
   if (!locked) return null
 
-  return (
+  return createPortal(
     <div className="idle-lock-overlay auth-stage" role="dialog" aria-modal="true" aria-label="Jotdex is locked">
       <PhosphorStreams />
       <div className="idle-lock-card auth-stage-card">
@@ -201,6 +278,7 @@ export function IdleLockGate({ enabled, minutes, authAvailable, onLockedChange }
           </button>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }
