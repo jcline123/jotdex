@@ -10,7 +10,7 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 ## 2026-08-10 — Collapsed rails + inline rename (1.1.5)
 
 **Portable release 1.1.5**
-- Tag `v1.1.5` — collapsed rail Add note / folder label, inline note title rename.
+- Tag `v1.1.5` (`213ccf1`) — collapsed rail Add note / folder label, inline note title rename.
 
 **Note title is now click-to-rename**
 - Clicking the title in the note header edits it inline (Enter/blur saves, Escape cancels); uses the same rename/move API as the Rename button, which stays.
