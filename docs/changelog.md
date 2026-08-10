@@ -10,7 +10,7 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 ## 2026-08-10 — Formatting applies to what you selected (1.1.7)
 
 **Portable release 1.1.7**
-- Tag `v1.1.7` — selection-accurate toolbar formatting.
+- Tag `v1.1.7` (`9d5bc8a`) — selection-accurate toolbar formatting.
 
 **Toolbar formatting sometimes hit neighbouring text or left empty lines**
 - Triple-click/drag selections silently extend to the start of the next block, so Todo/List/heading converted paragraphs the user never selected. All block and mark commands now trim that overhang first (`selectionUtils.normalizeBlockSelection`).
