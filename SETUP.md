@@ -84,7 +84,7 @@ Default is this PC only (`127.0.0.1`). Change in **Settings → Network** (resta
 .\Jotdex.Server.exe --urls http://0.0.0.0:5180
 ```
 
-Do not expose the port to the public Internet without a reverse proxy / VPN.
+Do not expose the port to the public Internet. Prefer a VPN or a [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/) to `http://127.0.0.1:5180` (keep Jotdex on loopback; turn on a password). See [README.md](README.md#away-from-home-vpn-or-cloudflare-tunnel).
 
 ## OneNote import (offline)
 

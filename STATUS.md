@@ -1,11 +1,16 @@
 # Jotdex STATUS
 
-**Active milestone:** Post-1.1.8 polish  
+**Active milestone:** Post-1.1.10 polish  
 **Last updated:** 2026-08-11
 
 ## In progress
 
 - (none)
+
+## Highlights (v1.1.10)
+
+- README sells the product first, then install (portable zip is the fastest path)
+- Cloudflare Tunnel documented next to VPN for remote access (tunnel to loopback; don’t port-forward 5180)
 
 ## Highlights (v1.1.9)
 

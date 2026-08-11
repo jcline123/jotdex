@@ -36,7 +36,7 @@ App data: `artifacts\win-x64\data\` (`config\`, `auth\`, `indexes\`, `history\`,
 - Default: loopback `127.0.0.1` (also configurable in Settings → Network → restart).
 - LAN: Settings → Network → LAN, Save (UAC may add firewall rules), Restart. Or `--urls http://0.0.0.0:5180`. Manual: `Ensure-JotdexFirewall.ps1` as Administrator.
 - HTTPS: set **HTTPS certificate (PFX path)** in Settings → Network (optional password, or env `JOTDEX_HTTPS_PFX_PASSWORD`). Restart required. When a valid PFX is configured and `ASPNETCORE_URLS` is unset, Kestrel listens with HTTPS on the configured bind/port.
-- Prefer VPN / reverse proxy for remote access; do not expose to the public Internet.
+- Prefer a VPN or a [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/) (`cloudflared` → `http://127.0.0.1:5180`) for remote access; do not port-forward to the public Internet.
 
 ## Windows Service
 

@@ -7,6 +7,13 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 
 ---
 
+## 2026-08-11 — README leads with the product, then install (1.1.10)
+
+**GitHub opened on setup steps**
+- README now sells what Jotdex is (files you own, one Windows host / any browser, work-note search and capture) before the how-to. Portable zip from Releases is the first install path; clone/build stays for people who want it. Duplicate portability link in “More help” removed. Remote access lists **Cloudflare Tunnel** next to VPN (tunnel to loopback; do not port-forward 5180).
+
+---
+
 ## 2026-08-11 — Even line spacing + readable link color (1.1.9)
 
 **Portable release 1.1.9**

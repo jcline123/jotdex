@@ -26,7 +26,7 @@
 | CSRF on writes | Cookie auth + antiforgery (M6) |
 | Brute-force login | Rate limit / lockout (M6); TOTP optional second factor (M8) |
 | SSRF on image download | HTTP(S) only; block private/loopback; size/redirect limits |
-| LAN sniffing credentials | Default bind localhost; warn on HTTP+LAN; prefer HTTPS/VPN |
+| LAN sniffing credentials | Default bind localhost; warn on HTTP+LAN; prefer HTTPS, VPN, or Cloudflare Tunnel to loopback |
 | Accidental content loss | Atomic saves; history; no silent Markdown drop |
 | Sync corruption | Live vault not on iCloud |
 | Secrets at rest on install PC | Windows DPAPI CurrentUser (M8) |
