@@ -10,7 +10,7 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 ## 2026-08-11 — Shared prefs + unlock to home (1.1.8)
 
 **Portable release 1.1.8**
-- Tag `v1.1.8` — idle lock / clip folder / recently viewed on the server; unlock after idle returns to Home.
+- Tag `v1.1.8` (`a3d381b`) — idle lock / clip folder / recently viewed on the server; unlock after idle returns to Home.
 
 ## 2026-08-11 — Home “Recently viewed” syncs across devices
 
