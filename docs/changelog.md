@@ -9,6 +9,9 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 
 ## 2026-08-11 — Even line spacing + readable link color (1.1.9)
 
+**Portable release 1.1.9**
+- Tag `v1.1.9` (`3df9824`) — readable link color; Shift+Enter = paragraph outside structural blocks; smart paste splits `<br>`.
+
 **Some single-Enter lines sat tighter than others**
 - The tight lines were invisible hard breaks (trailing `\` in the vault Markdown) from accidental Shift+Enter or `<br>` in pasted HTML; typed Enters make paragraphs, which space wider. Shift+Enter now acts like Enter in plain paragraphs/headings (still a real line break inside lists, tasks, tables, blockquotes where it's structural), and smart paste splits `<br>` runs into paragraphs. AI prompt documents blank-line paragraphs.
 
