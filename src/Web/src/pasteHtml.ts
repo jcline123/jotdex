@@ -51,6 +51,7 @@ export function cleanPasteHtml(raw: string, options: CleanPasteOptions = {}): st
   const body = doc.body
   stripDangerous(body, options.keepMore === true)
   normalizeDivs(body)
+  if (options.keepMore !== true) splitBrIntoParagraphs(body)
   absolutizeProtocolRelativeImages(body)
   return body.innerHTML.trim()
 }
@@ -175,6 +176,43 @@ function stripDangerous(root: Element, keepMore: boolean) {
 
   for (const child of Array.from(root.children)) {
     process(child as HTMLElement)
+  }
+}
+
+/**
+ * Smart paste: turn <br>-separated lines inside paragraphs into real paragraphs
+ * so pasted content gets the same spacing as typed content (hard breaks store
+ * as trailing `\` in Markdown and render tighter than paragraph breaks).
+ * Breaks inside list items and table cells stay, since a paragraph there would
+ * change the structure.
+ */
+function splitBrIntoParagraphs(root: Element) {
+  const doc = root.ownerDocument!
+  for (const p of Array.from(root.querySelectorAll('p'))) {
+    if (!p.querySelector('br')) continue
+    if (p.closest('li, td, th')) continue
+
+    const groups: Node[][] = [[]]
+    for (const child of Array.from(p.childNodes)) {
+      if (child.nodeName === 'BR') {
+        if (groups[groups.length - 1].length > 0) groups.push([])
+      } else {
+        groups[groups.length - 1].push(child)
+      }
+    }
+
+    const frag = doc.createDocumentFragment()
+    for (const group of groups) {
+      if (group.length === 0) continue
+      const next = doc.createElement('p')
+      for (const attr of Array.from(p.attributes)) next.setAttribute(attr.name, attr.value)
+      for (const node of group) next.appendChild(node)
+      if ((next.textContent?.trim().length ?? 0) > 0 || next.querySelector('img')) {
+        frag.appendChild(next)
+      }
+    }
+    if (frag.childNodes.length > 0) p.replaceWith(frag)
+    else p.remove()
   }
 }
 

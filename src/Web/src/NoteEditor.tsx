@@ -16,6 +16,7 @@ import { common, createLowlight } from 'lowlight'
 import powershell from 'highlight.js/lib/languages/powershell'
 import dos from 'highlight.js/lib/languages/dos'
 import { Markdown } from 'tiptap-markdown'
+import { Extension } from '@tiptap/core'
 import { TextStyle } from '@tiptap/extension-text-style'
 import { Color } from '@tiptap/extension-color'
 import { CodeBlockView } from './CodeBlockView'
@@ -51,6 +52,44 @@ const FontSizeTextStyle = TextStyle.extend({
           if (!attributes.fontSize) return {}
           return { style: `font-size: ${attributes.fontSize}` }
         },
+      },
+    }
+  },
+})
+
+/**
+ * Accidental Shift+Enter in a plain paragraph/heading inserts an invisible hard
+ * break, which spaces differently from an Enter paragraph and confuses spacing
+ * (trailing `\` in the vault Markdown). Treat Shift+Enter as Enter there; keep
+ * the real line break inside lists, tasks, tables, and blockquotes where a
+ * break is the only way to get a new line without changing structure.
+ */
+const ConsistentLineBreaks = Extension.create({
+  name: 'consistentLineBreaks',
+  priority: 1000,
+  addKeyboardShortcuts() {
+    return {
+      'Shift-Enter': () => {
+        const { $from } = this.editor.state.selection
+        for (let depth = $from.depth; depth > 0; depth--) {
+          const name = $from.node(depth).type.name
+          if (
+            name === 'listItem' ||
+            name === 'taskItem' ||
+            name === 'tableCell' ||
+            name === 'tableHeader' ||
+            name === 'blockquote' ||
+            name === 'codeBlock'
+          ) {
+            return false
+          }
+        }
+        return this.editor.commands.first(({ commands }) => [
+          () => commands.newlineInCode(),
+          () => commands.createParagraphNear(),
+          () => commands.liftEmptyBlock(),
+          () => commands.splitBlock(),
+        ])
       },
     }
   },
@@ -558,6 +597,7 @@ export function NoteEditor({
       TableCell,
       FontSizeTextStyle,
       Color,
+      ConsistentLineBreaks,
       Markdown.configure({
         // Allow <span style="color/font-size"> so color & size round-trip in the vault.
         html: true,

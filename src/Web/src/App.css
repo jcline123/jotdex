@@ -7,6 +7,8 @@
   --muted: #8b9bb0;
   --accent: #3d9cf0;
   --accent-soft: rgba(61, 156, 240, 0.14);
+  --link: #7ab8f5;
+  --link-hover: #a3cdf8;
   --danger: #f07178;
   --ok: #7fd99a;
   --font: "Segoe UI", "IBM Plex Sans", system-ui, sans-serif;
@@ -2155,6 +2157,19 @@ button {
 
 .tiptap-editor p {
   margin: 0 0 0.75rem;
+}
+
+/* Browser-default link blue is unreadable on the dark theme. */
+.tiptap-editor a,
+.tiptap-editor a:visited {
+  color: var(--link);
+  text-decoration-color: color-mix(in srgb, var(--link) 45%, transparent);
+  text-underline-offset: 2px;
+}
+
+.tiptap-editor a:hover {
+  color: var(--link-hover);
+  text-decoration-color: currentColor;
 }
 
 .tiptap-editor h1,

@@ -7,6 +7,11 @@
 
 - (none)
 
+## Highlights (v1.1.9)
+
+- Link color in notes readable on dark theme (`--link`)
+- Consistent line spacing: Shift+Enter = paragraph outside lists/tables; smart paste converts `<br>` to paragraphs
+
 ## Highlights (v1.1.8)
 
 - Idle lock, clip default folder, and Home recently-viewed stored on the server (same on every device)

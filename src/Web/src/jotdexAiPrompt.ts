@@ -97,6 +97,10 @@ Prefer markdown links to other notes: \`[VPN runbook](Network/VPN runbook.md)\`
 - Block quotes: \`> quoted line\`
 - Horizontal rule: \`---\` on its own line
 
+## Paragraphs & line breaks
+- Separate lines with a blank line — each becomes its own paragraph with even spacing
+- Avoid trailing-backslash / two-space hard breaks in normal text (they render tighter than paragraphs and make spacing look uneven); inside list items and table cells a hard break is fine
+
 ## Style for IT / work notes
 - Lead with a one-line summary
 - Then prerequisites, steps, verification, rollback
