@@ -9,6 +9,9 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 
 ## 2026-08-11 — Todos rail no longer keeps a 401 error after unlock (1.1.11)
 
+**Portable release 1.1.11**
+- Tag `v1.1.11` (`322b667`) — Todos rail ignores idle-lock 401s and reloads after unlock.
+
 **Unlock left “Could not save todos” / “Could not update task” on the rail**
 - Same as the note editor: adding or editing a todo while idle-locked hits a signed-out session. The lock overlay already handles that, so the rail now ignores 401s, drops the error as soon as auth is required, and reloads from disk after unlock.
 
