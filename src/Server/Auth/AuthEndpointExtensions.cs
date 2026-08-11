@@ -31,7 +31,16 @@ public static class AuthEndpointExtensions
                 o.Cookie.SameSite = SameSiteMode.Lax;
                 o.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
                 o.SlidingExpiration = true;
+                // Overridden from data/config/ui.json after the host starts (idle lock minutes).
                 o.ExpireTimeSpan = TimeSpan.FromMinutes(Math.Clamp(idle, 5, 24 * 60));
+                o.Events.OnSigningIn = ctx =>
+                {
+                    var prefs = ctx.HttpContext.RequestServices.GetRequiredService<IUiPrefsService>();
+                    var timeout = prefs.CookieTimeout;
+                    ctx.Properties.IsPersistent = true;
+                    ctx.Properties.ExpiresUtc = DateTimeOffset.UtcNow.Add(timeout);
+                    return Task.CompletedTask;
+                };
                 o.Events.OnRedirectToLogin = ctx =>
                 {
                     ctx.Response.StatusCode = StatusCodes.Status401Unauthorized;
@@ -53,7 +62,7 @@ public static class AuthEndpointExtensions
 
     public static void MapAuthEndpoints(this WebApplication app)
     {
-        app.MapGet("/api/auth/status", (HttpContext ctx, ILocalAuthService auth, IHostEnvironment env, IOptions<JotdexOptions> options) =>
+        app.MapGet("/api/auth/status", (HttpContext ctx, ILocalAuthService auth, IHostEnvironment env, IOptions<JotdexOptions> options, IUiPrefsService uiPrefs) =>
         {
             var username = ctx.User.Identity?.IsAuthenticated == true ? ctx.User.Identity.Name : null;
             var status = auth.GetStatus(username);
@@ -62,6 +71,7 @@ public static class AuthEndpointExtensions
             // When not set, the app stays open. Dev bypass only matters when no password exists.
             var openAccess = !passwordSet;
             var developmentBypass = openAccess && env.IsDevelopment() && options.Value.Auth.BypassInDevelopment;
+            var ui = uiPrefs.Get();
             return Results.Json(new
             {
                 setupComplete = passwordSet,
@@ -73,7 +83,15 @@ public static class AuthEndpointExtensions
                 totpEnabled = status.TotpEnabled,
                 username = status.Username,
                 displayName = status.DisplayName,
-                developmentBypass
+                developmentBypass,
+                ui = new
+                {
+                    configured = uiPrefs.IsConfigured,
+                    idleLockEnabled = ui.IdleLockEnabled,
+                    idleLockMinutes = ui.IdleLockMinutes,
+                    clipDefaultFolder = ui.ClipDefaultFolder,
+                    recentNoteIds = ui.RecentNoteIds
+                }
             });
         });
 
@@ -358,6 +376,42 @@ public static class AuthEndpointExtensions
                 : Results.BadRequest(new { error, status = mirror.GetStatus() });
         });
 
+        app.MapGet("/api/settings/ui", (IUiPrefsService uiPrefs) =>
+        {
+            var ui = uiPrefs.Get();
+            return Results.Json(new
+            {
+                configured = uiPrefs.IsConfigured,
+                idleLockEnabled = ui.IdleLockEnabled,
+                idleLockMinutes = ui.IdleLockMinutes,
+                clipDefaultFolder = ui.ClipDefaultFolder,
+                recentNoteIds = ui.RecentNoteIds
+            });
+        });
+
+        app.MapPut("/api/settings/ui", async (HttpRequest request, IUiPrefsService uiPrefs) =>
+        {
+            var body = await request.ReadFromJsonAsync<UiPrefsBody>();
+            if (body is null) return Results.BadRequest(new { error = "Invalid body" });
+            var cur = uiPrefs.Get();
+            var saved = uiPrefs.Save(new UiPrefs
+            {
+                IdleLockEnabled = body.IdleLockEnabled ?? cur.IdleLockEnabled,
+                IdleLockMinutes = body.IdleLockMinutes ?? cur.IdleLockMinutes,
+                ClipDefaultFolder = body.ClipDefaultFolder ?? cur.ClipDefaultFolder,
+                RecentNoteIds = body.RecentNoteIds ?? cur.RecentNoteIds
+            });
+            return Results.Json(new
+            {
+                success = true,
+                configured = true,
+                idleLockEnabled = saved.IdleLockEnabled,
+                idleLockMinutes = saved.IdleLockMinutes,
+                clipDefaultFolder = saved.ClipDefaultFolder,
+                recentNoteIds = saved.RecentNoteIds
+            });
+        });
+
         app.MapGet("/api/settings/notifications", (INotificationSettingsService notify) =>
         {
             var s = notify.GetSettings();
@@ -523,6 +577,14 @@ public static class AuthEndpointExtensions
         public string? DestinationPath { get; set; }
         public int? IntervalMinutes { get; set; }
         public bool? IncludeDailyMoveKit { get; set; }
+    }
+
+    private sealed class UiPrefsBody
+    {
+        public bool? IdleLockEnabled { get; set; }
+        public int? IdleLockMinutes { get; set; }
+        public string? ClipDefaultFolder { get; set; }
+        public List<string>? RecentNoteIds { get; set; }
     }
 
     private sealed class NotificationsBody

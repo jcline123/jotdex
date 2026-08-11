@@ -51,6 +51,8 @@ type Props = {
   /** Kept for callers; MFA is revealed after password, not shown up front. */
   totpEnabled?: boolean
   onLockedChange?: (locked: boolean) => void
+  /** After a successful password unlock (not when idle lock is merely disabled). */
+  onUnlocked?: () => void
 }
 
 /**
@@ -58,7 +60,7 @@ type Props = {
  * tab stays hidden for that long). Also locks on session 401. Unlock with the
  * Jotdex password (and TOTP if enabled).
  */
-export function IdleLockGate({ enabled, minutes, authAvailable, onLockedChange }: Props) {
+export function IdleLockGate({ enabled, minutes, authAvailable, onLockedChange, onUnlocked }: Props) {
   const [locked, setLocked] = useState(false)
   const [password, setPassword] = useState('')
   const [totpCode, setTotpCode] = useState('')
@@ -225,6 +227,7 @@ export function IdleLockGate({ enabled, minutes, authAvailable, onLockedChange }
       setLocked(false)
       lastActiveRef.current = Date.now()
       onLockedChange?.(false)
+      onUnlocked?.()
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unlock failed')
     } finally {

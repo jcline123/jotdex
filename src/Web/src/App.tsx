@@ -11,7 +11,6 @@ import {
   buildClipBookmarklet,
   loadClipDefaultFolder,
   parseClipHash,
-  saveClipDefaultFolder,
   type ClipPayload,
 } from './jotdexBookmarklet'
 import { FirstRunWizard, LoginScreen } from './AuthScreens'
@@ -26,11 +25,11 @@ import {
   type NoteTemplate,
 } from './templates'
 import { copyJotdexAiPrompt } from './jotdexAiPrompt'
-import { IdleLockGate, loadIdleLockEnabled, loadIdleLockMinutes, saveIdleLockPrefs } from './IdleLockGate'
+import { IdleLockGate, loadIdleLockEnabled, loadIdleLockMinutes } from './IdleLockGate'
+import { hydrateUiPrefs, rememberViewedNoteAndSync, saveUiPrefs, type UiPrefs } from './uiPrefs'
 import { TodosRail } from './TodosRail'
 import { getNotificationPermission, promptTodoNotifications, type NotifyPermission } from './todoReminders'
 import { HomeLanding } from './HomeLanding'
-import { rememberViewedNote } from './recentNotes'
 import { isStandaloneTodosNote } from './systemNotes'
 import { diffLines } from './diffLines'
 
@@ -103,6 +102,7 @@ type AuthInfo = {
   username?: string
   displayName?: string
   developmentBypass?: boolean
+  ui?: UiPrefs
 }
 
 function loadCollapsedFolders(): Set<string> {
@@ -389,11 +389,19 @@ function App() {
     hint?: string
   } | null>(null)
 
+  const applyUiPrefs = useCallback((prefs: UiPrefs) => {
+    setIdleLockEnabled(prefs.idleLockEnabled)
+    setIdleLockMinutes(prefs.idleLockMinutes)
+    setClipDefaultFolder(prefs.clipDefaultFolder)
+  }, [])
+
   const loadAuth = useCallback(async () => {
     const a = (await fetch('/api/auth/status', { credentials: 'same-origin' }).then((r) => r.json())) as AuthInfo
     setAuth(a)
+    const ui = await hydrateUiPrefs(a.ui)
+    applyUiPrefs(ui)
     return a
-  }, [])
+  }, [applyUiPrefs])
 
   const loadVault = useCallback(async () => {
     setError(null)
@@ -419,6 +427,23 @@ function App() {
       /* index optional */
     }
   }, [])
+
+  const returnHomeAfterUnlock = useCallback(() => {
+    if (saveTimer.current) {
+      window.clearTimeout(saveTimer.current)
+      saveTimer.current = null
+    }
+    savingRef.current = false
+    setError(null)
+    setSaveStatus('saved')
+    setConflictDisk(null)
+    setTitleEditing(false)
+    setHistoryOpen(false)
+    setSelectedId(null)
+    setNote(null)
+    setMobilePane('editor')
+    void loadVault()
+  }, [loadVault])
 
   useEffect(() => {
     loadAuth()
@@ -473,11 +498,14 @@ function App() {
     }
     fetch(`/api/notes/${selectedId}`)
       .then(async (r) => {
+        // Idle lock / session expiry — overlay handles this; don't flash "Note 401".
+        if (r.status === 401) return null
         if (!r.ok) throw new Error(`Note ${r.status}`)
         return r.json() as Promise<NoteDetail>
       })
       .then((n) => {
-        if (!isStandaloneTodosNote(n.relativePath)) rememberViewedNote(selectedId)
+        if (!n) return
+        if (!isStandaloneTodosNote(n.relativePath)) rememberViewedNoteAndSync(selectedId)
         setNote(n)
         const split = splitFrontMatter(n.markdown)
         setFrontMatter(split.frontMatter)
@@ -567,6 +595,11 @@ function App() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ markdown, etag: etagToSend, force }),
         })
+        if (res.status === 401) {
+          // Session gone — idle lock overlay takes over; don't leave "Save failed" on the note.
+          setSaveStatus('saved')
+          return
+        }
         const data = await res.json()
         if (res.status === 409 || data.conflict) {
           const diskMarkdown = (data.note?.markdown as string | undefined) ?? ''
@@ -1206,7 +1239,7 @@ function App() {
       setSecNewPassword('')
       setSecNewConfirm('')
       setIdleLockEnabled(false)
-      saveIdleLockPrefs(false, idleLockMinutes)
+      void saveUiPrefs({ idleLockEnabled: false, idleLockMinutes })
       setSecHint('Password removed. The app opens freely again.')
       await loadAuth()
     } catch (e) {
@@ -1554,7 +1587,7 @@ function App() {
     }
     if (!info && !window.confirm('Could not fetch page info. Save with the URL only?')) return
     title = window.prompt('Note title', title) || title
-    const dest = window.prompt('Folder (blank = Inbox)', folder || loadClipDefaultFolder())
+    const dest = window.prompt('Folder (blank = Inbox)', folder || clipDefaultFolder)
     if (dest === null) return
     const folderDest = dest.trim() || 'Inbox'
     const body = pageInfoToMarkdown({
@@ -1580,7 +1613,7 @@ function App() {
       setError(data.error ?? 'Could not create note from URL')
       return
     }
-    saveClipDefaultFolder(folderDest)
+    void saveUiPrefs({ clipDefaultFolder: folderDest })
     await loadVault()
     setSelectedId(data.noteId)
     setMobilePane('editor')
@@ -1977,6 +2010,10 @@ function App() {
         minutes={idleLockMinutes}
         authAvailable={!!auth?.setupComplete}
         totpEnabled={!!auth?.totpEnabled}
+        onUnlocked={() => {
+          setError(null)
+          setSaveStatus('saved')
+        }}
       />
       </div>
     )
@@ -2640,8 +2677,8 @@ function App() {
             ) : (
               <>
                 <p className="muted">
-                  After you stop interacting (or leave this tab hidden), require your password again. Off by default —
-                  choose how many minutes below.
+                  After you stop interacting (or leave this tab hidden), require your password again. This setting is
+                  stored on the Jotdex server, so every computer and browser that opens this app uses the same timer.
                 </p>
                 <label className="field checkbox-row">
                   <input
@@ -2650,7 +2687,7 @@ function App() {
                     onChange={(e) => {
                       const on = e.target.checked
                       setIdleLockEnabled(on)
-                      saveIdleLockPrefs(on, idleLockMinutes)
+                      void saveUiPrefs({ idleLockEnabled: on, idleLockMinutes })
                     }}
                   />
                   Lock after idle
@@ -2667,7 +2704,7 @@ function App() {
                       const n = Number(e.target.value) || 15
                       const clamped = Math.max(1, Math.min(240, Math.floor(n)))
                       setIdleLockMinutes(clamped)
-                      saveIdleLockPrefs(idleLockEnabled, clamped)
+                      void saveUiPrefs({ idleLockEnabled, idleLockMinutes: clamped })
                     }}
                   />
                 </label>
@@ -2706,7 +2743,7 @@ function App() {
                     onChange={(e) => {
                       const v = e.target.value
                       setClipDefaultFolder(v)
-                      saveClipDefaultFolder(v || 'Inbox')
+                      void saveUiPrefs({ clipDefaultFolder: v || 'Inbox' })
                     }}
                     onFocus={() => {
                       void fetch('/api/tree', { credentials: 'same-origin' })
@@ -4120,6 +4157,7 @@ function App() {
         minutes={idleLockMinutes}
         authAvailable={!!auth?.setupComplete}
         totpEnabled={!!auth?.totpEnabled}
+        onUnlocked={returnHomeAfterUnlock}
       />
     </div>
   )

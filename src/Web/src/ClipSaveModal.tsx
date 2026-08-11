@@ -65,7 +65,16 @@ export function ClipSaveModal({ initial, onClose, onSaved }: Props) {
       })
       const data = await res.json()
       if (!res.ok || !data.success) throw new Error(data.error ?? 'Could not save')
-      saveClipDefaultFolder(folder.trim() || 'Inbox')
+      const dest = folder.trim() || 'Inbox'
+      saveClipDefaultFolder(dest)
+      void fetch('/api/settings/ui', {
+        method: 'PUT',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ clipDefaultFolder: dest }),
+      }).catch(() => {
+        /* cache already updated */
+      })
       onSaved(data.noteId as string)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save')

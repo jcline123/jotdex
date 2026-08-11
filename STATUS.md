@@ -1,11 +1,16 @@
 # Jotdex STATUS
 
-**Active milestone:** Post-1.1.7 polish  
-**Last updated:** 2026-08-10
+**Active milestone:** Post-1.1.8 polish  
+**Last updated:** 2026-08-11
 
 ## In progress
 
 - (none)
+
+## Highlights (v1.1.8)
+
+- Idle lock, clip default folder, and Home recently-viewed stored on the server (same on every device)
+- Unlock after idle returns to Home instead of a failed-save banner on the open note
 
 ## Highlights (v1.1.7)
 

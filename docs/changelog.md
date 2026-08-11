@@ -7,6 +7,32 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 
 ---
 
+## 2026-08-11 — Shared prefs + unlock to home (1.1.8)
+
+**Portable release 1.1.8**
+- Tag `v1.1.8` — idle lock / clip folder / recently viewed on the server; unlock after idle returns to Home.
+
+## 2026-08-11 — Home “Recently viewed” syncs across devices
+
+**Recently viewed was per-browser**
+- Created/updated notes and open to-dos already come from the vault. Viewed-note order now lives in `data/config/ui.json` with the other shared prefs, so Home matches on every device. Local recents are uploaded once if the server list is still empty.
+
+---
+
+## 2026-08-11 — Idle lock (and clip folder) stored on the server
+
+**Security settings looked different on Mac vs Windows**
+- Idle lock used `localStorage` per browser, while the login cookie still expired at 60 minutes — so Windows showed “off / 15 min” but still locked at an hour. Prefs now live in `data/config/ui.json` and every device loads them from `/api/auth/status`. Cookie lifetime follows the same timer when lock is on (7 days when off). First browser that already had lock enabled migrates into that file.
+
+---
+
+## 2026-08-11 — Unlock after idle returns to home
+
+**Unlock left a Save failed / Note 401 banner on the open note**
+- Idle lock signs out the session, so the keystroke that woke the lock also failed a save. After a successful unlock, the main app now clears that error and opens Home instead of the stale editor. 401 on save/load no longer paints an error under the overlay.
+
+---
+
 ## 2026-08-10 — Formatting applies to what you selected (1.1.7)
 
 **Portable release 1.1.7**

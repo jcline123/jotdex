@@ -143,6 +143,7 @@ builder.Services.AddHttpClient("telegram");
 builder.Services.AddSingleton<ISecretStore, DpapiSecretStore>();
 builder.Services.AddSingleton<ILocalAuthProbe, LocalAuthProbe>();
 builder.Services.AddSingleton<IMoveKitCryptoService, MoveKitCryptoService>();
+builder.Services.AddSingleton<IUiPrefsService, UiPrefsService>();
 builder.Services.AddSingleton<NotificationSettingsService>();
 builder.Services.AddSingleton<INotificationSettingsService>(sp => sp.GetRequiredService<NotificationSettingsService>());
 builder.Services.AddSingleton<IMirrorAlertState>(sp => sp.GetRequiredService<NotificationSettingsService>());
@@ -206,6 +207,13 @@ app.Use(async (ctx, next) =>
 
 app.UseDefaultFiles();
 app.UseStaticFiles();
+
+var uiPrefs = app.Services.GetRequiredService<IUiPrefsService>();
+var cookieOpts = app.Services.GetRequiredService<IOptionsMonitor<Microsoft.AspNetCore.Authentication.Cookies.CookieAuthenticationOptions>>();
+uiPrefs.BindCookieOptions(timeout =>
+{
+    cookieOpts.Get(Jotdex.Server.Auth.AuthEndpointExtensions.CookieScheme).ExpireTimeSpan = timeout;
+});
 
 app.UseAuthentication();
 app.UseAuthorization();

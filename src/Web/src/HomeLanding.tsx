@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { formatDueLabel, parseTodosMarkdown, sortTodos, type TodoItem } from './todosMarkdown'
-import { loadRecentNoteIds } from './recentNotes'
+import { cacheRecentNoteIds, loadRecentNoteIds } from './recentNotes'
 import { isStandaloneTodosNote } from './systemNotes'
 
 export type HomeNote = {
@@ -77,6 +77,7 @@ export function HomeLanding({
 }: Props) {
   const [notes, setNotes] = useState<HomeNote[]>([])
   const [todos, setTodos] = useState<TodoItem[]>([])
+  const [recentIds, setRecentIds] = useState<string[]>(() => loadRecentNoteIds())
   const [busy, setBusy] = useState(true)
 
   useEffect(() => {
@@ -84,16 +85,24 @@ export function HomeLanding({
     setBusy(true)
     void (async () => {
       try {
-        const [all, openTodos, todosId] = await Promise.all([
+        const [all, openTodos, todosId, uiRes] = await Promise.all([
           fetchAllNotes(),
           fetchOpenTodos(),
           fetchTodosNoteId(),
+          fetch('/api/settings/ui', { credentials: 'same-origin' }),
         ])
         if (cancelled) return
         const hiddenIds = new Set<string>()
         if (todosId) hiddenIds.add(todosId)
         setNotes(visibleHomeNotes(all, hiddenIds))
         setTodos(openTodos)
+        if (uiRes.ok) {
+          const ui = (await uiRes.json()) as { recentNoteIds?: string[] }
+          if (Array.isArray(ui.recentNoteIds) && ui.recentNoteIds.length > 0) {
+            const ids = cacheRecentNoteIds(ui.recentNoteIds)
+            setRecentIds(ids)
+          }
+        }
       } catch {
         if (!cancelled) {
           setNotes([])
@@ -109,7 +118,7 @@ export function HomeLanding({
   }, [])
 
   const byId = new Map(notes.map((n) => [n.id, n]))
-  const recentViewed = loadRecentNoteIds()
+  const recentViewed = recentIds
     .map((id) => byId.get(id))
     .filter((n): n is HomeNote => !!n)
     .slice(0, 8)
