@@ -1,11 +1,15 @@
 # Jotdex STATUS
 
-**Active milestone:** Post-1.1.10 polish  
+**Active milestone:** Post-1.1.11 polish  
 **Last updated:** 2026-08-11
 
 ## In progress
 
 - (none)
+
+## Highlights (v1.1.11)
+
+- Todos rail ignores idle-lock 401s and reloads after unlock (no leftover “Could not save/update” error)
 
 ## Highlights (v1.1.10)
 

@@ -43,6 +43,22 @@ export function signalAuthRequired() {
   }
 }
 
+/** Thrown when an API returns 401; the lock overlay handles it — don't paint a feature error. */
+export class SessionGoneError extends Error {
+  constructor() {
+    super('Session expired')
+    this.name = 'SessionGoneError'
+  }
+}
+
+export function throwIfUnauthorized(res: Response): void {
+  if (res.status === 401) throw new SessionGoneError()
+}
+
+export function isSessionGone(error: unknown): boolean {
+  return error instanceof SessionGoneError
+}
+
 type Props = {
   enabled: boolean
   minutes: number

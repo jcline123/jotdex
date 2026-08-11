@@ -442,6 +442,7 @@ function App() {
     setSelectedId(null)
     setNote(null)
     setMobilePane('editor')
+    setTasksRefreshKey((k) => k + 1)
     void loadVault()
   }, [loadVault])
 

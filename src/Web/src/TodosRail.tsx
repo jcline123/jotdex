@@ -9,6 +9,11 @@ import {
   type TodoPriority,
 } from './todosMarkdown'
 import { promptTodoNotifications, startTodoReminderLoop } from './todoReminders'
+import {
+  AUTH_REQUIRED_EVENT,
+  isSessionGone,
+  throwIfUnauthorized,
+} from './IdleLockGate'
 
 const UNDO_MS = 30_000
 
@@ -55,6 +60,7 @@ type Selection =
 
 async function findOrCreateTodosNote(): Promise<NoteDetail> {
   const byPath = await fetch('/api/notes/by-path?path=Todos.md', { credentials: 'same-origin' })
+  throwIfUnauthorized(byPath)
   if (byPath.ok) {
     return (await byPath.json()) as NoteDetail
   }
@@ -68,6 +74,7 @@ async function findOrCreateTodosNote(): Promise<NoteDetail> {
       markdown: '',
     }),
   })
+  throwIfUnauthorized(created)
   const data = (await created.json()) as NoteDetail & { error?: string }
   if (!created.ok) throw new Error(data.error ?? 'Could not create Todos.md')
   if (data.id && typeof data.markdown === 'string' && data.etag) return data
@@ -120,6 +127,7 @@ export function TodosRail({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ markdown, etag: expectedEtag }),
       })
+      throwIfUnauthorized(res)
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Could not save todos')
       if (data.etag) setEtag(data.etag)
@@ -136,9 +144,10 @@ export function TodosRail({
       if (!noteId) return
       if (saveTimer.current) window.clearTimeout(saveTimer.current)
       saveTimer.current = window.setTimeout(() => {
-        void persist(next, markdownRef.current, noteId, etagRef.current).catch((e) =>
-          setError(e instanceof Error ? e.message : 'Save failed'),
-        )
+        void persist(next, markdownRef.current, noteId, etagRef.current).catch((e) => {
+          if (isSessionGone(e)) return
+          setError(e instanceof Error ? e.message : 'Save failed')
+        })
       }, 280)
     },
     [noteId, persist],
@@ -154,13 +163,17 @@ export function TodosRail({
       setMarkdownBase(note.markdown)
       setItems(sortTodos(parseTodosMarkdown(note.markdown)))
       try {
-        const taskData = await fetch('/api/tasks', { credentials: 'same-origin' }).then((r) => r.json())
+        const taskRes = await fetch('/api/tasks', { credentials: 'same-origin' })
+        throwIfUnauthorized(taskRes)
+        const taskData = await taskRes.json()
         const raw = Array.isArray(taskData.items) ? (taskData.items as VaultTask[]) : []
         setVaultTasks(raw.filter((t) => !t.standaloneTodosMd))
-      } catch {
+      } catch (e) {
+        if (isSessionGone(e)) throw e
         setVaultTasks([])
       }
     } catch (e) {
+      if (isSessionGone(e)) return
       setError(e instanceof Error ? e.message : 'Could not load todos')
     } finally {
       setBusy(false)
@@ -176,6 +189,22 @@ export function TodosRail({
     const t = window.setTimeout(() => void reload(), 250)
     return () => window.clearTimeout(t)
   }, [refreshKey, reload])
+
+  useEffect(() => {
+    const onAuthRequired = () => {
+      setError(null)
+      if (saveTimer.current) {
+        window.clearTimeout(saveTimer.current)
+        saveTimer.current = null
+      }
+      if (vaultSaveTimer.current) {
+        window.clearTimeout(vaultSaveTimer.current)
+        vaultSaveTimer.current = null
+      }
+    }
+    window.addEventListener(AUTH_REQUIRED_EVENT, onAuthRequired)
+    return () => window.removeEventListener(AUTH_REQUIRED_EVENT, onAuthRequired)
+  }, [])
 
   useEffect(() => {
     return startTodoReminderLoop(() => itemsRef.current)
@@ -255,6 +284,7 @@ export function TodosRail({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id }),
       })
+      throwIfUnauthorized(res)
       const data = await res.json()
       if (!res.ok || !data.success) throw new Error(data.error ?? 'Could not complete task')
       if (selection?.kind === 'vault' && selection.id === id) setSelection(null)
@@ -262,6 +292,7 @@ export function TodosRail({
       else if (data.noteId != null) onNoteTasksChanged?.(String(data.noteId))
       await reload()
     } catch (e) {
+      if (isSessionGone(e)) return
       setError(e instanceof Error ? e.message : 'Could not complete task')
     }
   }
@@ -309,12 +340,14 @@ export function TodosRail({
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(body),
           })
+          throwIfUnauthorized(res)
           const data = await res.json()
           if (!res.ok || !data.success) throw new Error(data.error ?? 'Could not update task')
           if (typeof data.noteId === 'string' && data.noteId) onNoteTasksChanged?.(data.noteId)
           else if (data.noteId != null) onNoteTasksChanged?.(String(data.noteId))
           await reload()
         } catch (e) {
+          if (isSessionGone(e)) return
           setError(e instanceof Error ? e.message : 'Could not update task')
           await reload()
         }
