@@ -32,10 +32,12 @@ public class UiPrefsServiceTests
     }
 
     [Fact]
-    public void CookieTimeout_FollowsIdleLock()
+    public void CookieTimeout_StaysLong_RegardlessOfIdleLock()
     {
+        // Idle lock is enforced in the browser (and signs out on lock). A short cookie
+        // matching idle minutes caused early 401 locks while the user was still active.
         var on = UiPrefsService.TimeoutFor(new UiPrefs { IdleLockEnabled = true, IdleLockMinutes = 60 });
-        Assert.Equal(TimeSpan.FromMinutes(60), on);
+        Assert.Equal(UiPrefsService.UnlockedCookieTimeout, on);
 
         var off = UiPrefsService.TimeoutFor(new UiPrefs { IdleLockEnabled = false, IdleLockMinutes = 15 });
         Assert.Equal(UiPrefsService.UnlockedCookieTimeout, off);

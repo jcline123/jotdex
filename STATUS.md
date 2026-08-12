@@ -1,11 +1,15 @@
 # Jotdex STATUS
 
-**Active milestone:** Post-1.1.12 polish  
+**Active milestone:** Post-1.1.13 polish  
 **Last updated:** 2026-08-12
 
 ## In progress
 
 - (none)
+
+## Highlights (v1.1.13)
+
+- Idle lock no longer fires early from a short session cookie while you are still clicking/typing; cookie stays long, idle timer owns the walk-away lock
 
 ## Highlights (v1.1.12)
 

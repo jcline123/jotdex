@@ -2711,8 +2711,9 @@ function App() {
             ) : (
               <>
                 <p className="muted">
-                  After you stop interacting (or leave this tab hidden), require your password again. This setting is
-                  stored on the Jotdex server, so every computer and browser that opens this app uses the same timer.
+                  Clicks, typing, scrolling, and touch reset the timer. After that many minutes with no interaction —
+                  or with this tab hidden — require your password again. Stored on the Jotdex server so every device
+                  uses the same setting.
                 </p>
                 <label className="field checkbox-row">
                   <input

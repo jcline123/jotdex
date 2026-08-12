@@ -7,6 +7,13 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 
 ---
 
+## 2026-08-12 — Idle lock honors in-app activity for the full timer (1.1.13)
+
+**Could lock sooner than the configured minutes while still clicking around**
+- The UI idle timer correctly reset on mouse/keyboard, but the login cookie was also set to the same short lifetime and only renewed on API calls. Reading or clicking without a save could expire the cookie, return 401, and force the lock early. Cookie lifetime is now the long sliding session again; idle lock (which already signs out) owns the N-minute walk-away behavior.
+
+---
+
 ## 2026-08-12 — Edited notes rise to the top; formatting bar stops flashing (1.1.12)
 
 **Portable release 1.1.12**

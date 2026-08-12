@@ -78,10 +78,12 @@ public sealed class UiPrefsService : IUiPrefsService
         }
     }
 
-    public static TimeSpan TimeoutFor(UiPrefs prefs) =>
-        prefs.IdleLockEnabled
-            ? TimeSpan.FromMinutes(Math.Clamp(prefs.IdleLockMinutes, MinIdleMinutes, MaxIdleMinutes))
-            : UnlockedCookieTimeout;
+    /// <summary>
+    /// Login cookie lifetime. Idle lock is enforced in the browser (and signs out on lock);
+    /// the cookie must outlast that timer so mouse/keyboard activity alone cannot be
+    /// overridden by a short HTTP-only session expiry.
+    /// </summary>
+    public static TimeSpan TimeoutFor(UiPrefs prefs) => UnlockedCookieTimeout;
 
     public static UiPrefs Normalize(UiPrefs p)
     {
