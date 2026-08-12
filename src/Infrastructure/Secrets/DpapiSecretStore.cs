@@ -87,6 +87,9 @@ public sealed class DpapiSecretStore : ISecretStore
 
     public IReadOnlyDictionary<string, string> ExportPortable()
     {
+        // Only entries from data/secrets/secrets.json (this store).
+        // Cloud OAuth lives in data/secrets/cloud-backup.json via ICloudCredentialStore —
+        // never loaded or exported here; Move Kit / backup ZIPs must not pack that file.
         lock (_gate)
         {
             var store = Load();
@@ -207,6 +210,7 @@ public sealed class DpapiSecretStore : ISecretStore
     }
 
     private string StorePath() =>
+        // Notification / TOTP / etc. Cloud OAuth is a sibling file cloud-backup.json (never this path).
         Path.Combine(_dataRoot.ResolveDataRoot(), "secrets", "secrets.json");
 
     private static string Protect(string plain)

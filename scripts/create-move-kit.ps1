@@ -95,6 +95,11 @@ Get-ChildItem -LiteralPath $AppDir -Force | Where-Object { $_.Name -ne "data" } 
 
 $appdata = Join-Path $stage "appdata"
 New-Item -ItemType Directory -Force -Path $appdata | Out-Null
+# Portable appdata only. Never pack:
+#   secrets\secrets.json, secrets\cloud-backup.json (DPAPI / machine-bound OAuth)
+#   state\cloud-backup\ (runtime status)
+#   exports\cloud-backup-staging\ (transient staging)
+# config\cloud-backup.json settings ARE included when present under config\.
 foreach ($name in @("config", $(if ($IncludeAuth) { "auth" } else { $null }), $(if ($IncludeHistory) { "history" } else { $null }))) {
     if (-not $name) { continue }
     $src = Join-Path $DataRoot $name
@@ -104,7 +109,7 @@ foreach ($name in @("config", $(if ($IncludeAuth) { "auth" } else { $null }), $(
 }
 
 # Prefer already-exported portable secrets (from a prior in-app move kit / manual export).
-# Raw DPAPI secrets.json will not work on another PC — do not copy it.
+# Raw DPAPI secrets.json and cloud-backup.json will not work on another PC — do not copy them.
 $portableSecrets = Join-Path $DataRoot "secrets\secrets-portable.json"
 if (Test-Path -LiteralPath $portableSecrets) {
     $secDest = Join-Path $appdata "secrets"
@@ -121,6 +126,7 @@ Unzip and run Restore-Jotdex.ps1 on the new PC.
 See docs/backup.md in the Jotdex repo for details.
 For SMTP/Telegram/TOTP secrets, prefer Settings → Backup → Create move kit
 (it unwraps DPAPI). This CLI kit only includes secrets-portable.json if that file already exists.
+Cloud OAuth (data\secrets\cloud-backup.json) is never packed — reconnect providers after restore.
 "@
 Set-Content -LiteralPath (Join-Path $stage "README-MOVE.txt") -Value $readme -Encoding UTF8
 

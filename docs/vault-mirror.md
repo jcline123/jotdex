@@ -32,3 +32,5 @@ Schedule with Task Scheduler (daily/hourly) while Jotdex is idle or running; rob
 - Destination = read-only for humans / other devices.
 - Do not run Jotdex with `VaultPath` set to the mirror.
 - Auth, history, and search indexes stay in app `data\` — they are not part of this mirror.
+
+This filesystem mirror is **independent** of multi-provider cloud backup (API uploads of encrypted Move Kits). Configure that under **Settings → Backup → Cloud backups** — see [cloud-backup.md](cloud-backup.md).

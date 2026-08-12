@@ -35,6 +35,12 @@ public class MoveKitCryptoTests : IDisposable
         var enc = crypto.EncryptZipFile(zip);
         Assert.EndsWith(".jotdexkit", enc, StringComparison.OrdinalIgnoreCase);
         Assert.False(File.Exists(zip));
+        using (var fs = File.OpenRead(enc))
+        {
+            var magic = new byte[5];
+            Assert.Equal(5, fs.Read(magic, 0, 5));
+            Assert.Equal("JDXK2", System.Text.Encoding.ASCII.GetString(magic));
+        }
 
         var outZip = Path.Combine(_root, "out.zip");
         crypto.DecryptToZip(enc, "correct-horse-battery", outZip);

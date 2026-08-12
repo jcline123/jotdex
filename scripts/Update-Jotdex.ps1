@@ -212,6 +212,17 @@ try {
     if ($self -and (Test-Path -LiteralPath $self)) {
         Copy-Item -LiteralPath $self -Destination (Join-Path $InstallPath "Update-Jotdex.ps1") -Force -ErrorAction SilentlyContinue
     }
+    # Ensure cloud-backup / app data folders exist on older installs (do not wipe contents).
+    $dataRoot = Join-Path $InstallPath "data"
+    foreach ($rel in @(
+            "config",
+            "secrets",
+            "state\cloud-backup",
+            "exports\backups",
+            "exports\cloud-backup-staging"
+        )) {
+        New-Item -ItemType Directory -Force -Path (Join-Path $dataRoot $rel) | Out-Null
+    }
     Write-Ok "Files replaced"
 
     Write-Step "Starting Jotdex"

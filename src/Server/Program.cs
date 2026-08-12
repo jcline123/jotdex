@@ -1,15 +1,18 @@
+using System.Buffers.Binary;
 using System.Diagnostics;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using Jotdex.Core.CloudBackup;
 using Jotdex.Core.Configuration;
 using Jotdex.Core.Notifications;
 using Jotdex.Core.Search;
 using Jotdex.Core.Secrets;
 using Jotdex.Core.Vault;
 using Jotdex.Infrastructure.Auth;
+using Jotdex.Infrastructure.CloudBackup;
 using Jotdex.Infrastructure.Config;
 using Jotdex.Infrastructure.Export;
 using Jotdex.Infrastructure.History;
@@ -23,11 +26,12 @@ using Jotdex.Infrastructure.Search;
 using Jotdex.Infrastructure.Secrets;
 using Jotdex.Infrastructure.Vault;
 using Jotdex.Server.Auth;
+using Jotdex.Server.CloudBackup;
 using Jotdex.Server.Hosting;
 using Microsoft.Extensions.Options;
 
 // Offline helper: Jotdex.Server.exe --decrypt-kit <kit.jotdexkit> <out.zip>
-// Password via env JOTDEX_DECRYPT_PASSWORD or prompt.
+// Supports streaming JDXK2 and legacy JDXK1. Password via env JOTDEX_DECRYPT_PASSWORD or prompt.
 if (args is ["--decrypt-kit", var kitPath, var outZip])
 {
     var password = Environment.GetEnvironmentVariable("JOTDEX_DECRYPT_PASSWORD");
@@ -70,42 +74,115 @@ static string ReadPassword()
 
 static void DecryptKitFile(string encryptedPath, string password, string outputZipPath)
 {
-    const string Magic = "JDXK1";
     const int NonceSize = 12;
+    const int NoncePrefixSize = 8;
     const int TagSize = 16;
     const int KeySize = 32;
     const int Pbkdf2Iterations = 200_000;
+    const int ChunkSize = 4 * 1024 * 1024;
 
-    var bytes = File.ReadAllBytes(encryptedPath);
-    using var ms = new MemoryStream(bytes);
-    using var br = new BinaryReader(ms);
-    var magic = Encoding.ASCII.GetString(br.ReadBytes(Magic.Length));
-    if (magic != Magic) throw new InvalidDataException("Not a Jotdex encrypted move kit.");
-    var saltLen = br.ReadUInt16();
-    var salt = br.ReadBytes(saltLen);
-    var wrapLen = br.ReadUInt16();
-    var wrapped = br.ReadBytes(wrapLen);
-    var nonce = br.ReadBytes(NonceSize);
-    var tag = br.ReadBytes(TagSize);
-    var cipher = br.ReadBytes((int)(ms.Length - ms.Position));
-
-    var kek = Rfc2898DeriveBytes.Pbkdf2(
-        Encoding.UTF8.GetBytes(password), salt, Pbkdf2Iterations, HashAlgorithmName.SHA256, KeySize);
-    if (wrapped.Length < NonceSize + TagSize + KeySize)
-        throw new InvalidDataException("Invalid wrapped key.");
-    var wNonce = wrapped.AsSpan(0, NonceSize);
-    var wTag = wrapped.AsSpan(NonceSize, TagSize);
-    var wCipher = wrapped.AsSpan(NonceSize + TagSize);
-    var aesKey = new byte[wCipher.Length];
-    using (var aes = new AesGcm(kek, TagSize))
-        aes.Decrypt(wNonce, wCipher, wTag, aesKey);
-
-    var plain = new byte[cipher.Length];
-    using (var aes = new AesGcm(aesKey, TagSize))
-        aes.Decrypt(nonce, cipher, tag, plain);
-
+    using var fs = File.OpenRead(encryptedPath);
+    using var br = new BinaryReader(fs, Encoding.UTF8, leaveOpen: true);
+    var magic = Encoding.ASCII.GetString(br.ReadBytes(5));
     Directory.CreateDirectory(Path.GetDirectoryName(Path.GetFullPath(outputZipPath))!);
-    File.WriteAllBytes(outputZipPath, plain);
+    var tmp = outputZipPath + ".partial";
+    try
+    {
+        if (magic == "JDXK2")
+        {
+            var saltLen = br.ReadUInt16();
+            var salt = br.ReadBytes(saltLen);
+            var wrapLen = br.ReadUInt16();
+            var wrapped = br.ReadBytes(wrapLen);
+            var plainLen = br.ReadInt64();
+            var chunkCount = br.ReadUInt32();
+            var noncePrefix = br.ReadBytes(NoncePrefixSize);
+            if (noncePrefix.Length != NoncePrefixSize)
+                throw new InvalidDataException("Invalid JDXK2 nonce prefix.");
+
+            var kek = Rfc2898DeriveBytes.Pbkdf2(
+                Encoding.UTF8.GetBytes(password), salt, Pbkdf2Iterations, HashAlgorithmName.SHA256, KeySize);
+            if (wrapped.Length < NonceSize + TagSize + KeySize)
+                throw new InvalidDataException("Invalid wrapped key.");
+            var wNonce = wrapped.AsSpan(0, NonceSize);
+            var wTag = wrapped.AsSpan(NonceSize, TagSize);
+            var wCipher = wrapped.AsSpan(NonceSize + TagSize);
+            var aesKey = new byte[wCipher.Length];
+            using (var aesUnwrap = new AesGcm(kek, TagSize))
+                aesUnwrap.Decrypt(wNonce, wCipher, wTag, aesKey);
+
+            using var output = File.Create(tmp);
+            using var aes = new AesGcm(aesKey, TagSize);
+            long written = 0;
+            var cipherBuf = new byte[ChunkSize];
+            var plainBuf = new byte[ChunkSize];
+            var tag = new byte[TagSize];
+            for (uint i = 0; i < chunkCount; i++)
+            {
+                var chunkPlainLen = br.ReadUInt32();
+                if (chunkPlainLen > ChunkSize)
+                    throw new InvalidDataException("JDXK2 chunk too large.");
+                var cipher = br.ReadBytes((int)chunkPlainLen);
+                if (cipher.Length != chunkPlainLen)
+                    throw new InvalidDataException("Truncated JDXK2 chunk.");
+                if (br.Read(tag, 0, TagSize) != TagSize)
+                    throw new InvalidDataException("Missing JDXK2 auth tag.");
+
+                var nonce = new byte[NonceSize];
+                Buffer.BlockCopy(noncePrefix, 0, nonce, 0, NoncePrefixSize);
+                BinaryPrimitives.WriteUInt32BigEndian(nonce.AsSpan(NoncePrefixSize), i);
+                var aad = new byte[8];
+                BinaryPrimitives.WriteUInt32BigEndian(aad.AsSpan(0), i);
+                BinaryPrimitives.WriteUInt32BigEndian(aad.AsSpan(4), chunkPlainLen);
+                var plainSpan = plainBuf.AsSpan(0, (int)chunkPlainLen);
+                aes.Decrypt(nonce, cipher, tag, plainSpan, aad);
+                output.Write(plainSpan);
+                written += chunkPlainLen;
+            }
+
+            if (written != plainLen)
+                throw new InvalidDataException("JDXK2 plaintext length mismatch.");
+            if (br.BaseStream.Position != br.BaseStream.Length)
+                throw new InvalidDataException("Extra data after JDXK2 payload.");
+        }
+        else if (magic == "JDXK1")
+        {
+            var saltLen = br.ReadUInt16();
+            var salt = br.ReadBytes(saltLen);
+            var wrapLen = br.ReadUInt16();
+            var wrapped = br.ReadBytes(wrapLen);
+            var nonce = br.ReadBytes(NonceSize);
+            var tag = br.ReadBytes(TagSize);
+            var cipher = br.ReadBytes((int)(fs.Length - fs.Position));
+
+            var kek = Rfc2898DeriveBytes.Pbkdf2(
+                Encoding.UTF8.GetBytes(password), salt, Pbkdf2Iterations, HashAlgorithmName.SHA256, KeySize);
+            if (wrapped.Length < NonceSize + TagSize + KeySize)
+                throw new InvalidDataException("Invalid wrapped key.");
+            var wNonce = wrapped.AsSpan(0, NonceSize);
+            var wTag = wrapped.AsSpan(NonceSize, TagSize);
+            var wCipher = wrapped.AsSpan(NonceSize + TagSize);
+            var aesKey = new byte[wCipher.Length];
+            using (var aes = new AesGcm(kek, TagSize))
+                aes.Decrypt(wNonce, wCipher, wTag, aesKey);
+
+            var plain = new byte[cipher.Length];
+            using (var aes = new AesGcm(aesKey, TagSize))
+                aes.Decrypt(nonce, cipher, tag, plain);
+            File.WriteAllBytes(tmp, plain);
+        }
+        else
+        {
+            throw new InvalidDataException("Not a Jotdex encrypted move kit.");
+        }
+
+        File.Move(tmp, outputZipPath, overwrite: true);
+    }
+    catch
+    {
+        try { if (File.Exists(tmp)) File.Delete(tmp); } catch { /* ignore */ }
+        throw;
+    }
 }
 
 var builder = WebApplication.CreateBuilder(args);
@@ -160,6 +237,21 @@ builder.Services.AddHostedService<VaultFileWatcher>();
 builder.Services.AddSingleton<IAppVersion>(_ => new AssemblyAppVersion());
 builder.Services.AddSingleton(new StopwatchHolder(Stopwatch.StartNew()));
 builder.Services.AddSingleton<Jotdex.Server.Hosting.IServerRestartService, Jotdex.Server.Hosting.ServerRestartService>();
+
+// Cloud backup (multi-provider)
+builder.Services.AddSingleton<ICloudBackupSettingsService, CloudBackupSettingsService>();
+builder.Services.AddSingleton<ICloudBackupStateStore, CloudBackupStateStore>();
+builder.Services.AddSingleton<ICloudCredentialStore, DpapiCloudCredentialStore>();
+builder.Services.AddSingleton<CloudBackupHashService>();
+builder.Services.AddSingleton<ICloudBackupSnapshotService, CloudBackupSnapshotService>();
+builder.Services.AddSingleton<IVaultSnapshotZipService, VaultSnapshotZipService>();
+builder.Services.AddSingleton<ICloudBackupArtifactService, CloudBackupArtifactService>();
+builder.Services.AddSingleton<ICloudBackupHealthService, CloudBackupHealthService>();
+builder.Services.AddSingleton<ICloudOAuthConnectionService, CloudOAuthConnectionService>();
+CloudBackupProviderFactory.AddCloudBackupProviders(builder.Services);
+builder.Services.AddSingleton<ICloudBackupCoordinator, CloudBackupCoordinator>();
+builder.Services.AddHostedService<CloudBackupHostedService>();
+
 builder.Services.AddJotdexAuth(builder.Configuration);
 
 // Resolve data root early so file logs land next to other app data
@@ -170,6 +262,12 @@ var earlyDataRoot = !string.IsNullOrWhiteSpace(earlyOpts.DataRoot)
         ? Path.Combine(builder.Environment.ContentRootPath, "data")
         : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Jotdex");
 Directory.CreateDirectory(earlyDataRoot);
+if (builder.Environment.IsDevelopment())
+{
+    // Optional gitignored data/config/cloud-oauth.local.json → process env (real OAuth client IDs).
+    // When unset, Development still gets local-folder provider fallbacks (see CloudBackupProviderResolver).
+    CloudBackupLocalOAuthEnv.TryApply(earlyDataRoot, builder.Environment.ContentRootPath);
+}
 var fileLogs = new FileLoggerProvider(earlyDataRoot);
 builder.Services.AddSingleton(fileLogs);
 
@@ -220,6 +318,7 @@ app.UseAuthorization();
 app.UseJotdexAuthGate();
 
 app.MapAuthEndpoints();
+app.MapCloudBackupEndpoints();
 
 app.MapGet("/api/health", (IAppVersion version, IDataRootResolver paths, IVaultPathGuard vault, ISearchIndex search, StopwatchHolder uptime, IOptions<JotdexOptions> options) =>
 {

@@ -7,6 +7,65 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 
 ---
 
+## 2026-08-12 — Backup Now looked idle while stale OneDrive errors stayed on screen
+
+**Why**
+- “Backup started” could finish in milliseconds with no upload when OneDrive was connected but `enabled: false`, while the UI still showed the previous 403. Filtered Backup Now now auto-enables that provider, clears stale failure text at run start, and polls until the operation finishes (success or real error). OneDrive Settings also links API permissions for Graph consent checks.
+
+---
+
+## 2026-08-12 — OneDrive App Folder quota 403 should not fail backup
+
+**Why**
+- After a successful OneDrive Connect, backup runs failed immediately on `GET /me/drive` quota with 403. `Files.ReadWrite.AppFolder` cannot read the full drive; quota is now optional and uploads continue via `special/approot`.
+
+---
+
+**Why**
+- Settings sent `oauthClientId`, but System.Text.Json’s camel-case policy expected `oAuthClientId` for `OAuthClientId`, so pasted Azure/Dropbox/Google app IDs never persisted and Connect returned “unavailable.” Explicit `[JsonPropertyName("oauthClientId")]` fixes save/Connect.
+
+---
+
+**Why**
+- Providers were gated only on process env client IDs, so Settings showed “Unavailable in this build” with no way to configure real Dropbox/Google/OneDrive from the product. Each provider card now has a setup link, paste fields for App key/Client ID, Save, and Connect (browser OAuth). Client IDs persist in `cloud-backup.json`; env remains an optional override. The temporary local-folder Development fallback was removed.
+
+---
+
+## 2026-08-12 — Development local-folder cloud backup providers
+
+**Why**
+- (Superseded by GUI OAuth client ID entry.) Earlier local-folder Development fallback was the wrong product path for enabling real cloud backups.
+
+---
+
+## 2026-08-12 — Cloud backup PKCE OAuth + provider adapters (CB-20…43)
+
+**Why**
+- Placeholder OAuth stored the auth code as a refresh token and had no loopback `/oauth/{provider}` callbacks, so real Dropbox/Google/OneDrive connects could not complete. PKCE S256 + token exchange, Dropbox upload sessions/`content_hash`, Google MD5 checks, and mocked HTTP adapter tests make the three providers usable without live accounts; personal matrices remain pending Joshua.
+
+---
+
+## 2026-08-12 — Cloud backup Settings UI + docs (1.1.14, CB-50…CB-62)
+
+**Why**
+- Backend cloud backup APIs needed a Settings → Backup section and Home health banner so users can connect providers, see per-artifact status, and recover from failures without reading raw JSON. Docs (`cloud-backup.md`, matrices, backup/portability/threat-model/README) keep the API upload path clearly separate from the filesystem vault mirror.
+
+---
+
+## 2026-08-12 — Cloud backup backend unit tests (CB-15)
+
+**Why**
+- CB-02/CB-03 claimed credential exclusion and JDXK2/JDXK1 crypto coverage; CB-15 adds `Jotdex.Unit.Tests` so those behaviors (plus retention, Move Kit critical vs vault-ZIP amber health, Dropbox content-hash vector, settings clamps) are executable and filterable with `--filter CloudBackup`.
+
+---
+
+## 2026-08-12 — Cloud backup folders in install/move-kit (CB-06)
+
+**Why**
+- Multi-provider cloud backup adds `config/cloud-backup.json` (portable settings), `secrets/cloud-backup.json` (machine-bound OAuth), `state/cloud-backup/`, and `exports/cloud-backup-staging/`. Setup/Restore/Update now create those dirs; Move Kits and portable secrets export still never pack OAuth, runtime state, or staging — reconnect providers after restore.
+
+---
+
 ## 2026-08-12 — Idle lock honors in-app activity for the full timer (1.1.13)
 
 **Portable release 1.1.13**

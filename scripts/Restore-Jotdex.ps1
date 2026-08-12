@@ -6,8 +6,10 @@
 .DESCRIPTION
   Simple flow:
     1. Point this script at jotdex-move-latest.jotdexkit (or an unzipped kit folder).
-    2. If the kit is encrypted, enter your Jotdex unlock password when asked.
+    2. If the kit is encrypted (JDXK1 or JDXK2), enter your Jotdex unlock password when asked.
     3. Choose install folder + vault folder — done.
+  Cloud-backup settings (config\cloud-backup.json) may restore; OAuth (secrets\cloud-backup.json)
+  never travels — reconnect providers in Settings after unlock.
 
 .PARAMETER KitRoot
   Unzipped kit folder, OR a .zip / .jotdexkit file (default: this script's directory,
@@ -262,7 +264,13 @@ try {
 
     if (Test-Path -LiteralPath $appdataSrc) {
         Write-Step "Copying app data (auth, config, history)"
+        # Portable folders only — never restore runtime/state/staging from a kit.
+        $skipAppdata = @("state", "exports", "indexes", "logs")
         Get-ChildItem -LiteralPath $appdataSrc -Directory -ErrorAction SilentlyContinue | ForEach-Object {
+            if ($skipAppdata -contains $_.Name.ToLowerInvariant()) {
+                Write-WarnLine "Skipping non-portable appdata\$($_.Name)"
+                return
+            }
             $dest = Join-Path $dataDest $_.Name
             Copy-Tree $_.FullName $dest
             Write-Ok $_.Name
@@ -273,6 +281,23 @@ try {
             New-Item -ItemType Directory -Force -Path $secDir | Out-Null
             Copy-Item -LiteralPath $portableLoose -Destination (Join-Path $secDir "secrets-portable.json") -Force
         }
+        # Cloud OAuth is machine-bound DPAPI — never keep even if a kit wrongly included it.
+        $cloudCred = Join-Path $dataDest "secrets\cloud-backup.json"
+        if (Test-Path -LiteralPath $cloudCred) {
+            Remove-Item -LiteralPath $cloudCred -Force -ErrorAction SilentlyContinue
+            Write-WarnLine "Removed secrets\cloud-backup.json (not portable). Reconnect cloud backup providers in Settings."
+        }
+    }
+
+    Write-Step "Ensuring data folders"
+    foreach ($rel in @(
+            "config",
+            "secrets",
+            "state\cloud-backup",
+            "exports\backups",
+            "exports\cloud-backup-staging"
+        )) {
+        New-Item -ItemType Directory -Force -Path (Join-Path $dataDest $rel) | Out-Null
     }
 
     Write-Step "Pointing config at the new vault path"
@@ -303,6 +328,11 @@ try {
         } catch {
             Write-WarnLine "Could not adjust vault-mirror.json: $($_.Exception.Message)"
         }
+    }
+
+    $cloudBackupSettings = Join-Path $configDir "cloud-backup.json"
+    if (Test-Path -LiteralPath $cloudBackupSettings) {
+        Write-WarnLine "cloud-backup.json settings were restored; reconnect OneDrive/Google/Dropbox (OAuth is machine-bound)."
     }
 
     $example = Join-Path $InstallPath "appsettings.json"
@@ -380,6 +410,7 @@ try {
     Write-Host "  3. Open http://127.0.0.1:5180"
     Write-Host "  4. Unlock with your existing password (and authenticator code if TOTP is on)"
     Write-Host "  5. Search rebuilds automatically; notification secrets import on first start"
+    Write-Host "  6. If you use cloud backup: reconnect providers in Settings (OAuth does not travel in kits)"
     Write-Host ""
     if (Test-Path -LiteralPath (Join-Path $dataDest "secrets\secrets-portable.json")) {
         Write-Host "Note: secrets-portable.json will be imported into DPAPI on first launch, then removed." -ForegroundColor Yellow

@@ -30,6 +30,8 @@ import { hydrateUiPrefs, rememberViewedNoteAndSync, saveUiPrefs, type UiPrefs } 
 import { TodosRail } from './TodosRail'
 import { getNotificationPermission, promptTodoNotifications, type NotifyPermission } from './todoReminders'
 import { HomeLanding } from './HomeLanding'
+import { CloudBackupSettings } from './CloudBackupSettings'
+import { runCloudBackup } from './cloudBackupApi'
 import { isStandaloneTodosNote } from './systemNotes'
 import { diffLines } from './diffLines'
 
@@ -3137,6 +3139,13 @@ function App() {
               </button>
             </div>
 
+            <CloudBackupSettings
+              onHint={(m) => setNetworkHint(m)}
+              onError={(m) => {
+                if (m) setError(m)
+              }}
+            />
+
             <h2 className="settings-section">Cloud backup mirror</h2>
             <p className="lede">
               Keep the live vault on local disk. Optionally copy the whole vault one-way to iCloud, OneDrive, etc. Never
@@ -3748,6 +3757,20 @@ function App() {
                 } catch {
                   /* ignore */
                 }
+              }}
+              onOpenCloudBackupSettings={() => {
+                setSettingsOpen(true)
+                setSettingsTab('backup')
+              }}
+              onRetryCloudBackup={async () => {
+                setNetworkHint('Retrying cloud backup…')
+                const res = await runCloudBackup()
+                if (!res.accepted) {
+                  setError(res.error ?? 'Cloud backup retry failed')
+                  setNetworkHint(null)
+                  return
+                }
+                setNetworkHint('Cloud backup started.')
               }}
             />
           )}

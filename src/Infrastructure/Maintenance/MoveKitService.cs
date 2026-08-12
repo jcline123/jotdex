@@ -32,6 +32,19 @@ public interface IMoveKitService
         string? passwordForInit = null,
         string? outputDirectory = null,
         CancellationToken ct = default);
+
+    /// <summary>
+    /// Cloud-backup path: pack a pre-staged vault directory instead of the live vault.
+    /// Not exposed over HTTP — caller must supply a path already validated inside staging.
+    /// </summary>
+    Task<MoveKitResult> CreateFromVaultSnapshotAsync(
+        string vaultSnapshotPath,
+        bool includeAuth = true,
+        bool includeHistory = true,
+        string? passwordForInit = null,
+        string? outputDirectory = null,
+        string? fileNameStem = null,
+        CancellationToken ct = default);
 }
 
 /// <summary>
@@ -62,7 +75,7 @@ public sealed class MoveKitService : IMoveKitService
         _logger = logger;
     }
 
-    public async Task<MoveKitResult> CreateAsync(
+    public Task<MoveKitResult> CreateAsync(
         bool includeAuth = true,
         bool includeHistory = true,
         string? passwordForInit = null,
@@ -70,9 +83,33 @@ public sealed class MoveKitService : IMoveKitService
         CancellationToken ct = default)
     {
         if (!_paths.IsConfigured)
-            return new MoveKitResult { Success = false, Error = "Vault not configured." };
+            return Task.FromResult(new MoveKitResult { Success = false, Error = "Vault not configured." });
+        return CreateCoreAsync(_paths.VaultRoot, includeAuth, includeHistory, passwordForInit, outputDirectory, fileNameStem: null, ct);
+    }
 
-        var vault = _paths.VaultRoot;
+    public Task<MoveKitResult> CreateFromVaultSnapshotAsync(
+        string vaultSnapshotPath,
+        bool includeAuth = true,
+        bool includeHistory = true,
+        string? passwordForInit = null,
+        string? outputDirectory = null,
+        string? fileNameStem = null,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(vaultSnapshotPath) || !Directory.Exists(vaultSnapshotPath))
+            return Task.FromResult(new MoveKitResult { Success = false, Error = "Vault snapshot missing." });
+        return CreateCoreAsync(vaultSnapshotPath, includeAuth, includeHistory, passwordForInit, outputDirectory, fileNameStem, ct);
+    }
+
+    private async Task<MoveKitResult> CreateCoreAsync(
+        string vault,
+        bool includeAuth,
+        bool includeHistory,
+        string? passwordForInit,
+        string? outputDirectory,
+        string? fileNameStem,
+        CancellationToken ct)
+    {
         if (!Directory.Exists(vault))
             return new MoveKitResult { Success = false, Error = "Vault folder missing." };
 
@@ -104,7 +141,8 @@ public sealed class MoveKitService : IMoveKitService
             ? Path.Combine(dataRoot, "exports", "backups")
             : outputDirectory;
         Directory.CreateDirectory(outDir);
-        var zipPath = Path.Combine(outDir, $"jotdex-move-{stamp}.zip");
+        var stem = string.IsNullOrWhiteSpace(fileNameStem) ? $"jotdex-move-{stamp}" : fileNameStem.Trim();
+        var zipPath = Path.Combine(outDir, stem + ".zip");
 
         var appDir = ResolvePortableAppDir();
         var includedApp = appDir is not null;
@@ -120,7 +158,12 @@ public sealed class MoveKitService : IMoveKitService
 
                 var configDir = Path.Combine(dataRoot, "config");
                 if (Directory.Exists(configDir))
+                {
+                    // Include cloud-backup.json settings (preferences). Do NOT pack secrets —
+                    // OAuth lives in data/secrets/cloud-backup.json and is never under config/.
+                    // Also never pack state/cloud-backup or exports/cloud-backup-staging (not under config/).
                     AddDirectory(zip, configDir, "appdata/config", ct, skipRelative: null);
+                }
 
                 if (includeAuth)
                 {
@@ -136,6 +179,7 @@ public sealed class MoveKitService : IMoveKitService
                         AddDirectory(zip, histDir, "appdata/history", ct, skipRelative: null);
                 }
 
+                // ISecretStore only — does not walk secrets/ (excludes cloud-backup.json OAuth).
                 PortableSecretsZip.AddToZip(zip, _secrets);
 
                 if (appDir is not null)
@@ -155,6 +199,7 @@ public sealed class MoveKitService : IMoveKitService
                     includeHistory,
                     includedApp,
                     encrypted = _crypto.IsPasswordProtectionEnabled,
+                    kitFormat = _crypto.IsPasswordProtectionEnabled ? MoveKitCryptoService.MagicV2 : null,
                     appSource = appDir,
                     note = "Unzip (decrypt .jotdexkit with your Jotdex password first if encrypted), run Restore-Jotdex.ps1."
                 };
@@ -363,7 +408,8 @@ public sealed class MoveKitService : IMoveKitService
         Contents (inside the archive)
         -----------------------------
         - vault\          Your notes
-        - appdata\        Password, settings, history, portable secrets
+        - appdata\        Password, settings (incl. cloud-backup preferences), history, portable secrets
+                          (cloud OAuth credentials are NOT included — reconnect providers after restore)
         - app\            Portable program {{(includedApp ? "(included)" : "(not included)")}}
         - Restore-Jotdex.ps1
         """;

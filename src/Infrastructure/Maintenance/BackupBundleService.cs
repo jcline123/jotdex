@@ -65,7 +65,11 @@ public sealed class BackupBundleService : IBackupBundleService
 
                 var configDir = Path.Combine(dataRoot, "config");
                 if (Directory.Exists(configDir))
+                {
+                    // Includes config/cloud-backup.json settings when present.
+                    // Never packs secrets/, state/cloud-backup/, or exports/cloud-backup-staging/.
                     AddDirectory(zip, configDir, "appdata/config", ct);
+                }
 
                 if (includeAuth)
                 {
@@ -81,6 +85,7 @@ public sealed class BackupBundleService : IBackupBundleService
                         AddDirectory(zip, histDir, "appdata/history", ct);
                 }
 
+                // ExportPortable only — cloud OAuth (secrets/cloud-backup.json) excluded.
                 PortableSecretsZip.AddToZip(zip, _secrets);
 
                 var manifest = new

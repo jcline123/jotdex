@@ -69,7 +69,7 @@ Checkboxes in notes show up in a **Todos** rail with priority, due date, and rem
 Every edit **autosaves**. Per-note **history** lives outside the vault so you can compare and roll back a bad change. Trash (restore or delete). Optional password, idle lock, and TOTP. **Share HTML** downloads one note as a clean single file you can email — no Jotdex branding, recipient does not need the app.
 
 ### Your network, your backup, your next PC
-LAN access from Settings (firewall helper included). Away from home: a VPN, or a **Cloudflare Tunnel** so you do not open inbound ports. Optional Windows Service so it comes back after reboot. One-way **cloud backup mirror** to iCloud/OneDrive/a NAS. **Move kit** ZIP to pick up the whole install on a new machine. In-app **Updates** pull the latest portable release.
+LAN access from Settings (firewall helper included). Away from home: a VPN, or a **Cloudflare Tunnel** so you do not open inbound ports. Optional Windows Service so it comes back after reboot. One-way **cloud backup mirror** to iCloud/OneDrive/a NAS. Optional **multi-provider cloud backup** (encrypted Move Kits to Dropbox / Google Drive / OneDrive APIs). **Move kit** ZIP to pick up the whole install on a new machine. In-app **Updates** pull the latest portable release.
 
 ### OneNote → Jotdex without touching the export
 Offline migration copies into a staging vault. Your original OneNote Markdown export stays exactly as the exporter wrote it.
@@ -292,7 +292,7 @@ Cloudflare’s setup guide: [Connect apps with Cloudflare Tunnels](https://devel
 |---|---|
 | Your notes (vault) | e.g. `C:\JotdexVault` |
 | App settings, search index, history | `%LOCALAPPDATA%\Jotdex` or `data\` next to the portable exe |
-| Cloud copy (optional) | Wherever you set under **Settings → Cloud backup mirror** |
+| Cloud copy (optional) | Wherever you set under **Settings → Cloud backup mirror**, and/or **Settings → Cloud backups** (API Move Kits) |
 
 Moving to a new PC: **Settings → Move to another PC → Create move kit (ZIP)**, copy the ZIP, unzip on the new machine, run `Restore-Jotdex.ps1`. Details: [docs/backup.md](docs/backup.md).
 
@@ -322,8 +322,9 @@ Details: [docs/import-format/onenote-md-exporter.md](docs/import-format/onenote-
 | [SETUP.md](SETUP.md) | Fuller install / portable / service notes |
 | [docs/upgrading.md](docs/upgrading.md) | Check for updates + Update-Jotdex.ps1 |
 | [docs/backup.md](docs/backup.md) | Move kit + backup ZIP |
+| [docs/cloud-backup.md](docs/cloud-backup.md) | Multi-provider cloud backup (API) |
 | [docs/portability.md](docs/portability.md) | Moving vaults safely |
-| [docs/vault-mirror.md](docs/vault-mirror.md) | Cloud backup mirror |
+| [docs/vault-mirror.md](docs/vault-mirror.md) | Cloud backup mirror (filesystem) |
 | [docs/changelog.md](docs/changelog.md) | Why recent fixes were made |
 | [AGENTS.md](AGENTS.md) | For contributors / AI agents |
 

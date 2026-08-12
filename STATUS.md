@@ -1,11 +1,24 @@
 # Jotdex STATUS
 
-**Active milestone:** Post-1.1.13 polish  
+**Active milestone:** CB — Multi-provider cloud backup (code complete; OneDrive live-verified)  
 **Last updated:** 2026-08-12
 
 ## In progress
 
-- (none)
+- Dropbox / Google personal-account matrices (`CB-24` / `CB-34`) still pending. OneDrive live upload verified (`CB-44` notes in matrices when filled).
+
+## Just shipped (this session)
+
+- Multi-provider cloud backup: encrypted Move Kit (JDXK2) + optional vault-only ZIP via Dropbox / Google Drive / OneDrive APIs
+- Settings GUI: paste OAuth client IDs, Connect, Backup now (polls to completion), clear stale errors, auto-enable on per-provider retry
+- Home health banner when backup is unhealthy / stale
+- OneDrive App Folder path (quota optional; uploads via `special/approot`)
+- Version **1.1.14**
+
+## Highlights (v1.1.14)
+
+- Multi-provider cloud backup (API uploads) separate from filesystem vault mirror; optional readable vault ZIP
+- Configure providers from Settings (no env required for personal OAuth apps)
 
 ## Highlights (v1.1.13)
 
@@ -73,14 +86,9 @@
 - Search box can show `undefined` as the value
 - Leftover `tools/SampleVault/Conflict *.md` from earlier conflict tests (safe to delete)
 - NuGet NU1903 warning on SQLitePCLRaw (dependency bump later)
-- PDF attachment text / OCR still deferred; bookmarklet needs same-origin auth cookie
+- Cloud backup Dropbox/Google live matrices pending (`docs/cloud-backup-matrices.md`)
 
-## Persistence after reboot (this Dev PC)
-
-- Startup: `%APPDATA%\...\Startup\Jotdex Server.cmd` → `dotnet run --no-launch-profile` in `src\Server`
-- Portable users: Start with Windows from the portable exe (unchanged)
-
-## Run (Development)
+## Run (Development + SampleVault)
 
 ```powershell
 $env:ASPNETCORE_ENVIRONMENT="Development"
@@ -88,4 +96,6 @@ cd src\Server
 dotnet run --no-launch-profile
 ```
 
-Listen URL from `data/config/network.json` when present (often `http://0.0.0.0:5180`).
+Listen URL comes from `data/config/network.json` when present (often `http://127.0.0.1:5180`).
+
+Optional provider env vars still override Settings-pasted client IDs: `JOTDEX_CLOUD_DROPBOX_APP_KEY`, `JOTDEX_CLOUD_GOOGLE_CLIENT_ID`, `JOTDEX_CLOUD_ONEDRIVE_CLIENT_ID`.

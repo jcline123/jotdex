@@ -296,10 +296,20 @@ if (-not $SkipBuild) {
     Write-Ok "Using existing build: $artifacts"
 }
 
-# Pre-seed vault path for portable data root
+# Pre-seed vault path + data layout for portable app
 Write-Step "Writing vault setting for portable app"
-$dataConfig = Join-Path $artifacts "data\config"
-New-Item -ItemType Directory -Force -Path $dataConfig | Out-Null
+$dataRoot = Join-Path $artifacts "data"
+$dataConfig = Join-Path $dataRoot "config"
+# Cloud backup layout (settings may later live under config\; secrets/state/staging are install-local)
+foreach ($rel in @(
+        "config",
+        "secrets",
+        "state\cloud-backup",
+        "exports\backups",
+        "exports\cloud-backup-staging"
+    )) {
+    New-Item -ItemType Directory -Force -Path (Join-Path $dataRoot $rel) | Out-Null
+}
 $vaultJson = Join-Path $dataConfig "vault.json"
 @{ vaultPath = $VaultPath } | ConvertTo-Json | Set-Content -Path $vaultJson -Encoding UTF8
 Write-Ok "Wrote $vaultJson"

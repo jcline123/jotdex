@@ -5,6 +5,11 @@ namespace Jotdex.Infrastructure.Secrets;
 
 public static class PortableSecretsZip
 {
+    /// <summary>
+    /// Packs <see cref="ISecretStore.ExportPortable"/> only (SMTP/Telegram/TOTP, etc.).
+    /// Does not walk <c>data/secrets/</c> on disk — so <c>cloud-backup.json</c> OAuth
+    /// (separate <c>ICloudCredentialStore</c>) is never included.
+    /// </summary>
     public static void AddToZip(System.IO.Compression.ZipArchive zip, ISecretStore secrets, string entryName = "appdata/secrets/secrets-portable.json")
     {
         var portable = secrets.ExportPortable();

@@ -2,7 +2,7 @@
 
 Mark items `- [x]` when done. IDs are stable for chat (“done M1-04”).
 
-**Active milestone:** M8 complete — polish as needed
+**Active milestone:** CB — Multi-provider cloud backup
 
 ---
 
@@ -178,3 +178,66 @@ Mark items `- [x]` when done. IDs are stable for chat (“done M1-04”).
 - [x] `OPS-05` Produce real vault; set path; reindex
 - [x] `OPS-06` Spot-check; original export unchanged
 - [x] `OPS-07` Document migration for future hosts
+
+---
+
+## CB — Multi-provider cloud backup (+ readable vault ZIP)
+
+### Phase 0 — Tracker + ADR
+
+- [x] `CB-00` ADR 0007 + CHECKLIST CB-* + STATUS claim
+
+### Phase 1 — Foundation & security
+
+- [x] `CB-01` Core models/interfaces + settings/state stores (`IncludePlainVaultZip`)
+- [x] `CB-02` `ICloudCredentialStore` + exclusion from Move Kit / ExportPortable (tests)
+- [x] `CB-03` Streaming JDXK2 + keep JDXK1; decrypt CLI/scripts; crypto tests
+- [x] `CB-04` Move Kit staged vault source (internal, not HTTP)
+- [x] `CB-05` Snapshot + VaultSnapshotZip + artifact wrapper + generation manifest
+- [x] `CB-06` Post-ZIP boundary validation; install/move-kit awareness of new data folders
+
+### Phase 2 — Engine with fake provider
+
+- [x] `CB-10` Fake `ICloudBackupProvider`
+- [x] `CB-11` Coordinator (generation, isolation, lock, retention, verification)
+- [x] `CB-12` Hosted scheduler (startup catch-up, interval, encryption gate)
+- [x] `CB-13` Health aggregation (Move Kit critical / ZIP partial)
+- [x] `CB-14` Server API + auth/loopback rules for connect
+- [x] `CB-15` Backend tests (coordinator, retention, health, credentials, endpoints)
+
+### Phase 3 — Dropbox
+
+- [x] `CB-20` Dropbox OAuth PKCE + App Folder + credential store
+- [x] `CB-21` Dropbox upload sessions + content-hash verification
+- [x] `CB-22` Dropbox quota + retention + reconnect
+- [x] `CB-23` Dropbox adapter unit tests (mocked HTTP)
+- [ ] `CB-24` Dropbox personal-account manual matrix (document results)
+
+### Phase 4 — Google Drive
+
+- [x] `CB-30` Google Desktop OAuth + `drive.file` + credential store
+- [x] `CB-31` Resumable uploads + MD5 + SHA-256 verification
+- [x] `CB-32` Google quota + folder ID reuse + reconnect
+- [x] `CB-33` Google adapter unit tests
+- [ ] `CB-34` Google personal-account manual matrix (document results)
+
+### Phase 5 — OneDrive
+
+- [x] `CB-40` MSAL public client + personal accounts + App Folder
+- [x] `CB-41` Graph upload sessions + size/hash verification
+- [x] `CB-42` OneDrive quota + approot recreation + reconnect
+- [x] `CB-43` OneDrive adapter unit tests + preview-permission note
+- [ ] `CB-44` OneDrive personal-account manual matrix (document results)
+
+### Phase 6 — UI
+
+- [x] `CB-50` Settings → Backup → Cloud backups (interval, retention, providers, readable ZIP confirm)
+- [x] `CB-51` Per-artifact status + storage estimate on provider cards
+- [x] `CB-52` Home `CloudBackupHealthBanner` (poll, Open settings, Retry)
+- [x] `CB-53` SPA production build + accessible status wording
+
+### Phase 7 — Hardening & release
+
+- [x] `CB-60` Docs (`cloud-backup.md`, backup/portability/threat-model/README/changelog)
+- [x] `CB-61` Personal-account matrices + restore test notes
+- [x] `CB-62` Packaging/version; confirm vault mirror unchanged; gate complete

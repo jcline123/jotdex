@@ -4,7 +4,9 @@
   Decrypt a Jotdex .jotdexkit move kit using your Jotdex unlock password.
 
 .DESCRIPTION
-  Prefers Jotdex.Server.exe --decrypt-kit (works on Windows PowerShell 5.1).
+  Calls Jotdex.Server.exe --decrypt-kit (works on Windows PowerShell 5.1).
+  That CLI supports both kit formats: legacy JDXK1 and streaming JDXK2.
+  Prefer Restore-Jotdex.ps1 when possible — it decrypts and restores in one step.
 #>
 [CmdletBinding()]
 param(

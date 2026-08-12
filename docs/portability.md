@@ -24,10 +24,14 @@ Notes travel with the vault. Search index is rebuilt.
 | Note history snapshots | AppData `history\` | Optional / included in move kit |
 | Trash | AppData `trash\` | Optional |
 | Auth / sessions | AppData `auth\` | Recreate or copy carefully / included in move kit |
-| Secrets (SMTP/Telegram/TOTP) | AppData `secrets\` (DPAPI) | Move kit unwraps to `secrets-portable.json`; rewrapped on first start |
+| Secrets (SMTP/Telegram/TOTP) | AppData `secrets\secrets.json` (DPAPI) | Move kit unwraps to `secrets-portable.json`; rewrapped on first start |
+| Cloud backup settings | AppData `config\cloud-backup.json` | Included in move kit (preferences only) |
+| Cloud OAuth credentials | AppData `secrets\cloud-backup.json` (DPAPI) | **Never** in move kits — reconnect providers on the new PC |
+| Cloud backup runtime status | AppData `state\cloud-backup\` | Not portable |
+| Cloud backup staging | AppData `exports\cloud-backup-staging\` | Not portable |
 | Logs | AppData `logs\` | Skip |
 
-Move-kit and backup ZIPs may include `history\`, `auth\`, and portable secrets. Treat those ZIPs as secret.
+Move-kit and backup ZIPs may include `history\`, `auth\`, and portable secrets. Treat those ZIPs as secret. Cloud provider OAuth never travels in kits.
 
 ## AppData locations
 
@@ -63,6 +67,10 @@ Keep the **live** vault on local disk (e.g. `C:\JotdexVault`). In **Settings →
 - Do **not** point VaultPath at the mirror folder.
 
 Manual script alternative: `scripts/mirror-vault.ps1` (see [vault-mirror.md](vault-mirror.md)).
+
+## Multi-provider cloud backup (separate)
+
+API uploads of encrypted Move Kits to Dropbox / Google Drive / OneDrive are configured under **Settings → Backup → Cloud backups**, not the mirror destination above. See [cloud-backup.md](cloud-backup.md). After moving PCs, reconnect providers (OAuth is machine-bound).
 
 ## Static HTML export
 

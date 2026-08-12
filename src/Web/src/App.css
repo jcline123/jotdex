@@ -1984,6 +1984,66 @@ button {
   margin: 0 0 0.65rem;
 }
 
+.cloud-backup-health-banner {
+  margin: 0 0 1.25rem;
+  padding: 0.85rem 1rem;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg-panel) 92%, var(--muted));
+}
+
+.cloud-backup-health-banner-warn {
+  border-color: #c47b2b;
+  background: rgba(196, 123, 43, 0.12);
+}
+
+.cloud-backup-health-banner-error {
+  border-color: #b42318;
+  background: rgba(180, 35, 24, 0.1);
+}
+
+.cloud-backup-health-banner-info {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+}
+
+.cloud-backup-health-banner p {
+  margin: 0 0 0.65rem;
+}
+
+.cloud-backup-providers {
+  display: grid;
+  gap: 0.85rem;
+  margin: 1rem 0;
+}
+
+.cloud-backup-provider-card {
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+}
+
+.cloud-backup-provider-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.35rem 1rem;
+  margin-bottom: 0.35rem;
+}
+
+.cloud-backup-provider-card .muted {
+  margin: 0.25rem 0;
+}
+
+.cloud-backup-provider-card .warn {
+  margin: 0.35rem 0;
+}
+
+.cloud-backup-provider-card .modal-actions {
+  margin-top: 0.65rem;
+}
+
 .rich-editor {
   display: flex;
   flex-direction: column;

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { formatDueLabel, parseTodosMarkdown, sortTodos, type TodoItem } from './todosMarkdown'
 import { cacheRecentNoteIds, loadRecentNoteIds } from './recentNotes'
 import { isStandaloneTodosNote } from './systemNotes'
+import { CloudBackupHealthBanner } from './CloudBackupHealthBanner'
 
 export type HomeNote = {
   id: string
@@ -20,6 +21,8 @@ type Props = {
   onNewNote: () => void
   onFocusSearch: () => void
   onOpenTodos: () => void
+  onOpenCloudBackupSettings?: () => void
+  onRetryCloudBackup?: () => void | Promise<void>
 }
 
 function ts(value?: string): number {
@@ -74,6 +77,8 @@ export function HomeLanding({
   onNewNote,
   onFocusSearch,
   onOpenTodos,
+  onOpenCloudBackupSettings,
+  onRetryCloudBackup,
 }: Props) {
   const [notes, setNotes] = useState<HomeNote[]>([])
   const [todos, setTodos] = useState<TodoItem[]>([])
@@ -166,6 +171,11 @@ export function HomeLanding({
           </button>
         </div>
       </header>
+
+      <CloudBackupHealthBanner
+        onOpenSettings={onOpenCloudBackupSettings}
+        onRetry={onRetryCloudBackup}
+      />
 
       {busy ? (
         <p className="muted home-loading">Loading your vault…</p>

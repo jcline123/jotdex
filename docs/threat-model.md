@@ -32,6 +32,9 @@
 | Secrets at rest on install PC | Windows DPAPI CurrentUser (M8) |
 | Secrets in move-kit ZIP | Portable plaintext unwrap for transfer; treat ZIP as secret; rewrap on restore |
 | Disk theft of whole PC | Prefer OS BitLocker (or similar); see non-goals |
+| Cloud OAuth token theft from kit | Tokens in `data/secrets/cloud-backup.json` (DPAPI) — **excluded** from Move Kits; reconnect after restore |
+| Readable vault ZIP in cloud | Opt-in only; unencrypted Markdown + assets; confirm in Settings; encrypted Move Kit remains primary |
+| Provider API abuse from LAN | Connect endpoints require loopback; password auth still protects settings APIs |
 
 ## Non-goals (current)
 

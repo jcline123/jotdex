@@ -28,7 +28,7 @@ Mirror still copies your **whole vault** as normal. Optionally also enable **Als
 | Entry | Purpose |
 |---|---|
 | `vault/` | Full live vault |
-| `appdata/config/` | Vault path, network, mirror settings |
+| `appdata/config/` | Vault path, network, mirror settings, **cloud-backup.json** preferences (portable) |
 | `appdata/auth/` | Password hash (secret) |
 | `appdata/history/` | Note rollback snapshots |
 | `appdata/secrets/secrets-portable.json` | Unwrapped notification / TOTP secrets for transfer (re-wrapped with DPAPI on first start) |
@@ -38,6 +38,16 @@ Mirror still copies your **whole vault** as normal. Optionally also enable **Als
 | `MANIFEST.json` | Timestamp + flags |
 
 Indexes are **never** included (rebuilt on first start).
+
+**Not in move kits / backup ZIPs**
+
+| Path | Why |
+|---|---|
+| `data/secrets/cloud-backup.json` | DPAPI OAuth tokens — machine-bound; reconnect providers after restore |
+| `data/state/cloud-backup/` | Runtime status |
+| `data/exports/cloud-backup-staging/` | Transient staging for cloud backup generations |
+
+Encrypted kits (`.jotdexkit`) use **JDXK2** (streaming) when created with a password; `Decrypt-JotdexKit.ps1` / `Jotdex.Server.exe --decrypt-kit` also still decrypt legacy **JDXK1**. Restore decrypts for you.
 
 ### On the new PC
 
@@ -54,6 +64,12 @@ If you created the kit while running `dotnet run` (dev), the ZIP may omit `app\`
 ```
 
 Treat move-kit ZIPs that include `appdata\auth` or `appdata\secrets\secrets-portable.json` as secrets.
+
+## Multi-provider cloud backup (API upload)
+
+**Settings → Backup → Cloud backups** schedules encrypted Move Kits (optional readable vault-only ZIP) to Dropbox / Google Drive / OneDrive via their APIs. Separate from the filesystem mirror below. User guide: [cloud-backup.md](cloud-backup.md). After restore, reconnect providers — OAuth tokens are not in the kit.
+
+---
 
 ## Data-only backup ZIP
 
