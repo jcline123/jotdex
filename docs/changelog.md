@@ -9,6 +9,9 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 
 ## 2026-08-12 — Backup Now looked idle while stale OneDrive errors stayed on screen
 
+**Portable release 1.1.14**
+- Tag `v1.1.14` (`6e8aebf`) — multi-provider cloud backup (API uploads) + Settings GUI + Home health banner.
+
 **Why**
 - “Backup started” could finish in milliseconds with no upload when OneDrive was connected but `enabled: false`, while the UI still showed the previous 403. Filtered Backup Now now auto-enables that provider, clears stale failure text at run start, and polls until the operation finishes (success or real error). OneDrive Settings also links API permissions for Graph consent checks.
 
