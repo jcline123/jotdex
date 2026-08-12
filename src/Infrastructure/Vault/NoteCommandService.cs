@@ -112,6 +112,7 @@ public sealed class NoteCommandService : INoteCommandService
         }
 
         // Open→close / identical buffer: do not rewrite the file or snapshot.
+        // (modified timestamp is ignored — the server bumps it on every real write.)
         if (SameDocument(existing.Markdown, markdown))
         {
             return new NoteSaveResult
@@ -124,13 +125,16 @@ public sealed class NoteCommandService : INoteCommandService
 
         var absolute = _paths.EnsureInsideVault(existing.RelativePath.Replace('/', Path.DirectorySeparatorChar));
         _history.SnapshotIfChanged(id, existing.Markdown);
-        AtomicWrite(absolute, markdown);
+        // Bump modified so the note floats to the top of folder lists (favorites still win).
+        var toWrite = UpsertFrontMatterModified(markdown, DateTimeOffset.UtcNow)
+            .Replace("\r\n", "\n", StringComparison.Ordinal);
+        AtomicWrite(absolute, toWrite);
         _vault.Rescan();
         var updated = _vault.GetNote(id);
         return new NoteSaveResult
         {
             Success = true,
-            ETag = updated?.ETag ?? Hash(markdown),
+            ETag = updated?.ETag ?? Hash(toWrite),
             Note = updated
         };
     }
@@ -544,6 +548,27 @@ public sealed class NoteCommandService : INoteCommandService
             CopyDirectory(sub, Path.Combine(dest, Path.GetFileName(sub)));
     }
 
+    private static string UpsertFrontMatterModified(string markdown, DateTimeOffset when)
+    {
+        var value = when.ToString("O");
+        if (markdown.StartsWith("---", StringComparison.Ordinal))
+        {
+            var end = markdown.IndexOf("\n---", 3, StringComparison.Ordinal);
+            if (end > 0)
+            {
+                var header = markdown[3..end];
+                var body = markdown[(end + 4)..].TrimStart('\n', '\r');
+                if (Regex.IsMatch(header, @"^modified:\s*.*$", RegexOptions.Multiline | RegexOptions.IgnoreCase))
+                    header = Regex.Replace(header, @"^modified:\s*.*$", "modified: " + value, RegexOptions.Multiline | RegexOptions.IgnoreCase);
+                else
+                    header = header.TrimEnd() + "\nmodified: " + value + "\n";
+                return "---" + header + "\n---\n\n" + body;
+            }
+        }
+
+        return markdown;
+    }
+
     private static string UpsertFrontMatterTitle(string markdown, string title)
     {
         if (markdown.StartsWith("---", StringComparison.Ordinal))
@@ -594,11 +619,29 @@ public sealed class NoteCommandService : INoteCommandService
     private static bool SameDocument(string a, string b) =>
         string.Equals(NormalizeDoc(a), NormalizeDoc(b), StringComparison.Ordinal);
 
-    private static string NormalizeDoc(string content) =>
-        content
+    private static string NormalizeDoc(string content)
+    {
+        var n = content
             .Replace("\r\n", "\n", StringComparison.Ordinal)
             .Replace("\r", "\n", StringComparison.Ordinal)
             .TrimEnd();
+        // Server rewrites `modified:` on every save; ignore it for sameness / conflict checks.
+        if (n.StartsWith("---", StringComparison.Ordinal))
+        {
+            var end = n.IndexOf("\n---", 3, StringComparison.Ordinal);
+            if (end > 0)
+            {
+                var header = n[3..end];
+                header = Regex.Replace(
+                    header,
+                    @"^modified:\s*.*$",
+                    "modified:",
+                    RegexOptions.Multiline | RegexOptions.IgnoreCase);
+                n = "---" + header + n[end..];
+            }
+        }
+        return n;
+    }
 
     private static string Hash(string content) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(content))).ToLowerInvariant();

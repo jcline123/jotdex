@@ -1,11 +1,16 @@
 # Jotdex STATUS
 
-**Active milestone:** Post-1.1.11 polish  
-**Last updated:** 2026-08-11
+**Active milestone:** Post-1.1.12 polish  
+**Last updated:** 2026-08-12
 
 ## In progress
 
 - (none)
+
+## Highlights (v1.1.12)
+
+- Edited notes bump `modified` and rise to the top of the folder notes list
+- Formatting bar collapse uses wider hysteresis + cooldown so it does not flash while scrolling
 
 ## Highlights (v1.1.11)
 

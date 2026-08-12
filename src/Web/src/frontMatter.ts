@@ -53,14 +53,24 @@ export function isFavoriteFrontMatter(markdown: string): boolean {
     /^favourite\s*:\s*(true|yes|1)\s*$/im.test(frontMatter)
 }
 
-/** Compare docs ignoring TipTap/Markdown cosmetic differences (newlines, trailing space). */
+/** Compare docs ignoring TipTap/Markdown cosmetic differences (newlines, trailing space).
+ * Also ignore `modified:` — the server rewrites that timestamp on every real save.
+ */
 export function normalizeMarkdown(markdown: string): string {
-  return markdown
+  let n = markdown
     .replace(/\r\n/g, '\n')
     .replace(/[ \t]+\n/g, '\n')
     .replace(/\n{3,}/g, '\n\n')
     .replace(/^\n+/, '')
     .replace(/\n+$/, '\n')
+  if (n.startsWith('---')) {
+    const end = n.indexOf('\n---', 3)
+    if (end > 0) {
+      const header = n.slice(3, end).replace(/^modified:\s*.*$/gim, 'modified:')
+      n = '---' + header + n.slice(end)
+    }
+  }
+  return n
 }
 
 export function sameMarkdown(a: string, b: string): boolean {

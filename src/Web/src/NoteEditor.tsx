@@ -818,17 +818,41 @@ export function NoteEditor({
     const readTop = () =>
       scroller === window ? window.scrollY : (scroller as HTMLElement).scrollTop
 
-    // Hysteresis: collapsing the toolbar shortens the page. On short notes that makes
-    // scrollTop snap back under the collapse threshold and the bar thrash. Stay collapsed
-    // until near the top; only collapse after a clearer scroll.
-    const COLLAPSE_AT = 72
-    const EXPAND_AT = 16
+    // Wide hysteresis + short lockout: collapsing the toolbar changes layout height,
+    // which can nudge scrollTop back across a tight threshold and flash the bar.
+    const COLLAPSE_AT = 110
+    const EXPAND_AT = 8
+    const COOLDOWN_MS = 450
+    let lockedUntil = 0
+    let lockedCollapsed: boolean | null = null
 
     const onScroll = () => {
       const top = readTop()
+      const now = performance.now()
       setChromeScrolled((prev) => {
-        if (prev) return top > EXPAND_AT
-        return top > COLLAPSE_AT
+        if (lockedCollapsed !== null && now < lockedUntil) {
+          // During cooldown, only allow expand when clearly parked at the top.
+          if (lockedCollapsed && top <= EXPAND_AT) {
+            lockedCollapsed = false
+            lockedUntil = now + COOLDOWN_MS
+            return false
+          }
+          return lockedCollapsed
+        }
+        if (prev) {
+          if (top <= EXPAND_AT) {
+            lockedCollapsed = false
+            lockedUntil = now + COOLDOWN_MS
+            return false
+          }
+          return true
+        }
+        if (top > COLLAPSE_AT) {
+          lockedCollapsed = true
+          lockedUntil = now + COOLDOWN_MS
+          return true
+        }
+        return false
       })
       if (top <= EXPAND_AT) setChromePeek(false)
     }

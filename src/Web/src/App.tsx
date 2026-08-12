@@ -428,6 +428,17 @@ function App() {
     }
   }, [])
 
+  const refreshNotes = useCallback(async () => {
+    if (!vault?.configured) return
+    const q = folder ? `?folder=${encodeURIComponent(folder)}` : ''
+    try {
+      const data = (await fetch(`/api/notes${q}`, { credentials: 'same-origin' }).then((r) => r.json())) as NoteSummary[]
+      setNotes(data.filter((n) => !isStandaloneTodosNote(n.relativePath)))
+    } catch {
+      /* keep current list */
+    }
+  }, [folder, vault?.configured])
+
   const returnHomeAfterUnlock = useCallback(() => {
     if (saveTimer.current) {
       window.clearTimeout(saveTimer.current)
@@ -656,12 +667,34 @@ function App() {
         etagRef.current = newEtag
         baselineRef.current = markdown
         if (data.note) {
-          setNote({ ...data.note, markdown })
+          const serverMd = typeof data.note.markdown === 'string' ? data.note.markdown : markdown
+          const serverSplit = splitFrontMatter(serverMd)
+          const latestBody = draftRef.current
+          // Adopt server front matter (bumped modified) when the body we saved is still current.
+          if (sameMarkdown(joinFrontMatter(frontMatterRef.current, latestBody), markdown) ||
+              sameMarkdown(joinFrontMatter(serverSplit.frontMatter, latestBody), serverMd)) {
+            frontMatterRef.current = serverSplit.frontMatter
+            setFrontMatter(serverSplit.frontMatter)
+            baselineRef.current = joinFrontMatter(serverSplit.frontMatter, latestBody)
+            setNote({ ...data.note, markdown: baselineRef.current })
+          } else {
+            // User typed during save — keep the draft, sync modified line into local FM.
+            const mod = /^modified:\s*.*$/im.exec(serverSplit.frontMatter)?.[0]
+            if (mod) {
+              let fm = frontMatterRef.current
+              if (/^modified:\s*.*$/im.test(fm)) fm = fm.replace(/^modified:\s*.*$/im, mod)
+              else fm = fm.trimEnd() + '\n' + mod + '\n'
+              frontMatterRef.current = fm
+              setFrontMatter(fm)
+            }
+            setNote({ ...data.note, markdown: joinFrontMatter(frontMatterRef.current, latestBody) })
+          }
         }
         setSaveStatus('saved')
         setConflictDisk(null)
         setError(null)
         setTasksRefreshKey((k) => k + 1)
+        void refreshNotes()
 
         // If the user typed something meaningfully different while we saved,
         // let the normal debounce pick it up — do not chain rapid saves here.
@@ -673,7 +706,7 @@ function App() {
         savingRef.current = false
       }
     },
-    [selectedId],
+    [selectedId, refreshNotes],
   )
 
   useEffect(() => {

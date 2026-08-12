@@ -7,6 +7,16 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 
 ---
 
+## 2026-08-12 — Edited notes rise to the top; formatting bar stops flashing (1.1.12)
+
+**Editing a note did not move it up in the folder list**
+- The list already sorted by `modified`, but saves left the front-matter timestamp unchanged. Real saves now bump `modified`, and the notes pane refreshes after a successful save so the note floats up (favorites still sort first).
+
+**Formatting bar flashed open/closed while scrolling near the collapse point**
+- Collapsing the toolbar changes layout height, which nudged scroll position back across a tight threshold. Wider hysteresis plus a short cooldown after each collapse/expand stops the thrash; it still expands when you scroll back near the top.
+
+---
+
 ## 2026-08-11 — Todos rail no longer keeps a 401 error after unlock (1.1.11)
 
 **Portable release 1.1.11**
