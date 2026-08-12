@@ -9,6 +9,9 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 
 ## 2026-08-12 — Edited notes rise to the top; formatting bar stops flashing (1.1.12)
 
+**Portable release 1.1.12**
+- Tag `v1.1.12` (`1a1117b`) — edited notes rise in the list; formatting bar collapse no longer flashes.
+
 **Editing a note did not move it up in the folder list**
 - The list already sorted by `modified`, but saves left the front-matter timestamp unchanged. Real saves now bump `modified`, and the notes pane refreshes after a successful save so the note floats up (favorites still sort first).
 
