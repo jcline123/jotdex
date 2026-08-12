@@ -1,16 +1,19 @@
-# Read-only vault mirror (e.g. to iCloud)
+# Vault mirror (filesystem copy)
 
-**Never** point the live Jotdex vault at an iCloud-synced folder. Use a local-disk vault, then copy a read-only snapshot elsewhere.
+**Never** point the live Jotdex vault at a cloud-synced folder. Use a local-disk vault, then optionally mirror a one-way copy elsewhere (another local path, USB, UNC share, or a sync-client folder for offline browsing).
 
 ## Recommended flow
 
 ```text
 C:\JotdexVault          (live, local disk)
         |
-        |  scheduled robocopy / mirror script
+        |  scheduled robocopy / in-app mirror
         v
-iCloud Drive\JotdexMirror   (browse offline; not written by the server)
+D:\JotdexMirror   or   \\server\share\JotdexMirror
+        (browse / recover; not written by the server as the live vault)
 ```
+
+In the app: **Settings → Backup → Vault mirror**.
 
 ## Script
 
@@ -19,7 +22,7 @@ From the repo (or copy beside your install):
 ```powershell
 .\scripts\mirror-vault.ps1 `
   -Source "C:\JotdexVault" `
-  -Destination "$env:USERPROFILE\iCloudDrive\JotdexMirror"
+  -Destination "D:\JotdexMirror"
 ```
 
 Uses `robocopy /MIR` by default (destination mirrors source). Review the destination path carefully — `/MIR` deletes files on the destination that are gone from the source.

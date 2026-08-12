@@ -13,7 +13,7 @@ When a Jotdex unlock password is set, Create move kit writes an AES-encrypted **
 
 No separate decrypt command required.
 
-### Daily kit in the cloud mirror
+### Daily kit in the vault mirror
 
 Mirror still copies your **whole vault** as normal. Optionally also enable **Also drop a daily recovery move kit** — that adds `jotdex-move-kits\` inside the same mirror destination (one archive + Restore script) for PC-loss recovery.
 

@@ -69,7 +69,7 @@ Checkboxes in notes show up in a **Todos** rail with priority, due date, and rem
 Every edit **autosaves**. Per-note **history** lives outside the vault so you can compare and roll back a bad change. Trash (restore or delete). Optional password, idle lock, and TOTP. **Share HTML** downloads one note as a clean single file you can email — no Jotdex branding, recipient does not need the app.
 
 ### Your network, your backup, your next PC
-LAN access from Settings (firewall helper included). Away from home: a VPN, or a **Cloudflare Tunnel** so you do not open inbound ports. Optional Windows Service so it comes back after reboot. One-way **cloud backup mirror** to iCloud/OneDrive/a NAS. Optional **multi-provider cloud backup** (encrypted Move Kits to Dropbox / Google Drive / OneDrive APIs). **Move kit** ZIP to pick up the whole install on a new machine. In-app **Updates** pull the latest portable release.
+LAN access from Settings (firewall helper included). Away from home: a VPN, or a **Cloudflare Tunnel** so you do not open inbound ports. Optional Windows Service so it comes back after reboot. Optional **vault mirror** to another local path, UNC share, or sync folder. Optional **multi-provider cloud backup** (encrypted Move Kits to Dropbox / Google Drive / OneDrive APIs). **Move kit** ZIP to pick up the whole install on a new machine. In-app **Updates** pull the latest portable release.
 
 ### OneNote → Jotdex without touching the export
 Offline migration copies into a staging vault. Your original OneNote Markdown export stays exactly as the exporter wrote it.
@@ -91,7 +91,7 @@ Offline migration copies into a staging vault. Your original OneNote Markdown ex
 
 1. A **Windows 10 or 11** PC (x64).
 2. A folder for notes, for example `C:\JotdexVault` — create it empty in File Explorer if you are starting fresh.
-3. Put that folder on **local disk** (`C:\…`). **Do not** put the live vault inside iCloud Drive or OneDrive. Use **Settings → Cloud backup mirror** later if you want a cloud copy.
+3. Put that folder on **local disk** (`C:\…`). **Do not** put the live vault inside a sync client folder. Use **Settings → Backup → Vault mirror** later if you want a one-way copy elsewhere, and/or **Cloud backups** for API uploads.
 
 ---
 
@@ -292,7 +292,7 @@ Cloudflare’s setup guide: [Connect apps with Cloudflare Tunnels](https://devel
 |---|---|
 | Your notes (vault) | e.g. `C:\JotdexVault` |
 | App settings, search index, history | `%LOCALAPPDATA%\Jotdex` or `data\` next to the portable exe |
-| Cloud copy (optional) | Wherever you set under **Settings → Cloud backup mirror**, and/or **Settings → Cloud backups** (API Move Kits) |
+| Mirror / cloud copy (optional) | **Settings → Backup → Vault mirror** destination, and/or **Cloud backups** (API Move Kits) |
 
 Moving to a new PC: **Settings → Move to another PC → Create move kit (ZIP)**, copy the ZIP, unzip on the new machine, run `Restore-Jotdex.ps1`. Details: [docs/backup.md](docs/backup.md).
 
@@ -324,7 +324,7 @@ Details: [docs/import-format/onenote-md-exporter.md](docs/import-format/onenote-
 | [docs/backup.md](docs/backup.md) | Move kit + backup ZIP |
 | [docs/cloud-backup.md](docs/cloud-backup.md) | Multi-provider cloud backup (API) |
 | [docs/portability.md](docs/portability.md) | Moving vaults safely |
-| [docs/vault-mirror.md](docs/vault-mirror.md) | Cloud backup mirror (filesystem) |
+| [docs/vault-mirror.md](docs/vault-mirror.md) | Vault mirror (filesystem copy) |
 | [docs/changelog.md](docs/changelog.md) | Why recent fixes were made |
 | [AGENTS.md](AGENTS.md) | For contributors / AI agents |
 

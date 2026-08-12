@@ -2044,6 +2044,12 @@ button {
   margin-top: 0.65rem;
 }
 
+.settings-backup-mirror {
+  margin-top: 1.75rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--border);
+}
+
 .rich-editor {
   display: flex;
   flex-direction: column;

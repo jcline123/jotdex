@@ -58,9 +58,9 @@ Use `scripts/mirror-vault.ps1` — see [vault-mirror.md](vault-mirror.md).
 
 Away from home: secure remote to web UI, browse iCloud mirror, or open static HTML export.
 
-## Automatic cloud mirror (in-app)
+## Automatic vault mirror (in-app)
 
-Keep the **live** vault on local disk (e.g. `C:\JotdexVault`). In **Settings → Backup → Cloud backup mirror**, set a destination under iCloud/OneDrive/Dropbox and enable automatic copy.
+Keep the **live** vault on local disk (e.g. `C:\JotdexVault`). In **Settings → Backup → Vault mirror**, set a destination (second local path, USB, UNC share, or a sync-client folder) and enable automatic copy.
 
 - One-way only (live → cloud). The app never writes notes into the mirror as the live vault.
 - Uses Windows `robocopy /MIR` so the destination matches the vault.

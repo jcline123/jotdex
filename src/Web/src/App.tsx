@@ -2896,8 +2896,8 @@ function App() {
 
             <h2 className="settings-section">Ops alerts (email / Telegram)</h2>
             <p className="lede">
-              Optional alerts when cloud mirror backup goes stale. Passwords and bot tokens are stored with Windows DPAPI
-              on this PC (and travel in the move kit as a portable secrets file).
+              Optional alerts when the vault mirror goes stale. Passwords and bot tokens are stored with Windows DPAPI on
+              this PC (and travel in the move kit as a portable secrets file).
             </p>
             <h3 className="settings-subhead">Email (SMTP)</h3>
             <label className="field checkbox-row">
@@ -3146,10 +3146,12 @@ function App() {
               }}
             />
 
-            <h2 className="settings-section">Cloud backup mirror</h2>
+            <div className="settings-backup-mirror">
+            <h2 className="settings-section">Vault mirror</h2>
             <p className="lede">
-              Keep the live vault on local disk. Optionally copy the whole vault one-way to iCloud, OneDrive, etc. Never
-              open the mirror as the live vault — use a separate folder name such as <code>JotdexMirror</code>.
+              One-way filesystem copy of the live vault to another path — a second local folder, a USB drive, or a UNC
+              share. This is not the API cloud backups above. Keep the live vault on local disk; never open the mirror
+              folder as the vault.
             </p>
             <label className="field checkbox-row">
               <input type="checkbox" checked={mirrorEnabled} onChange={(e) => setMirrorEnabled(e.target.checked)} />
@@ -3160,12 +3162,12 @@ function App() {
               <input
                 value={mirrorDest}
                 onChange={(e) => setMirrorDest(e.target.value)}
-                placeholder="C:\Users\You\iCloudDrive\JotdexMirror"
+                placeholder="D:\JotdexMirror or \\server\share\JotdexMirror"
               />
             </label>
             <p className="muted">
-              Prefer <code>…\iCloudDrive\JotdexMirror</code> (not a folder also named JotdexVault). Mirror is one-way:
-              local live vault → destination (full vault copy, as before).
+              Use a distinct folder name (for example <code>JotdexMirror</code>), not the live vault path. Copy is
+              one-way: live vault → destination.
             </p>
             <label className="field">
               Interval (minutes)
@@ -3186,9 +3188,8 @@ function App() {
               Also drop a daily recovery move kit into that mirror folder
             </label>
             <p className="muted">
-              Extra safety net only: still mirrors the full vault. Adds <code>jotdex-move-kits\</code> with one archive
-              (encrypted when a password is set) plus <code>Restore-Jotdex.ps1</code>. On a new PC, run Restore on that
-              kit and enter your password if asked.
+              Extra safety net: still mirrors the full vault, and adds <code>jotdex-move-kits\</code> with one archive
+              (encrypted when a password is set) plus <code>Restore-Jotdex.ps1</code>.
             </p>
             <div className="modal-actions">
               <button type="button" className="primary" onClick={() => void saveMirrorSettings()}>
@@ -3199,6 +3200,7 @@ function App() {
               </button>
             </div>
             {mirrorStatus && <p className="muted">{mirrorStatus}</p>}
+            </div>
               </>
             )}
 

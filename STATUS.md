@@ -9,11 +9,16 @@
 
 ## Just shipped (this session)
 
+- Settings Backup: **Vault mirror** rename/copy (vs API Cloud backups)
 - Multi-provider cloud backup: encrypted Move Kit (JDXK2) + optional vault-only ZIP via Dropbox / Google Drive / OneDrive APIs
 - Settings GUI: paste OAuth client IDs, Connect, Backup now (polls to completion), clear stale errors, auto-enable on per-provider retry
 - Home health banner when backup is unhealthy / stale
 - OneDrive App Folder path (quota optional; uploads via `special/approot`)
-- Version **1.1.14**
+- Version **1.1.15**
+
+## Highlights (v1.1.15)
+
+- Backup settings: filesystem copy renamed **Vault mirror** (local / USB / UNC) so it is distinct from API **Cloud backups**
 
 ## Highlights (v1.1.14)
 

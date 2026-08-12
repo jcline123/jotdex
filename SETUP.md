@@ -28,7 +28,7 @@ Manual steps below are the same process, done by hand.
 | **Vault** | Your notes: folders, `.md`, `.assets` | Local disk, e.g. `C:\JotdexVault` |
 | **App data** | Search index, history, auth, config | `%LOCALAPPDATA%\Jotdex` or `.\data` beside the exe |
 
-**Do not** put the live vault inside iCloud Drive. Use **Settings → Cloud backup mirror** for a one-way copy to iCloud/OneDrive/etc. Live writes + sync = conflict risk.
+**Do not** put the live vault inside a cloud sync folder. Use **Settings → Backup → Vault mirror** for a one-way copy to another path (local disk, UNC share, or a sync-client folder). Live writes + sync = conflict risk.
 
 Moving PCs: copy the vault folder, install Jotdex, point Settings → Vault at the new path, Rescan.
 

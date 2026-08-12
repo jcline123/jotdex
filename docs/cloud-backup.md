@@ -1,6 +1,6 @@
 # Cloud backup (multi-provider)
 
-Jotdex can upload **encrypted Move Kits** on a schedule to personal **Dropbox**, **Google Drive**, and/or **OneDrive** accounts through their APIs. This is **not** the same as the filesystem **Cloud backup mirror** (Settings → Backup → Cloud backup mirror), which still copies the live vault folder one-way with robocopy.
+Jotdex can upload **encrypted Move Kits** on a schedule to personal **Dropbox**, **Google Drive**, and/or **OneDrive** accounts through their APIs. This is **not** the same as the filesystem **Vault mirror** (Settings → Backup → Vault mirror), which still copies the live vault folder one-way with robocopy.
 
 Design notes: [decisions/0007-direct-multi-provider-cloud-backup.md](decisions/0007-direct-multi-provider-cloud-backup.md).
 
@@ -81,6 +81,6 @@ Readable vault ZIPs can be unzipped anywhere to recover Markdown files without J
 
 ## Related
 
-- Filesystem mirror (separate): [vault-mirror.md](vault-mirror.md), Settings → Cloud backup mirror
+- Filesystem mirror (separate): [vault-mirror.md](vault-mirror.md), Settings → Vault mirror
 - Move kit / backup ZIP: [backup.md](backup.md)
 - Manual test matrices: [cloud-backup-matrices.md](cloud-backup-matrices.md) (pending live verification)

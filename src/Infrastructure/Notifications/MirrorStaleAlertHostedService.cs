@@ -81,7 +81,7 @@ public sealed class MirrorStaleAlertHostedService : BackgroundService
             : $"last succeeded {lastOk:u}";
         var subject = "Jotdex: vault mirror is stale";
         var body =
-            $"Cloud backup mirror has not succeeded for at least {hours} hours.\n" +
+            $"Vault mirror has not succeeded for at least {hours} hours.\n" +
             $"Status: {age}.\n" +
             (string.IsNullOrWhiteSpace(mirror.LastError) ? "" : $"Last error: {mirror.LastError}\n") +
             $"Destination: {mirror.DestinationPath ?? "(unset)"}\n";

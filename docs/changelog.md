@@ -7,6 +7,16 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 
 ---
 
+## 2026-08-12 — Settings Backup: “Vault mirror” vs cloud backups
+
+**Portable release 1.1.15**
+- Tag `v1.1.15` — Backup settings rename **Cloud backup mirror** → **Vault mirror** (copy clarified for local/USB/UNC).
+
+**Why**
+- With API **Cloud backups** on the same tab, “Cloud backup mirror” sounded like the same feature. Renamed to **Vault mirror** and rewrote copy around local/USB/UNC destinations so the two paths are easy to tell apart.
+
+---
+
 ## 2026-08-12 — Backup Now looked idle while stale OneDrive errors stayed on screen
 
 **Portable release 1.1.14**

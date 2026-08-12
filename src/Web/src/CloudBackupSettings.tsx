@@ -392,8 +392,8 @@ export function CloudBackupSettings({ onHint, onError }: Props) {
     <>
       <h2 className="settings-section">Cloud backups</h2>
       <p className="lede">
-        Upload encrypted Move Kits on a schedule to Dropbox, Google Drive, and/or OneDrive via their APIs. This is
-        separate from the filesystem <strong>Cloud backup mirror</strong> below. Live vault stays on local disk.
+        Upload encrypted Move Kits (and optional readable vault ZIPs) to Dropbox, Google Drive, and/or OneDrive through
+        their APIs. Separate from the <strong>Vault mirror</strong> filesystem copy below.
       </p>
       <p className="muted">
         For each provider: open the setup link, create an app, paste the App key / Client ID here, then Connect to approve

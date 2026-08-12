@@ -131,7 +131,7 @@ function Assert-NotCloudSyncPath([string]$Path) {
     )
     foreach ($b in $bad) {
         if ($lower.Contains($b)) {
-            throw "Vault path looks like a cloud sync folder ($Path). Use a local disk path (e.g. C:\JotdexVault). You can enable Cloud backup mirror later inside Jotdex."
+            throw "Vault path looks like a cloud sync folder ($Path). Use a local disk path (e.g. C:\JotdexVault). You can enable Vault mirror later inside Jotdex."
         }
     }
 }
