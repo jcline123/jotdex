@@ -2207,6 +2207,14 @@ button {
   margin: 0 0.2rem;
 }
 
+.editor-toolbar button.strike-btn {
+  text-decoration: line-through;
+}
+
+.tiptap-editor s {
+  text-decoration: line-through;
+}
+
 .tiptap-editor {
   min-height: 22rem;
   padding: 1rem 1.1rem;
@@ -2499,6 +2507,13 @@ button {
   padding: 0.35rem 0.55rem;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(255, 255, 255, 0.04);
+  user-select: none;
+}
+
+.code-block-pre,
+.code-block-pre code {
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 .code-lang select {

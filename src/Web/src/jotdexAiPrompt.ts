@@ -11,7 +11,8 @@ Return ONLY the note body as Markdown I can paste into Jotdex. Do not wrap the w
 - Keep headings short and scannable
 
 ## Emphasis & inline
-- **bold**, *italic*, \`inline code\`, ~~strikethrough~~ if needed
+- **bold**, *italic*, \`inline code\`, ~~strikethrough~~ (line through text you want to keep but ignore)
+- Strikethrough stores as \`~~text~~\`; the formatting bar can also clear marks/block styles from a selection
 - Links: \`[label](https://example.com)\` or relative note links \`[Other note](Folder/Other note.md)\`
 - Optional limited color/size via HTML spans (use sparingly):
   \`<span style="color: #c47b2b">warning text</span>\`

@@ -7,6 +7,16 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 
 ---
 
+## 2026-08-13 — Code-box copy is plain text; strikethrough + clear formatting
+
+**Portable release 1.1.16**
+- Tag `v1.1.16` — selecting in a code box copies/pastes characters only; toolbar Strike + Clear.
+
+**Why**
+- Selecting text in a code box still pasted `<!--StartFragment-->` / `<span>` because Chrome copies highlighted HTML from the nested contenteditable (and sometimes puts that HTML in `text/plain`). Copy is intercepted at document capture and rewritten to characters only; paste peels Word/Chrome fragment wrappers (including entity-encoded ones) back to the selected text.
+
+---
+
 ## 2026-08-12 — Settings Backup: “Vault mirror” vs cloud backups
 
 **Portable release 1.1.15**

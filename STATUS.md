@@ -1,7 +1,7 @@
 # Jotdex STATUS
 
 **Active milestone:** CB — Multi-provider cloud backup (code complete; OneDrive live-verified)  
-**Last updated:** 2026-08-12
+**Last updated:** 2026-08-13
 
 ## In progress
 
@@ -9,12 +9,18 @@
 
 ## Just shipped (this session)
 
+- Code-box selection copy/cut is plain text (no Markdown fences); toolbar Strike + Clear formatting
 - Settings Backup: **Vault mirror** rename/copy (vs API Cloud backups)
 - Multi-provider cloud backup: encrypted Move Kit (JDXK2) + optional vault-only ZIP via Dropbox / Google Drive / OneDrive APIs
 - Settings GUI: paste OAuth client IDs, Connect, Backup now (polls to completion), clear stale errors, auto-enable on per-provider retry
 - Home health banner when backup is unhealthy / stale
 - OneDrive App Folder path (quota optional; uploads via `special/approot`)
-- Version **1.1.15**
+- Version **1.1.16**
+
+## Highlights (v1.1.16)
+
+- Code-box selection copy/paste is plain text (no Markdown fences or Chrome `StartFragment`/`span` junk)
+- Formatting bar: strikethrough and Clear formatting
 
 ## Highlights (v1.1.15)
 

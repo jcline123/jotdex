@@ -33,6 +33,13 @@ import {
   extractHttpImageUrls,
   rewriteDataImages,
 } from './pasteHtml'
+import {
+  copyPlainTextFromCodeBox,
+  deleteDomSelection,
+  htmlIsPlainClipboardSnippet,
+  installCodeBoxClipboardGuards,
+  plainTextFromClipboard,
+} from './copyCodePlain'
 
 const lowlight = createLowlight(common)
 lowlight.register('powershell', powershell)
@@ -127,6 +134,7 @@ const FONT_SIZES = [
   { label: 'Large', value: '1.25em' },
   { label: 'Larger', value: '1.5em' },
 ]
+
 export type PasteMode = 'smart' | 'plain' | 'code' | 'keep' | 'preserve'
 
 type AttachmentInfo = { id: string; fileName: string; contentType: string }
@@ -603,7 +611,7 @@ export function NoteEditor({
         html: true,
         // We handle rich paste ourselves so formatting/images aren't stripped by MD transform.
         transformPastedText: false,
-        transformCopiedText: true,
+        transformCopiedText: false,
       }),
     ],
     content: markdownForEditor(markdown, attachments),
@@ -630,29 +638,38 @@ export function NoteEditor({
         if (!ed) return false
 
         const shiftPlain = (event as ClipboardEvent & { shiftKey?: boolean }).shiftKey
+        const html = clipboard.getData('text/html')
+        const rawPlain = clipboard.getData('text/plain')
+        const plain = plainTextFromClipboard(rawPlain, html)
+
         if (mode === 'plain' || shiftPlain) {
           event.preventDefault()
-          const text = clipboard.getData('text/plain')
-          ed.chain().focus().insertContent(text).run()
+          ed.chain().focus().insertContent(plain).run()
           return true
         }
 
         if (mode === 'code') {
           event.preventDefault()
-          const text = clipboard.getData('text/plain')
           ed.chain()
             .focus()
             .insertContent({
               type: 'codeBlock',
               attrs: { language: 'powershell' },
-              content: text ? [{ type: 'text', text }] : undefined,
+              content: plain ? [{ type: 'text', text: plain }] : undefined,
             })
             .run()
           return true
         }
 
+        // Chrome/Word wrap a text selection as HTML (StartFragment + spans). Prefer the
+        // plain characters so pasting a code-box subset doesn't insert markup.
+        if (plain && htmlIsPlainClipboardSnippet(html)) {
+          event.preventDefault()
+          ed.chain().focus().insertContent(plain).run()
+          return true
+        }
+
         if (mode === 'preserve') {
-          const html = clipboard.getData('text/html')
           if (html && html.length > 20) {
             event.preventDefault()
             void preserveRef.current(html)
@@ -661,7 +678,6 @@ export function NoteEditor({
         }
 
         // smart / keep: rich HTML paste with structure + images
-        const html = clipboard.getData('text/html')
         if (html && html.length > 20 && (mode === 'smart' || mode === 'keep')) {
           event.preventDefault()
           void pasteRichRef.current(html, mode)
@@ -669,6 +685,14 @@ export function NoteEditor({
         }
 
         return false
+      },
+      handleDOMEvents: {
+        copy: (_view, event) => copyPlainTextFromCodeBox(event),
+        cut: (view, event) => {
+          if (!copyPlainTextFromCodeBox(event)) return false
+          if (view.editable) deleteDomSelection(view)
+          return true
+        },
       },
       handleDrop: (_view, event) => {
         const dt = event.dataTransfer
@@ -757,6 +781,11 @@ export function NoteEditor({
 
   useEffect(() => {
     editorRef.current = editor
+  }, [editor])
+
+  useEffect(() => {
+    if (!editor) return
+    return installCodeBoxClipboardGuards(editor.view)
   }, [editor])
 
   useEffect(() => {
@@ -996,6 +1025,17 @@ export function NoteEditor({
         </button>
         <button
           type="button"
+          className={`strike-btn${editor.isActive('strike') ? ' on' : ''}`}
+          title="Strikethrough — keep the text, mark it to ignore"
+          onClick={() => {
+            normalizeBlockSelection(editor)
+            editor.chain().focus().toggleStrike().run()
+          }}
+        >
+          Strike
+        </button>
+        <button
+          type="button"
           className={editor.isActive('code') ? 'on' : ''}
           onClick={() => {
             normalizeBlockSelection(editor)
@@ -1003,6 +1043,16 @@ export function NoteEditor({
           }}
         >
           Code
+        </button>
+        <button
+          type="button"
+          title="Remove formatting from the selection (bold, color, lists, headings, …)"
+          onClick={() => {
+            normalizeBlockSelection(editor)
+            editor.chain().focus().unsetAllMarks().clearNodes().run()
+          }}
+        >
+          Clear
         </button>
         <label className="toolbar-select" title="Text color for the selection">
           <span className="sr-only">Color</span>
