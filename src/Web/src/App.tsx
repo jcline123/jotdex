@@ -7,6 +7,7 @@ import { joinFrontMatter, sameMarkdown, setFavoriteInMarkdown, splitFrontMatter 
 import { looksUnsafeForVisual } from './unsafeMarkdown'
 import { ClipSaveModal } from './ClipSaveModal'
 import { NewNoteModal, folderRailShortLabel } from './NewNoteModal'
+import { FolderPickerModal } from './FolderPickerModal'
 import {
   buildClipBookmarklet,
   loadClipDefaultFolder,
@@ -122,6 +123,10 @@ function saveCollapsedFolders(paths: Set<string>) {
   localStorage.setItem('jotdex.collapsedFolders', JSON.stringify([...paths]))
 }
 
+type RailDrag =
+  | { kind: 'note'; id: string; title: string; folderPath: string }
+  | { kind: 'folder'; path: string }
+
 function FolderTree({
   node,
   depth,
@@ -129,6 +134,10 @@ function FolderTree({
   onSelect,
   collapsed,
   onToggle,
+  dropTargetPath,
+  onFolderDragStart,
+  onFolderDragOver,
+  onFolderDrop,
 }: {
   node: FolderNode
   depth: number
@@ -136,15 +145,25 @@ function FolderTree({
   onSelect: (path: string) => void
   collapsed: Set<string>
   onToggle: (path: string) => void
+  dropTargetPath?: string | null
+  onFolderDragStart?: (path: string, e: React.DragEvent) => void
+  onFolderDragOver?: (path: string, e: React.DragEvent) => void
+  onFolderDrop?: (path: string, e: React.DragEvent) => void
 }) {
   const hasKids = node.children.length > 0
   // Root (empty path) stays expanded; collapse applies to real folders
   const isCollapsed = node.relativePath !== '' && collapsed.has(node.relativePath)
   const showKids = hasKids && !isCollapsed
+  const dropHere = dropTargetPath === node.relativePath
 
   return (
     <div className="tree-branch">
-      <div className={`tree-row${selected === node.relativePath ? ' active' : ''}`} style={{ paddingLeft: `${0.35 + depth * 0.85}rem` }}>
+      <div
+        className={`tree-row${selected === node.relativePath ? ' active' : ''}${dropHere ? ' drop-target' : ''}`}
+        style={{ paddingLeft: `${0.35 + depth * 0.85}rem` }}
+        onDragOver={(e) => onFolderDragOver?.(node.relativePath, e)}
+        onDrop={(e) => onFolderDrop?.(node.relativePath, e)}
+      >
         {hasKids && node.relativePath !== '' ? (
           <button
             type="button"
@@ -161,7 +180,13 @@ function FolderTree({
         ) : (
           <span className="tree-twist spacer" aria-hidden />
         )}
-        <button type="button" className="tree-item" onClick={() => onSelect(node.relativePath)}>
+        <button
+          type="button"
+          className="tree-item"
+          draggable={Boolean(onFolderDragStart) && node.relativePath !== ''}
+          onDragStart={(e) => onFolderDragStart?.(node.relativePath, e)}
+          onClick={() => onSelect(node.relativePath)}
+        >
           {node.name}
         </button>
       </div>
@@ -175,6 +200,10 @@ function FolderTree({
             onSelect={onSelect}
             collapsed={collapsed}
             onToggle={onToggle}
+            dropTargetPath={dropTargetPath}
+            onFolderDragStart={onFolderDragStart}
+            onFolderDragOver={onFolderDragOver}
+            onFolderDrop={onFolderDrop}
           />
         ))}
     </div>
@@ -272,6 +301,10 @@ function App() {
     }
   })
   const [newNoteModalOpen, setNewNoteModalOpen] = useState(false)
+  const [movePicker, setMovePicker] = useState<null | { kind: 'note' } | { kind: 'folder'; path: string }>(null)
+  const [dropTargetPath, setDropTargetPath] = useState<string | null>(null)
+  const railDragRef = useRef<RailDrag | null>(null)
+  const folderExpandTimer = useRef<number | null>(null)
   const [titleEditing, setTitleEditing] = useState(false)
   const [titleDraft, setTitleDraft] = useState('')
   const [narrowLayout, setNarrowLayout] = useState(() => {
@@ -1502,29 +1535,38 @@ function App() {
     await loadVault()
   }
 
+  async function applyMoveFolder(srcPath: string, destParent: string) {
+    const src = srcPath.replace(/\\/g, '/')
+    const dest = destParent.replace(/\\/g, '/')
+    if (src === dest || dest.startsWith(src + '/')) {
+      throw new Error('Cannot move a folder into itself')
+    }
+    const parentOf = src.includes('/') ? src.slice(0, src.lastIndexOf('/')) : ''
+    if (parentOf === dest) return
+    const res = await fetch('/api/folders', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: src, newParent: dest }),
+    })
+    const data = await res.json()
+    if (!res.ok) {
+      const msg = data.error ?? 'Could not move folder'
+      setError(msg)
+      throw new Error(msg)
+    }
+    setFolder(data.path ?? dest)
+    setSelectedId(null)
+    await loadVault()
+    setNetworkHint(`Moved folder to ${dest || 'vault root'}`)
+    window.setTimeout(() => setNetworkHint(null), 2500)
+  }
+
   async function moveFolder() {
     if (!folder) {
       setError('Select a folder first')
       return
     }
-    const dest = window.prompt(
-      `Move "${folder}" into which folder?\n\nLeave blank to put it at the vault root (top level).\nExample: Joshua's Notebook`,
-      '',
-    )
-    if (dest === null) return
-    const res = await fetch('/api/folders', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path: folder, newParent: dest.trim() }),
-    })
-    const data = await res.json()
-    if (!res.ok) {
-      setError(data.error ?? 'Could not move folder')
-      return
-    }
-    setFolder(data.path ?? '')
-    setSelectedId(null)
-    await loadVault()
+    setMovePicker({ kind: 'folder', path: folder })
   }
 
   async function deleteFolder() {
@@ -1727,24 +1769,22 @@ function App() {
     await loadVault()
   }
 
-  async function moveNote() {
-    if (!selectedId || !note) return
-    const dest = window.prompt(
-      `Move note into which folder?\n\nLeave blank for vault root.\nCurrent: ${note.folderPath || '(root)'}`,
-      note.folderPath,
-    )
-    if (dest === null) return
-    const res = await fetch(`/api/notes/${selectedId}/move`, {
+  async function applyMoveNote(noteId: string, title: string, destFolder: string, fromFolder?: string) {
+    const dest = destFolder.replace(/\\/g, '/')
+    const from = (fromFolder ?? '').replace(/\\/g, '/')
+    if (dest === from) return
+    const res = await fetch(`/api/notes/${noteId}/move`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ title: note.title, folder: dest.trim() }),
+      body: JSON.stringify({ title, folder: dest }),
     })
     const data = await res.json()
     if (!res.ok || !data.success) {
-      setError(data.error ?? 'Move failed')
-      return
+      const msg = data.error ?? 'Move failed'
+      setError(msg)
+      throw new Error(msg)
     }
-    if (data.note) {
+    if (data.note && selectedIdRef.current === noteId) {
       setNote(data.note)
       const split = splitFrontMatter(data.note.markdown)
       setFrontMatter(split.frontMatter)
@@ -1757,6 +1797,13 @@ function App() {
       baselineRef.current = joinFrontMatter(split.frontMatter, split.body)
     }
     await loadVault()
+    setNetworkHint(`Moved to ${dest || 'vault root'}`)
+    window.setTimeout(() => setNetworkHint(null), 2500)
+  }
+
+  async function moveNote() {
+    if (!selectedId || !note) return
+    setMovePicker({ kind: 'note' })
   }
 
   async function duplicateNote() {
@@ -2244,6 +2291,33 @@ function App() {
               setMobilePane('editor')
             })
           }}
+        />
+      )}
+      {movePicker?.kind === 'note' && note && (
+        <FolderPickerModal
+          tree={tree}
+          title="Move note"
+          lede={`Choose a folder for “${note.title}”. Current: ${note.folderPath || 'vault root'}.`}
+          confirmLabel="Move note"
+          initialPath={note.folderPath}
+          onClose={() => setMovePicker(null)}
+          onPick={(dest) => applyMoveNote(note.id, note.title, dest, note.folderPath).then(() => setMovePicker(null))}
+        />
+      )}
+      {movePicker?.kind === 'folder' && (
+        <FolderPickerModal
+          tree={tree}
+          title="Move folder"
+          lede={`Choose a parent for “${movePicker.path}”. Leave vault root selected to put it at the top level.`}
+          confirmLabel="Move folder"
+          initialPath={
+            movePicker.path.includes('/')
+              ? movePicker.path.slice(0, movePicker.path.lastIndexOf('/'))
+              : ''
+          }
+          disablePath={movePicker.path}
+          onClose={() => setMovePicker(null)}
+          onPick={(dest) => applyMoveFolder(movePicker.path, dest).then(() => setMovePicker(null))}
         />
       )}
       {settingsOpen && (
@@ -3503,7 +3577,17 @@ function App() {
             </button>
           </aside>
         ) : (
-          <aside className="pane left">
+          <aside
+            className="pane left"
+            onDragEnd={() => {
+              railDragRef.current = null
+              setDropTargetPath(null)
+              if (folderExpandTimer.current) {
+                window.clearTimeout(folderExpandTimer.current)
+                folderExpandTimer.current = null
+              }
+            }}
+          >
             <div className="pane-rail-head desktop-only-rail">
               <span className="pane-rail-label">Folders</span>
               <button
@@ -3555,6 +3639,47 @@ function App() {
                 selected={folder}
                 collapsed={collapsedFolders}
                 onToggle={toggleFolderCollapsed}
+                dropTargetPath={dropTargetPath}
+                onFolderDragStart={(path, e) => {
+                  railDragRef.current = { kind: 'folder', path }
+                  e.dataTransfer.setData('text/plain', path)
+                  e.dataTransfer.effectAllowed = 'move'
+                }}
+                onFolderDragOver={(path, e) => {
+                  const drag = railDragRef.current
+                  if (!drag) return
+                  if (drag.kind === 'folder' && (path === drag.path || path.startsWith(drag.path + '/'))) return
+                  e.preventDefault()
+                  e.dataTransfer.dropEffect = 'move'
+                  setDropTargetPath(path)
+                  if (folderExpandTimer.current) window.clearTimeout(folderExpandTimer.current)
+                  if (path && collapsedFolders.has(path)) {
+                    folderExpandTimer.current = window.setTimeout(() => {
+                      toggleFolderCollapsed(path)
+                    }, 450)
+                  }
+                }}
+                onFolderDrop={(path, e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  setDropTargetPath(null)
+                  if (folderExpandTimer.current) {
+                    window.clearTimeout(folderExpandTimer.current)
+                    folderExpandTimer.current = null
+                  }
+                  const drag = railDragRef.current
+                  railDragRef.current = null
+                  if (!drag) return
+                  if (drag.kind === 'note') {
+                    void applyMoveNote(drag.id, drag.title, path, drag.folderPath).catch(() => {
+                      /* error already shown */
+                    })
+                    return
+                  }
+                  void applyMoveFolder(drag.path, path).catch(() => {
+                    /* error already shown */
+                  })
+                }}
                 onSelect={(p) => {
                   setFolder(p)
                   setSelectedId(null)
@@ -3681,12 +3806,33 @@ function App() {
                 </div>
               </div>
             </div>
-            <ul className="note-list">
+            <ul
+              className="note-list"
+              onDragEnd={() => {
+                railDragRef.current = null
+                setDropTargetPath(null)
+                if (folderExpandTimer.current) {
+                  window.clearTimeout(folderExpandTimer.current)
+                  folderExpandTimer.current = null
+                }
+              }}
+            >
               {notes.map((n) => (
                 <li key={n.id}>
                   <button
                     type="button"
                     className={selectedId === n.id ? 'active' : ''}
+                    draggable
+                    onDragStart={(e) => {
+                      railDragRef.current = {
+                        kind: 'note',
+                        id: n.id,
+                        title: n.title,
+                        folderPath: n.folderPath,
+                      }
+                      e.dataTransfer.setData('text/plain', n.title)
+                      e.dataTransfer.effectAllowed = 'move'
+                    }}
                     onClick={() => {
                       setSelectedId(n.id)
                       setMobilePane('editor')
