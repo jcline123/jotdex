@@ -10,7 +10,7 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 ## 2026-08-17 — Move notes/folders with a folder picker + drag-and-drop
 
 **Portable release 1.1.17**
-- Tag `v1.1.17` — Move uses a folder-tree picker; drag notes/folders onto the folders rail.
+- Tag `v1.1.17` (`c3fb5ad`) — Move uses a folder-tree picker; drag notes/folders onto the folders rail.
 
 **Why**
 - Move used a text prompt, so nested folders were unclear. Settings-style modal now lists the folder tree (filter + expand). Notes and folders can be dragged onto a folder in the existing rail; rest styling is unchanged aside from a drop highlight.
