@@ -1,7 +1,7 @@
 # Jotdex STATUS
 
 **Active milestone:** CB — Multi-provider cloud backup (code complete; OneDrive live-verified)  
-**Last updated:** 2026-08-17
+**Last updated:** 2026-08-21
 
 ## In progress
 
@@ -9,13 +9,13 @@
 
 ## Just shipped (this session)
 
+- Home + expanded-rail **New note** use the same folder-picker modal as collapsed **Add note**
 - Folder picker modal for Move (notes + folders); drag notes/folders onto the folders rail
-- Settings Backup: **Vault mirror** rename/copy (vs API Cloud backups)
-- Multi-provider cloud backup: encrypted Move Kit (JDXK2) + optional vault-only ZIP via Dropbox / Google Drive / OneDrive APIs
-- Settings GUI: paste OAuth client IDs, Connect, Backup now (polls to completion), clear stale errors, auto-enable on per-provider retry
-- Home health banner when backup is unhealthy / stale
-- OneDrive App Folder path (quota optional; uploads via `special/approot`)
-- Version **1.1.17**
+- Version **1.1.18**
+
+## Highlights (v1.1.18)
+
+- **New note** (Home and expanded notes rail) opens the title + folder modal, same as collapsed **Add note**
 
 ## Highlights (v1.1.17)
 

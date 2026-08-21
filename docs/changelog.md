@@ -7,6 +7,16 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 
 ---
 
+## 2026-08-21 — New note from Home and expanded rail uses folder picker
+
+**Portable release 1.1.18**
+- Tag `v1.1.18` — Home and expanded-rail **New note** use the same folder picker as collapsed **Add note**.
+
+**Why**
+- The collapsed notes rail already opened `NewNoteModal` (title + folder). Home and the expanded-rail **New note** button still used a title-only prompt, so folder choice was inconsistent. Both now open the same modal; templates still use their own create flow.
+
+---
+
 ## 2026-08-17 — Move notes/folders with a folder picker + drag-and-drop
 
 **Portable release 1.1.17**

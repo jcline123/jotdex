@@ -3763,7 +3763,12 @@ function App() {
                   Trash
                 </button>
                 <div className="template-wrap">
-                  <button type="button" className="ghost" onClick={() => void createNote()}>
+                  <button
+                    type="button"
+                    className="ghost"
+                    title="Create a note (choose folder)"
+                    onClick={() => setNewNoteModalOpen(true)}
+                  >
                     New note
                   </button>
                   <button
@@ -3892,7 +3897,7 @@ function App() {
                 setSelectedId(id)
                 setMobilePane('editor')
               }}
-              onNewNote={() => void createNote()}
+              onNewNote={() => setNewNoteModalOpen(true)}
               onFocusSearch={() => searchRef.current?.focus()}
               onOpenTodos={() => {
                 if (narrowLayout) {
