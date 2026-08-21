@@ -7,6 +7,13 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 
 ---
 
+## 2026-08-21 — MIT license for the Jotdex application
+
+**Why**
+- The public GitHub repo had no project license (only third-party notices), which left reuse rights unclear. MIT matches the dependency stack and keeps redistribution of the app simple; vault files remain the user’s content.
+
+---
+
 ## 2026-08-21 — New note from Home and expanded rail uses folder picker
 
 **Portable release 1.1.18**

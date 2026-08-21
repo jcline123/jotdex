@@ -332,4 +332,6 @@ Details: [docs/import-format/onenote-md-exporter.md](docs/import-format/onenote-
 
 ## License / notices
 
-See [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for third-party components.
+Jotdex is licensed under the [MIT License](LICENSE). Copyright (c) 2026 Joshua Cline.
+
+Third-party packages used by Jotdex are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). Your vault Markdown and attachments remain your content — the license covers the Jotdex application, not your notes.
