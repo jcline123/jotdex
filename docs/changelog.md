@@ -10,7 +10,7 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 ## 2026-08-22 — Portable release 1.1.19 (code editor milestone)
 
 **Portable release 1.1.19**
-- Tag `v1.1.19` — CodeMirror **Edit** dialog, snippets, Check formatting, optional PSScriptAnalyzer; code boxes stay basic TipTap inline edit.
+- Tag `v1.1.19` (`ba0d1cd`) — CodeMirror **Edit** dialog, snippets, Check formatting, optional PSScriptAnalyzer; code boxes stay basic TipTap inline edit.
 
 ---
 
