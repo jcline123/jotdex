@@ -2508,12 +2508,17 @@ button {
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(255, 255, 255, 0.04);
   user-select: none;
+  flex-wrap: wrap;
+  min-width: 0;
 }
 
 .code-block-actions {
   display: flex;
   align-items: center;
   gap: 0.35rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  min-width: 0;
 }
 
 .code-block-snippet-group {
@@ -2524,6 +2529,8 @@ button {
   border-radius: 8px;
   border: 1px solid rgba(125, 180, 255, 0.28);
   background: rgba(60, 120, 200, 0.12);
+  flex-wrap: wrap;
+  min-width: 0;
 }
 
 .code-snippet-label {
@@ -2534,6 +2541,11 @@ button {
   color: #9ec5ff;
   margin-right: 0.15rem;
   user-select: none;
+  white-space: nowrap;
+}
+
+.code-btn-label-short {
+  display: none;
 }
 
 .code-block-snippet-group .code-edit-btn {
@@ -3168,6 +3180,37 @@ button {
   .history-panel li {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .code-block-chrome {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .code-lang select {
+    width: 100%;
+    font-size: 16px;
+  }
+
+  .code-block-actions {
+    justify-content: flex-start;
+  }
+
+  .code-block-snippet-group {
+    width: 100%;
+  }
+
+  .code-btn-label-full {
+    display: none;
+  }
+
+  .code-btn-label-short {
+    display: inline;
+  }
+
+  .code-edit-btn,
+  .code-copy-btn {
+    min-height: 2.25rem;
   }
 }
 

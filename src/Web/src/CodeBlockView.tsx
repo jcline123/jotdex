@@ -127,7 +127,8 @@ export function CodeBlockView({ node, updateAttributes, editor, getPos }: NodeVi
                   onClick={() => setSaveOpen(true)}
                   title="Save this code as a reusable snippet note in your vault"
                 >
-                  Save as snippet
+                  <span className="code-btn-label-full">Save as snippet</span>
+                  <span className="code-btn-label-short">Save</span>
                 </button>
               </div>
               <button type="button" className="code-edit-btn" onClick={openEditor} title="Advanced edit">

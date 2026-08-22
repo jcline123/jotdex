@@ -9,7 +9,7 @@
 
 ## Just shipped (this session)
 
-- Portable **1.1.19**: code editor milestone (Edit dialog, snippets, formatting check, PSScriptAnalyzer optional)
+- Portable **1.1.20**: mobile code-box toolbar wrap (folders/notes layout unchanged)
 - Code boxes: basic TipTap edit; CodeMirror only via **Edit**
 
 ## Run (Development + SampleVault)

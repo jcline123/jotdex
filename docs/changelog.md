@@ -7,6 +7,13 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 
 ---
 
+## 2026-08-22 — Portable release 1.1.20 (mobile code-box chrome)
+
+**Portable release 1.1.20**
+- Tag `v1.1.20` — Code-box snippet/Edit/Copy buttons wrap on phones; mobile folders/notes layout unchanged from 1.1.19.
+
+---
+
 ## 2026-08-22 — Portable release 1.1.19 (code editor milestone)
 
 **Portable release 1.1.19**
