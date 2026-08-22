@@ -3,6 +3,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Core\Jotdex.Core.csproj" />
     <ProjectReference Include="..\Infrastructure\Jotdex.Infrastructure.csproj" />
+    <ProjectReference Include="..\PowerShellDiagnostics\Jotdex.PowerShellDiagnostics.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -13,10 +14,18 @@
     <TargetFramework>net10.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <Version>1.1.18</Version>
-    <AssemblyVersion>1.1.18.0</AssemblyVersion>
-    <FileVersion>1.1.18.0</FileVersion>
-    <InformationalVersion>1.1.18</InformationalVersion>
+    <Version>1.1.19</Version>
+    <AssemblyVersion>1.1.19.0</AssemblyVersion>
+    <FileVersion>1.1.19.0</FileVersion>
+    <InformationalVersion>1.1.19</InformationalVersion>
   </PropertyGroup>
+
+  <!-- When PSScriptAnalyzer is installed (scripts/install-psscriptanalyzer.ps1 or publish), copy beside the exe. -->
+  <ItemGroup Condition="Exists('..\PowerShellDiagnostics\modules\PSScriptAnalyzer')">
+    <Content Include="..\PowerShellDiagnostics\modules\PSScriptAnalyzer\**\*">
+      <Link>modules\PSScriptAnalyzer\%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
 
 </Project>

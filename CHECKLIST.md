@@ -2,7 +2,7 @@
 
 Mark items `- [x]` when done. IDs are stable for chat (“done M1-04”).
 
-**Active milestone:** CB — Multi-provider cloud backup
+**Active milestone:** CE — Code editing, diagnostics, and reusable snippets
 
 ---
 
@@ -241,3 +241,25 @@ Mark items `- [x]` when done. IDs are stable for chat (“done M1-04”).
 - [x] `CB-60` Docs (`cloud-backup.md`, backup/portability/threat-model/README/changelog)
 - [x] `CB-61` Personal-account matrices + restore test notes
 - [x] `CB-62` Packaging/version; confirm vault mirror unchanged; gate complete
+
+---
+
+## CE — Code editing, diagnostics, and reusable snippets
+
+**Active milestone.** CE-00–06 shipped; CE-07 is polish follow-up.
+
+### Foundation
+
+- [x] `CE-00` ADR (`docs/decisions/ADR-code-editor-diagnostics.md`) + checklist IDs
+- [x] `CE-01` Tab indentation in inline Tiptap code blocks (`enableTabIndentation`, `tabSize: 4`)
+- [x] `CE-02` Lazy CodeMirror 6 Edit dialog; sync to single `codeBlock` via ProseMirror transaction
+- [x] `CE-03` Diagnostics: shared model, JSON client lint, PowerShell parse-only API
+
+### Follow-ups
+
+- [x] `CE-04` Reusable snippet notes (`jotdex_type: code-snippet`); Save/Insert; Ctrl+Space from vault index
+- [x] `CE-05` On-demand remark-lint note checker (report-only; no format-on-save)
+- [x] `CE-06` Optional PSScriptAnalyzer (warnings when module present; parse-only fallback)
+- [x] `CE-07` Polish: fold gutter + whitespace in Edit dialog (inline CM rolled back — basic TipTap edit kept)
+
+- [x] `CE-GATE` CE-00–03 verified; changelog; THIRD_PARTY_NOTICES; portable publish ~63 MB zip (+~18 MB vs pre-CE)

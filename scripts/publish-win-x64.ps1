@@ -50,8 +50,22 @@ Copy-Item (Join-Path $PSScriptRoot "Update-Jotdex.ps1") $OutputRoot -Force
 Copy-Item (Join-Path $PSScriptRoot "Decrypt-JotdexKit.ps1") $OutputRoot -Force
 Copy-Item (Join-Path $PSScriptRoot "Ensure-JotdexFirewall.ps1") $OutputRoot -Force
 
+$psaModule = Join-Path $repo "src\PowerShellDiagnostics\modules\PSScriptAnalyzer"
+if (-not (Test-Path $psaModule)) {
+    Write-Host "PSScriptAnalyzer module missing - installing for portable bundle..."
+    & (Join-Path $PSScriptRoot "install-psscriptanalyzer.ps1")
+}
+if (Test-Path $psaModule) {
+    $outModules = Join-Path $OutputRoot "modules"
+    New-Item -ItemType Directory -Path $outModules -Force | Out-Null
+    Copy-Item $psaModule (Join-Path $outModules "PSScriptAnalyzer") -Recurse -Force
+    Write-Host "Bundled PSScriptAnalyzer -> $outModules"
+} else {
+    Write-Warning "PSScriptAnalyzer not installed; PowerShell best-practice hints will be syntax-only in this build."
+}
+
 $example = Join-Path $OutputRoot "appsettings.example.json"
-@"
+$exampleJson = @'
 {
   "Jotdex": {
     "VaultPath": "",
@@ -70,10 +84,11 @@ $example = Join-Path $OutputRoot "appsettings.example.json"
   },
   "AllowedHosts": "*"
 }
-"@ | Set-Content -Path $example -Encoding UTF8
+'@
+Set-Content -Path $example -Value $exampleJson -Encoding UTF8
 
 $readme = Join-Path $OutputRoot "README-PORTABLE.txt"
-@"
+$readmeText = @'
 Jotdex portable build
 =====================
 
@@ -83,12 +98,13 @@ Jotdex portable build
 4. First-run: choose vault path, optional password (no username), network bind/port
 5. App data is stored in .\data beside this exe (password hash under data\auth if set)
 
-LAN access: use Settings → Network (LAN + port), then Save (UAC may prompt for firewall) and Restart.
+LAN access: use Settings -> Network (LAN + port), then Save (UAC may prompt for firewall) and Restart.
 Or pass: Jotdex.Server.exe --urls http://0.0.0.0:5180
 Manual firewall: run Ensure-JotdexFirewall.ps1 as Administrator from this folder.
 
 Windows Service: run install-service.ps1 elevated from this folder.
-"@ | Set-Content -Path $readme -Encoding UTF8
+'@
+Set-Content -Path $readme -Value $readmeText -Encoding UTF8
 
 Write-Host "Done: $OutputRoot"
 Get-ChildItem $OutputRoot | Select-Object Name, Length

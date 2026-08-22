@@ -11,6 +11,8 @@ using Jotdex.Core.Notifications;
 using Jotdex.Core.Search;
 using Jotdex.Core.Secrets;
 using Jotdex.Core.Vault;
+using Jotdex.Core.CodeDiagnostics;
+using Jotdex.PowerShellDiagnostics;
 using Jotdex.Infrastructure.Auth;
 using Jotdex.Infrastructure.CloudBackup;
 using Jotdex.Infrastructure.Config;
@@ -24,10 +26,14 @@ using Jotdex.Infrastructure.Notifications;
 using Jotdex.Infrastructure.Paths;
 using Jotdex.Infrastructure.Search;
 using Jotdex.Infrastructure.Secrets;
+using Jotdex.Core.Snippets;
+using Jotdex.Infrastructure.Snippets;
 using Jotdex.Infrastructure.Vault;
 using Jotdex.Server.Auth;
 using Jotdex.Server.CloudBackup;
+using Jotdex.Server.CodeDiagnostics;
 using Jotdex.Server.Hosting;
+using Jotdex.Server.Snippets;
 using Microsoft.Extensions.Options;
 
 // Offline helper: Jotdex.Server.exe --decrypt-kit <kit.jotdexkit> <out.zip>
@@ -198,6 +204,7 @@ builder.Services.AddSingleton<IMarkdownRenderer, MarkdigMarkdownRenderer>();
 builder.Services.AddSingleton<SqliteSearchIndex>();
 builder.Services.AddSingleton<ISearchIndex>(sp => sp.GetRequiredService<SqliteSearchIndex>());
 builder.Services.AddSingleton<IVaultRescanObserver>(sp => sp.GetRequiredService<SqliteSearchIndex>());
+builder.Services.AddSingleton<IVaultRescanObserver>(sp => sp.GetRequiredService<SnippetIndexService>());
 builder.Services.AddSingleton<INoteHistoryService, NoteHistoryService>();
 builder.Services.AddSingleton<INoteCommandService, NoteCommandService>();
 builder.Services.AddSingleton<IVaultTaskService, VaultTaskService>();
@@ -217,6 +224,12 @@ builder.Services.AddSingleton<IMoveKitService, MoveKitService>();
 builder.Services.AddSingleton<IUpdateCheckService, UpdateCheckService>();
 builder.Services.AddHttpClient("github");
 builder.Services.AddHttpClient("telegram");
+builder.Services.AddSingleton<IPowerShellSyntaxParser, PowerShellSyntaxParser>();
+builder.Services.AddSingleton<IPowerShellScriptAnalyzer, PowerShellScriptAnalyzer>();
+builder.Services.AddSingleton<IPowerShellDiagnosticsService, PowerShellDiagnosticsService>();
+builder.Services.AddSingleton<SnippetIndexService>();
+builder.Services.AddSingleton<ISnippetIndex>(sp => sp.GetRequiredService<SnippetIndexService>());
+builder.Services.AddSingleton<ISnippetCommandService, SnippetCommandService>();
 builder.Services.AddSingleton<ISecretStore, DpapiSecretStore>();
 builder.Services.AddSingleton<ILocalAuthProbe, LocalAuthProbe>();
 builder.Services.AddSingleton<IMoveKitCryptoService, MoveKitCryptoService>();
@@ -319,6 +332,8 @@ app.UseJotdexAuthGate();
 
 app.MapAuthEndpoints();
 app.MapCloudBackupEndpoints();
+app.MapCodeDiagnosticsEndpoints();
+app.MapSnippetEndpoints();
 
 app.MapGet("/api/health", (IAppVersion version, IDataRootResolver paths, IVaultPathGuard vault, ISearchIndex search, StopwatchHolder uptime, IOptions<JotdexOptions> options) =>
 {

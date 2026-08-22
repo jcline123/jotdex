@@ -4,6 +4,7 @@ import DOMPurify from 'dompurify'
 import './App.css'
 import { NoteEditor, type NoteCatalogItem } from './NoteEditor'
 import { joinFrontMatter, sameMarkdown, setFavoriteInMarkdown, splitFrontMatter } from './frontMatter'
+import { lintNoteMarkdown, type MarkdownLintIssue } from './markdownLint'
 import { looksUnsafeForVisual } from './unsafeMarkdown'
 import { ClipSaveModal } from './ClipSaveModal'
 import { NewNoteModal, folderRailShortLabel } from './NewNoteModal'
@@ -233,6 +234,9 @@ function App() {
     snapshotId: string
     lines: { type: 'same' | 'add' | 'del'; text: string }[]
   } | null>(null)
+  const [formatLintOpen, setFormatLintOpen] = useState(false)
+  const [formatLintIssues, setFormatLintIssues] = useState<MarkdownLintIssue[]>([])
+  const [formatLintBusy, setFormatLintBusy] = useState(false)
   const saveTimer = useRef<number | null>(null)
   const [conflictDisk, setConflictDisk] = useState<NoteDetail | null>(null)
   const [sourceForced, setSourceForced] = useState<string | null>(null)
@@ -1001,9 +1005,31 @@ function App() {
     }
     setOutlineOpen(false)
     setBacklinksOpen(false)
+    setFormatLintOpen(false)
     const rows = await fetch(`/api/notes/${selectedId}/history`).then((r) => r.json())
     setHistory(rows)
     setHistoryOpen(true)
+  }
+
+  async function toggleFormatLint() {
+    if (formatLintOpen) {
+      setFormatLintOpen(false)
+      return
+    }
+    setHistoryOpen(false)
+    setOutlineOpen(false)
+    setBacklinksOpen(false)
+    setFormatLintBusy(true)
+    try {
+      const issues = await lintNoteMarkdown(draft)
+      setFormatLintIssues(issues)
+      setFormatLintOpen(true)
+    } catch {
+      setFormatLintIssues([])
+      setFormatLintOpen(true)
+    } finally {
+      setFormatLintBusy(false)
+    }
   }
 
   async function toggleBacklinks() {
@@ -1014,6 +1040,7 @@ function App() {
     }
     setHistoryOpen(false)
     setOutlineOpen(false)
+    setFormatLintOpen(false)
     const data = (await fetch(`/api/notes/${selectedId}/backlinks`).then((r) => r.json())) as {
       links: { noteId: string; title: string; relativePath: string; folderPath: string; context?: string }[]
     }
@@ -1024,6 +1051,7 @@ function App() {
   function toggleOutline() {
     setHistoryOpen(false)
     setBacklinksOpen(false)
+    setFormatLintOpen(false)
     setOutlineOpen((o) => !o)
   }
 
@@ -2057,6 +2085,8 @@ function App() {
                 onChange={setDraft}
                 onError={(msg) => setError(msg)}
                 getEtag={() => etagRef.current}
+                snippetFolder={note.folderPath ?? ''}
+                folderTree={tree}
                 onNoteMeta={(n) => {
                   if (n.markdown) {
                     const split = splitFrontMatter(n.markdown)
@@ -4060,6 +4090,14 @@ function App() {
                   </button>
                   <button
                     type="button"
+                    className={`ghost${formatLintOpen ? ' on' : ''}`}
+                    onClick={() => void toggleFormatLint()}
+                    title="Check Markdown formatting (report only — does not change your note)"
+                  >
+                    {formatLintBusy ? 'Checking…' : 'Check formatting'}
+                  </button>
+                  <button
+                    type="button"
                     className="ghost"
                     onClick={() => void exportNoteHtml()}
                     title="Download a self-contained HTML file you can send to someone"
@@ -4105,6 +4143,8 @@ function App() {
                   onChange={setDraft}
                   onError={(msg) => setError(msg)}
                   getEtag={() => etagRef.current}
+                  snippetFolder={note.folderPath ?? ''}
+                  folderTree={tree}
                   onNoteMeta={(n) => {
                     if (n.markdown) {
                       const split = splitFrontMatter(n.markdown)
@@ -4174,6 +4214,25 @@ function App() {
                             <span className="note-path">{b.folderPath || '/'}</span>
                             {b.context && <span className="history-preview">{b.context}</span>}
                           </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+              {formatLintOpen && (
+                <div className="history-panel">
+                  <h3>Formatting check</h3>
+                  <p className="muted">Report only — your note is not changed automatically.</p>
+                  {formatLintIssues.length === 0 ? (
+                    <p className="muted">No formatting issues reported for this note body.</p>
+                  ) : (
+                    <ul className="format-lint-list">
+                      {formatLintIssues.map((issue, i) => (
+                        <li key={`${issue.rule}-${issue.line}-${i}`}>
+                          <span className="diag-sev">{issue.severity === 'error' ? 'Error' : 'Warning'}</span>
+                          L{issue.line}:{issue.column} — {issue.message}
+                          <span className="muted"> ({issue.rule})</span>
                         </li>
                       ))}
                     </ul>

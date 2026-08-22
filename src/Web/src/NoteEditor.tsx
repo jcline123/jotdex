@@ -12,14 +12,14 @@ import { TableRow } from '@tiptap/extension-table-row'
 import { TableCell } from '@tiptap/extension-table-cell'
 import { TableHeader } from '@tiptap/extension-table-header'
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight'
-import { common, createLowlight } from 'lowlight'
-import powershell from 'highlight.js/lib/languages/powershell'
-import dos from 'highlight.js/lib/languages/dos'
 import { Markdown } from 'tiptap-markdown'
 import { Extension } from '@tiptap/core'
 import { TextStyle } from '@tiptap/extension-text-style'
 import { Color } from '@tiptap/extension-color'
+import { SnippetEditorContext, type FolderTreeNode } from './snippetEditorContext'
 import { CodeBlockView } from './CodeBlockView'
+import { CODE_BLOCK_ENABLE_TAB_INDENT, CODE_BLOCK_TAB_SIZE } from './codeBlockSettings'
+import { codeLowlight } from './codeHighlight'
 import { ImageView } from './ImageView'
 import { applyHeadingToSelection } from './headingSelection'
 import { normalizeBlockSelection } from './selectionUtils'
@@ -40,13 +40,6 @@ import {
   installCodeBoxClipboardGuards,
   plainTextFromClipboard,
 } from './copyCodePlain'
-
-const lowlight = createLowlight(common)
-lowlight.register('powershell', powershell)
-lowlight.register('ps1', powershell)
-lowlight.register('pwsh', powershell)
-lowlight.register('cmd', dos)
-lowlight.register('bat', dos)
 
 const FontSizeTextStyle = TextStyle.extend({
   addAttributes() {
@@ -106,7 +99,12 @@ const CodeBlockBox = CodeBlockLowlight.extend({
   addNodeView() {
     return ReactNodeViewRenderer(CodeBlockView)
   },
-}).configure({ lowlight, defaultLanguage: 'plaintext' })
+}).configure({
+  lowlight: codeLowlight,
+  defaultLanguage: 'plaintext',
+  enableTabIndentation: CODE_BLOCK_ENABLE_TAB_INDENT,
+  tabSize: CODE_BLOCK_TAB_SIZE,
+})
 
 const ImageBox = Image.extend({
   addNodeView() {
@@ -161,6 +159,8 @@ type Props = {
   onNoteMeta?: (note: { etag?: string; attachments?: AttachmentInfo[]; markdown?: string; htmlSidecars?: unknown }) => void
   onError?: (message: string) => void
   getEtag?: () => string
+  snippetFolder?: string
+  folderTree?: FolderTreeNode | null
 }
 
 type UploadResult = {
@@ -335,6 +335,8 @@ export function NoteEditor({
   onNoteMeta,
   onError,
   getEtag,
+  snippetFolder = '',
+  folderTree = null,
 }: Props) {
   const [uploadStatus, setUploadStatus] = useState<string | null>(null)
   const [pasteMode, setPasteMode] = useState<PasteMode>('smart')
@@ -897,6 +899,7 @@ export function NoteEditor({
   const chromeCollapsed = chromeAuto && chromeScrolled && !chromePeek
 
   return (
+    <SnippetEditorContext.Provider value={{ defaultFolder: snippetFolder, tree: folderTree }}>
     <div
       ref={rootRef}
       className={`rich-editor${chromeAuto ? ' chrome-autohide' : ' chrome-pinned'}${chromeScrolled ? ' is-scrolled' : ''}${chromePeek ? ' chrome-peek' : ''}`}
@@ -1320,6 +1323,7 @@ export function NoteEditor({
         <EditorContent editor={editor} />
       </div>
     </div>
+    </SnippetEditorContext.Provider>
   )
 }
 

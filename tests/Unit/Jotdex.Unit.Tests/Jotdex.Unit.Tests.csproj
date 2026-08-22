@@ -22,6 +22,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\..\src\Core\Jotdex.Core.csproj" />
     <ProjectReference Include="..\..\..\src\Infrastructure\Jotdex.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\..\src\PowerShellDiagnostics\Jotdex.PowerShellDiagnostics.csproj" />
   </ItemGroup>
 
 </Project>

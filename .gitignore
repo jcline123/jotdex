@@ -6,6 +6,7 @@ bin/
 obj/
 artifacts/
 **/node_modules/
+src/PowerShellDiagnostics/modules/
 src/Server/wwwroot/
 src/Server/data/
 src/Web/dist/

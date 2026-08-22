@@ -7,7 +7,40 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 
 ---
 
-## 2026-08-21 — MIT license for the Jotdex application
+## 2026-08-22 — Portable release 1.1.19 (code editor milestone)
+
+**Portable release 1.1.19**
+- Tag `v1.1.19` — CodeMirror **Edit** dialog, snippets, Check formatting, optional PSScriptAnalyzer; code boxes stay basic TipTap inline edit.
+
+---
+
+## 2026-08-22 — Code boxes: basic inline edit; Edit dialog only for CodeMirror
+
+**Why**
+- Click-to-open inline CodeMirror broke normal typing (keys landed outside the box) and wasn’t what was wanted — keep TipTap/Lowlight for everyday code-box editing; CodeMirror stays behind **Edit**. Also removed the “missing newline at end of block” hint and the parse change that tried to preserve trailing `\n`, which had autosaved an extra blank line into code boxes across the vault.
+
+---
+
+## 2026-08-22 — CE-07 polish + code block trailing newline fix
+
+**Why**
+- CE-07 adds fold gutter and optional whitespace display in the **Edit** dialog. (Inline CodeMirror was tried then rolled back — see entry above.)
+
+---
+
+## 2026-08-22 — Snippets, Markdown lint, optional PSScriptAnalyzer (CE-04–06)
+
+**Why**
+- Technicians asked for reusable command snippets without a separate database — snippet notes live in the vault (`jotdex_type: code-snippet`) with a rebuildable SQLite index. **Check formatting** uses remark-lint report-only so notes are never silently rewritten. **PSScriptAnalyzer** is optional: when the module is missing the server keeps parse-only PowerShell checks; when present it adds style warnings without executing code.
+
+---
+
+## 2026-08-22 — Advanced code editor + parse-only diagnostics (CE-00–03)
+
+**Why**
+- Technicians wanted IDE-like editing and syntax feedback in code boxes without replacing Jotdex’s visual note editor or executing snippets. **CodeMirror 6** (lazy-loaded on **Edit**) fits ProseMirror/TipTap, works on mobile browsers, and stays fully offline — Monaco was rejected for size, workers, and mobile support. PowerShell parse errors use in-process `Parser.ParseInput` (never runs code); JSON checks run in the browser. Markdown fenced blocks remain canonical.
+
+---
 
 **Why**
 - The public GitHub repo had no project license (only third-party notices), which left reuse rights unclear. MIT matches the dependency stack and keeps redistribution of the app simple; vault files remain the user’s content.
