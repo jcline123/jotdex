@@ -10,7 +10,7 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 ## 2026-08-23 — Portable release 1.1.22 (snippets rail layout)
 
 **Portable release 1.1.22**
-- Tag `v1.1.22` — Snippets rail header and list rows no longer stack (notes-list `width: 100%` button CSS was crushing Delete/Refresh/Close).
+- Tag `v1.1.22` (`070f8b3`) — Snippets rail header and list rows no longer stack (notes-list `width: 100%` button CSS was crushing Delete/Refresh/Close).
 
 ---
 
