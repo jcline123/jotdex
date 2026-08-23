@@ -53,7 +53,7 @@ export function InsertSnippetModal({ language, onClose, onPick }: Props) {
         {busy ? (
           <p className="muted">Loading…</p>
         ) : items.length === 0 ? (
-          <p className="muted">No snippets found. Save a code block as a snippet first.</p>
+          <p className="muted">No snippets found. Save a code block as a snippet first (stored under Snippets/ in your vault).</p>
         ) : (
           <ul className="snippet-pick-list">
             {items.map((s) => (

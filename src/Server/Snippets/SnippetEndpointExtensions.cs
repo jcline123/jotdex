@@ -30,7 +30,7 @@ public static class SnippetEndpointExtensions
             if (body is null || string.IsNullOrWhiteSpace(body.Title) || string.IsNullOrWhiteSpace(body.Code))
                 return Results.BadRequest(new { error = "Title and code are required." });
 
-            var created = commands.Create(new CreateSnippetRequest(
+            var (created, error) = commands.Create(new CreateSnippetRequest(
                 body.Title,
                 body.Trigger ?? "",
                 body.Language ?? "plaintext",
@@ -40,9 +40,39 @@ public static class SnippetEndpointExtensions
                 body.Tags));
 
             if (created is null)
-                return Results.BadRequest(new { error = "Could not create snippet note." });
+                return Results.BadRequest(new { error = error ?? "Could not create snippet." });
 
             return Results.Json(new { snippet = SnippetDto.From(created) });
+        });
+
+        app.MapPut("/api/snippets/{id:guid}", async (Guid id, HttpRequest request, ISnippetCommandService commands, CancellationToken ct) =>
+        {
+            UpdateSnippetBody? body;
+            try
+            {
+                body = await request.ReadFromJsonAsync<UpdateSnippetBody>(ct);
+            }
+            catch
+            {
+                return Results.BadRequest(new { error = "Invalid JSON body." });
+            }
+
+            if (body is null || string.IsNullOrWhiteSpace(body.Title) || string.IsNullOrWhiteSpace(body.Code))
+                return Results.BadRequest(new { error = "Title and code are required." });
+
+            var (updated, error) = commands.Update(id, new UpdateSnippetRequest(
+                body.Title,
+                body.Trigger ?? "",
+                body.Language ?? "plaintext",
+                body.Code,
+                body.Description,
+                body.Tags,
+                body.ETag ?? ""));
+
+            if (updated is null)
+                return Results.BadRequest(new { error = error ?? "Could not update snippet." });
+
+            return Results.Json(new { snippet = SnippetDto.From(updated) });
         });
 
         return app;
@@ -57,6 +87,17 @@ public static class SnippetEndpointExtensions
         public string? Folder { get; set; }
         public string? Description { get; set; }
         public List<string>? Tags { get; set; }
+    }
+
+    private sealed class UpdateSnippetBody
+    {
+        public string? Title { get; set; }
+        public string? Trigger { get; set; }
+        public string? Language { get; set; }
+        public string? Code { get; set; }
+        public string? Description { get; set; }
+        public List<string>? Tags { get; set; }
+        public string? ETag { get; set; }
     }
 
     private sealed record SnippetDto(

@@ -6,6 +6,8 @@ public static class SnippetConstants
     public const string TypeValue = "code-snippet";
     public const string LanguageKey = "jotdex_language";
     public const string TriggerKey = "jotdex_trigger";
+    /// <summary>Reserved vault folder for snippet notes (hidden from the notes UI).</summary>
+    public const string DefaultFolder = "Snippets";
 }
 
 public sealed record SnippetSummary(
@@ -28,6 +30,15 @@ public sealed record CreateSnippetRequest(
     string? Description,
     IReadOnlyList<string>? Tags);
 
+public sealed record UpdateSnippetRequest(
+    string Title,
+    string Trigger,
+    string Language,
+    string Code,
+    string? Description,
+    IReadOnlyList<string>? Tags,
+    string ExpectedETag);
+
 public interface ISnippetIndex
 {
     void RebuildFromVault();
@@ -36,5 +47,6 @@ public interface ISnippetIndex
 
 public interface ISnippetCommandService
 {
-    SnippetSummary? Create(CreateSnippetRequest request);
+    (SnippetSummary? Snippet, string? Error) Create(CreateSnippetRequest request);
+    (SnippetSummary? Snippet, string? Error) Update(Guid noteId, UpdateSnippetRequest request);
 }

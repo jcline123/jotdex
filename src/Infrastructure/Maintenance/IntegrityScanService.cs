@@ -47,7 +47,7 @@ public sealed partial class IntegrityScanService : IIntegrityScanService
             return new IntegrityScanResult { Success = false, Error = "Vault not configured" };
 
         var issues = new List<IntegrityIssue>();
-        var notes = _vault.ListNotes(null);
+        var notes = _vault.ListNotes(null, includeSnippetNotes: true);
         var pathByTitle = notes
             .GroupBy(n => n.Title, StringComparer.OrdinalIgnoreCase)
             .ToDictionary(g => g.Key, g => g.Select(x => x.RelativePath).ToList(), StringComparer.OrdinalIgnoreCase);

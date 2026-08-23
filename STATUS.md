@@ -1,7 +1,7 @@
 # Jotdex STATUS
 
-**Active milestone:** CE complete (CE-00–07)  
-**Last updated:** 2026-08-22
+**Active milestone:** CE complete (CE-00–07) + snippet UX polish  
+**Last updated:** 2026-08-23
 
 ## In progress
 
@@ -9,8 +9,8 @@
 
 ## Just shipped (this session)
 
-- Portable **1.1.20**: mobile code-box toolbar wrap (folders/notes layout unchanged)
-- Code boxes: basic TipTap edit; CodeMirror only via **Edit**
+- Portable **1.1.21**: snippets folder, rail manager, cursor insert, Edit-dialog Insert/Save, PSA module path
+- Portable **1.1.20**: mobile code-box toolbar wrap
 
 ## Run (Development + SampleVault)
 
@@ -40,3 +40,4 @@ Optional PSScriptAnalyzer (also auto-installed by `publish-win-x64.ps1`):
 - Leftover `tools/SampleVault/Conflict *.md` from earlier conflict tests (safe to delete)
 - NuGet NU1903 warning on SQLitePCLRaw (dependency bump later)
 - Cloud backup Dropbox/Google live matrices pending (`docs/cloud-backup-matrices.md`)
+- Mobile Edit dialog still scrolls the page behind it (accepted for 1.1.20)

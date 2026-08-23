@@ -1,8 +1,7 @@
 import { NodeViewContent, NodeViewWrapper } from '@tiptap/react'
 import type { NodeViewProps } from '@tiptap/react'
-import { lazy, Suspense, useCallback, useState } from 'react'
-import { syncCodeBlockText } from './syncCodeBlock'
-import { useSnippetEditorContext } from './snippetEditorContext'
+import { lazy, Suspense, useCallback, useRef, useState } from 'react'
+import { codeBlockInsertOffset, insertCodeBlockText, syncCodeBlockText } from './syncCodeBlock'
 import type { SnippetSummary } from './snippetApi'
 
 const CodeEditorDialog = lazy(() =>
@@ -35,7 +34,7 @@ export function CodeBlockView({ node, updateAttributes, editor, getPos }: NodeVi
   const [editing, setEditing] = useState(false)
   const [saveOpen, setSaveOpen] = useState(false)
   const [insertOpen, setInsertOpen] = useState(false)
-  const { defaultFolder, tree } = useSnippetEditorContext()
+  const insertOffsetRef = useRef(0)
   const language = (node.attrs.language as string) || 'plaintext'
 
   const copy = async () => {
@@ -78,13 +77,25 @@ export function CodeBlockView({ node, updateAttributes, editor, getPos }: NodeVi
     [editor, getPos],
   )
 
+  const openInsert = useCallback(() => {
+    const pos = getPos()
+    if (typeof pos === 'number') {
+      insertOffsetRef.current = codeBlockInsertOffset(editor, pos, node.textContent.length)
+    } else {
+      insertOffsetRef.current = node.textContent.length
+    }
+    setInsertOpen(true)
+  }, [editor, getPos, node.textContent.length])
+
   const applySnippet = useCallback(
     (snippet: SnippetSummary) => {
-      handleSync(snippet.code)
+      const pos = getPos()
+      if (typeof pos !== 'number') return
+      insertCodeBlockText(editor, pos, insertOffsetRef.current, snippet.code)
       if (snippet.language) updateAttributes({ language: snippet.language })
       setInsertOpen(false)
     },
-    [handleSync, updateAttributes],
+    [editor, getPos, updateAttributes],
   )
 
   return (
@@ -116,7 +127,7 @@ export function CodeBlockView({ node, updateAttributes, editor, getPos }: NodeVi
                 <button
                   type="button"
                   className="code-edit-btn"
-                  onClick={() => setInsertOpen(true)}
+                  onClick={openInsert}
                   title="Insert a saved snippet into this code box"
                 >
                   Insert
@@ -159,8 +170,6 @@ export function CodeBlockView({ node, updateAttributes, editor, getPos }: NodeVi
       {saveOpen && (
         <Suspense fallback={null}>
           <SaveAsSnippetModal
-            tree={tree}
-            defaultFolder={defaultFolder}
             language={language}
             code={node.textContent}
             onClose={() => setSaveOpen(false)}

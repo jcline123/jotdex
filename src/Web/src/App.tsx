@@ -17,6 +17,7 @@ import {
 } from './jotdexBookmarklet'
 import { FirstRunWizard, LoginScreen } from './AuthScreens'
 import { TrashPane } from './TrashPane'
+import { SnippetsPane } from './SnippetsPane'
 import { extractOutline } from './outline'
 import {
   NOTE_TEMPLATES,
@@ -36,6 +37,11 @@ import { CloudBackupSettings } from './CloudBackupSettings'
 import { runCloudBackup } from './cloudBackupApi'
 import { isStandaloneTodosNote } from './systemNotes'
 import { diffLines } from './diffLines'
+
+function isCodeSnippetNote(frontMatter: string, folderPath?: string): boolean {
+  if (/jotdex_type:\s*code-snippet/i.test(frontMatter)) return true
+  return (folderPath ?? '').replace(/\\/g, '/').trim().toLowerCase() === 'snippets'
+}
 
 
 function countRemoteImages(markdown: string): number {
@@ -279,8 +285,9 @@ function App() {
   const [templateMenu, setTemplateMenu] = useState(false)
   const [templateMenuPos, setTemplateMenuPos] = useState<{ top: number; left: number } | null>(null)
   const templateBtnRef = useRef<HTMLButtonElement>(null)
-  const [mobilePane, setMobilePane] = useState<'folders' | 'notes' | 'editor' | 'todos' | 'trash'>('editor')
+  const [mobilePane, setMobilePane] = useState<'folders' | 'notes' | 'editor' | 'todos' | 'trash' | 'snippets'>('editor')
   const [showTrash, setShowTrash] = useState(false)
+  const [showSnippets, setShowSnippets] = useState(false)
   const [tasksRefreshKey, setTasksRefreshKey] = useState(0)
   const bumpTasksRefresh = useCallback(() => setTasksRefreshKey((k) => k + 1), [])
   const [todosCollapsed, setTodosCollapsed] = useState(() => {
@@ -2085,8 +2092,6 @@ function App() {
                 onChange={setDraft}
                 onError={(msg) => setError(msg)}
                 getEtag={() => etagRef.current}
-                snippetFolder={note.folderPath ?? ''}
-                folderTree={tree}
                 onNoteMeta={(n) => {
                   if (n.markdown) {
                     const split = splitFrontMatter(n.markdown)
@@ -3576,7 +3581,7 @@ function App() {
           'body',
           `mobile-${mobilePane}`,
           !narrowLayout && foldersCollapsed ? 'folders-collapsed' : '',
-          !narrowLayout && notesCollapsed ? 'notes-collapsed' : '',
+          !narrowLayout && notesCollapsed && !showTrash && !showSnippets ? 'notes-collapsed' : '',
           !narrowLayout && todosCollapsed ? 'todos-collapsed' : '',
         ]
           .filter(Boolean)
@@ -3655,6 +3660,7 @@ function App() {
                 className="ghost"
                 onClick={() => {
                   setShowTrash(true)
+                  setShowSnippets(false)
                   setNotesCollapsed(false)
                   setMobilePane('trash')
                 }}
@@ -3714,10 +3720,34 @@ function App() {
                   setFolder(p)
                   setSelectedId(null)
                   setShowTrash(false)
+                  setShowSnippets(false)
                   setMobilePane('notes')
                 }}
               />
             )}
+            <div className="folders-rail-snippet">
+              <button
+                type="button"
+                className={`snippets-rail-btn${showSnippets || mobilePane === 'snippets' ? ' active' : ''}`}
+                title="View and edit saved code snippets"
+                onClick={() => {
+                  setShowSnippets(true)
+                  setShowTrash(false)
+                  setNotesCollapsed(false)
+                  try {
+                    localStorage.setItem('jotdex.notesCollapsed', '0')
+                  } catch {
+                    /* ignore */
+                  }
+                  setMobilePane('snippets')
+                }}
+              >
+                <span className="snippets-rail-icon" aria-hidden>
+                  {'</>'}
+                </span>
+                Snippets
+              </button>
+            </div>
           </aside>
         )}
 
@@ -3730,6 +3760,20 @@ function App() {
             }}
             onCollapse={() => {
               setShowTrash(false)
+              setMobilePane('notes')
+            }}
+          />
+        ) : showSnippets || mobilePane === 'snippets' ? (
+          <SnippetsPane
+            fill={narrowLayout && mobilePane === 'snippets'}
+            activeSnippetId={selectedId}
+            onChanged={() => void loadVault()}
+            onOpenSnippet={(s) => {
+              setSelectedId(s.noteId)
+              setMobilePane('editor')
+            }}
+            onCollapse={() => {
+              setShowSnippets(false)
               setMobilePane('notes')
             }}
           />
@@ -3787,6 +3831,7 @@ function App() {
                   title="Show trash"
                   onClick={() => {
                     setShowTrash(true)
+                    setShowSnippets(false)
                     setMobilePane('trash')
                   }}
                 >
@@ -3965,10 +4010,15 @@ function App() {
                   <button
                     type="button"
                     className="ghost mobile-only mobile-back"
-                    onClick={() => setMobilePane('notes')}
+                    onClick={() => setMobilePane(showSnippets || mobilePane === 'snippets' ? 'snippets' : 'notes')}
                   >
-                    ← Notes
+                    {showSnippets || mobilePane === 'snippets' ? '← Snippets' : '← Notes'}
                   </button>
+                  {isCodeSnippetNote(frontMatter, note.folderPath) && (
+                    <span className="snippet-note-badge" title="Reusable code snippet (stored in Snippets/)">
+                      Snippet
+                    </span>
+                  )}
                   {titleEditing ? (
                     <input
                       className="note-title-edit"
@@ -4143,8 +4193,6 @@ function App() {
                   onChange={setDraft}
                   onError={(msg) => setError(msg)}
                   getEtag={() => etagRef.current}
-                  snippetFolder={note.folderPath ?? ''}
-                  folderTree={tree}
                   onNoteMeta={(n) => {
                     if (n.markdown) {
                       const split = splitFrontMatter(n.markdown)
@@ -4344,9 +4392,10 @@ function App() {
         </button>
         <button
           type="button"
-          className={mobilePane === 'notes' || mobilePane === 'trash' ? 'on' : ''}
+          className={mobilePane === 'notes' || mobilePane === 'trash' || mobilePane === 'snippets' ? 'on' : ''}
           onClick={() => {
             setShowTrash(false)
+            setShowSnippets(false)
             setMobilePane('notes')
           }}
         >

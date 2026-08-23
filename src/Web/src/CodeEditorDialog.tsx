@@ -1,10 +1,17 @@
-import { useCallback, useEffect, useId, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useId, useRef, useState } from 'react'
 import { EditorView, highlightSpecialChars } from '@codemirror/view'
 import { EditorState } from '@codemirror/state'
 import { languageLabel, loadCodeMirrorLanguage, normalizeLanguageId } from './codeLanguages'
 import { asyncDiagnosticsForLanguage, toCodeMirrorDiagnostics, type CodeDiagnostic } from './codeDiagnostics'
 import { buildCodeMirrorExtensions, createCodeMirrorCompartments } from './codeMirrorSetup'
-import { fetchSnippets } from './snippetApi'
+import { fetchSnippets, type SnippetSummary } from './snippetApi'
+
+const SaveAsSnippetModal = lazy(() =>
+  import('./SaveAsSnippetModal').then((m) => ({ default: m.SaveAsSnippetModal })),
+)
+const InsertSnippetModal = lazy(() =>
+  import('./InsertSnippetModal').then((m) => ({ default: m.InsertSnippetModal })),
+)
 
 export type CodeEditorDialogProps = {
   language: string
@@ -35,9 +42,13 @@ export function CodeEditorDialog({ language, initialText, onSync, onClose }: Cod
   const [lintLabel, setLintLabel] = useState<string | null>(
     normalizeLanguageId(language) === 'powershell' ? 'PowerShell syntax' : null,
   )
+  const [saveOpen, setSaveOpen] = useState(false)
+  const [insertOpen, setInsertOpen] = useState(false)
 
   onSyncRef.current = onSync
   onCloseRef.current = onClose
+
+  const currentText = useCallback(() => viewRef.current?.state.doc.toString() ?? pendingText.current, [])
 
   const flushSync = useCallback((text: string) => {
     pendingText.current = text
@@ -52,6 +63,23 @@ export function CodeEditorDialog({ language, initialText, onSync, onClose }: Cod
       syncTimer.current = window.setTimeout(() => flushSync(text), SYNC_DEBOUNCE_MS)
     },
     [flushSync],
+  )
+
+  const insertSnippetAtCursor = useCallback(
+    (snippet: SnippetSummary) => {
+      const view = viewRef.current
+      if (!view) return
+      const pos = view.state.selection.main.head
+      view.dispatch({
+        changes: { from: pos, to: pos, insert: snippet.code },
+        selection: { anchor: pos + snippet.code.length },
+      })
+      const text = view.state.doc.toString()
+      pendingText.current = text
+      scheduleSync(text)
+      setInsertOpen(false)
+    },
+    [scheduleSync],
   )
 
   const handleClose = useCallback(() => {
@@ -165,6 +193,16 @@ export function CodeEditorDialog({ language, initialText, onSync, onClose }: Cod
         <div className="modal-head">
           <h2 id={titleId}>Edit code — {languageLabel(language)}</h2>
           <div className="code-editor-toolbar">
+            <div className="code-block-snippet-group code-editor-snippet-group" role="group" aria-label="Snippets">
+              <span className="code-snippet-label">Snippets</span>
+              <button type="button" className="code-edit-btn" onClick={() => setInsertOpen(true)} title="Insert snippet at cursor">
+                Insert
+              </button>
+              <button type="button" className="code-edit-btn" onClick={() => setSaveOpen(true)} title="Save this code as a snippet">
+                <span className="code-btn-label-full">Save as snippet</span>
+                <span className="code-btn-label-short">Save</span>
+              </button>
+            </div>
             <label className="code-editor-wrap-toggle">
               <input type="checkbox" checked={wordWrap} onChange={(e) => setWordWrap(e.target.checked)} />
               Word wrap
@@ -209,10 +247,30 @@ export function CodeEditorDialog({ language, initialText, onSync, onClose }: Cod
         </div>
 
         <p className="muted code-editor-hint">
-          Ctrl+F find · Tab indent · Shift+Tab outdent · Ctrl+Space snippet completions · Fold gutter (click ▸) ·
-          Escape or Done to close. Edits autosave into the note.
+          Ctrl+F find · Tab indent · Shift+Tab outdent · Ctrl+Space snippet completions · Insert/Save snippets above ·
+          Fold gutter (click ▸) · Escape or Done to close. Edits autosave into the note.
         </p>
       </div>
+
+      {saveOpen && (
+        <Suspense fallback={null}>
+          <SaveAsSnippetModal
+            language={language}
+            code={currentText()}
+            onClose={() => setSaveOpen(false)}
+          />
+        </Suspense>
+      )}
+
+      {insertOpen && (
+        <Suspense fallback={null}>
+          <InsertSnippetModal
+            language={language}
+            onClose={() => setInsertOpen(false)}
+            onPick={insertSnippetAtCursor}
+          />
+        </Suspense>
+      )}
     </div>
   )
 }

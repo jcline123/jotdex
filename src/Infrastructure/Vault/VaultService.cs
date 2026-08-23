@@ -131,7 +131,8 @@ public sealed class VaultService : IVaultService
                         Modified = FrontMatterParser.ParseDate(fm.Fields, "modified") ?? File.GetLastWriteTimeUtc(full),
                         Created = FrontMatterParser.ParseDate(fm.Fields, "created"),
                         HasAttachments = noteAttachments.Count > 0,
-                        Favorite = IsFavoriteField(fm.Fields)
+                        Favorite = IsFavoriteField(fm.Fields),
+                        IsCodeSnippet = IsCodeSnippetField(fm.Fields)
                     },
                     full,
                     text,
@@ -196,10 +197,17 @@ public sealed class VaultService : IVaultService
     public FolderNode GetTree()
     {
         var s = Snapshot;
-        return BuildTree(s.Folders);
+        // Hide reserved Snippets folder from the folders rail (notes still live on disk).
+        var folders = s.Folders
+            .Where(f => !IsReservedSnippetsFolder(f))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        return BuildTree(folders);
     }
 
-    public IReadOnlyList<NoteSummary> ListNotes(string? folderRelativePath, bool includeStandaloneTodosMd = false)
+    public IReadOnlyList<NoteSummary> ListNotes(
+        string? folderRelativePath,
+        bool includeStandaloneTodosMd = false,
+        bool includeSnippetNotes = false)
     {
         var s = Snapshot;
         var folder = (folderRelativePath ?? "").Replace('\\', '/').Trim('/');
@@ -210,6 +218,7 @@ public sealed class VaultService : IVaultService
                 : n.FolderPath.Equals(folder, StringComparison.OrdinalIgnoreCase) ||
                   n.FolderPath.StartsWith(folder + "/", StringComparison.OrdinalIgnoreCase))
             .Where(n => includeStandaloneTodosMd || !IsStandaloneTodosNote(n.RelativePath))
+            .Where(n => includeSnippetNotes || !n.IsCodeSnippet)
             .OrderByDescending(n => n.Favorite)
             .ThenByDescending(n => n.Modified ?? n.Created ?? DateTimeOffset.MinValue)
             .ThenBy(n => n.Title, StringComparer.OrdinalIgnoreCase)
@@ -225,6 +234,18 @@ public sealed class VaultService : IVaultService
             return true;
         return false;
     }
+
+    private static bool IsReservedSnippetsFolder(string folderPath)
+    {
+        var f = (folderPath ?? "").Replace('\\', '/').Trim('/');
+        if (f.Equals(Jotdex.Core.Snippets.SnippetConstants.DefaultFolder, StringComparison.OrdinalIgnoreCase))
+            return true;
+        return f.StartsWith(Jotdex.Core.Snippets.SnippetConstants.DefaultFolder + "/", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsCodeSnippetField(IReadOnlyDictionary<string, string?> fields) =>
+        fields.TryGetValue(Jotdex.Core.Snippets.SnippetConstants.TypeKey, out var t) &&
+        string.Equals(t?.Trim(), Jotdex.Core.Snippets.SnippetConstants.TypeValue, StringComparison.OrdinalIgnoreCase);
 
     public NoteDetail? GetNote(Guid id)
     {

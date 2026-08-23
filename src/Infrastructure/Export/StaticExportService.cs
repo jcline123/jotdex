@@ -58,7 +58,7 @@ public sealed partial class StaticExportService : IStaticExportService
                 Directory.Delete(staging, recursive: true);
             Directory.CreateDirectory(staging);
 
-            var notes = _vault.ListNotes(null);
+            var notes = _vault.ListNotes(null, includeSnippetNotes: true);
             var searchIndex = new List<object>();
             var attachmentCount = 0;
             var notePages = new List<(NoteSummary Summary, string HtmlRel)>();

@@ -29,6 +29,8 @@ public sealed class NoteSummary
     public DateTimeOffset? Created { get; init; }
     public bool HasAttachments { get; init; }
     public bool Favorite { get; init; }
+    /// <summary>True when front matter has jotdex_type: code-snippet (hidden from notes UI by default).</summary>
+    public bool IsCodeSnippet { get; init; }
 }
 
 public sealed class NoteDetail
@@ -82,7 +84,10 @@ public interface IVaultService
 {
     VaultInfo GetInfo();
     FolderNode GetTree();
-    IReadOnlyList<NoteSummary> ListNotes(string? folderRelativePath, bool includeStandaloneTodosMd = false);
+    IReadOnlyList<NoteSummary> ListNotes(
+        string? folderRelativePath,
+        bool includeStandaloneTodosMd = false,
+        bool includeSnippetNotes = false);
     NoteDetail? GetNote(Guid id);
     NoteDetail? GetNoteByRelativePath(string relativePath);
     AttachmentInfo? GetAttachment(string attachmentId);

@@ -32,6 +32,8 @@ public interface INoteCommandService
 {
     NoteSaveResult Save(Guid id, string markdown, string expectedETag, bool force = false);
     NoteDetail? Create(string folderRelativePath, string title, string? markdown = null);
+    /// <summary>Write a complete note file (already includes YAML front matter). Does not wrap another front matter block.</summary>
+    NoteDetail? CreateComplete(string folderRelativePath, string title, string fullMarkdown);
     bool MoveToTrash(Guid id);
     NoteSaveResult RestoreHistory(Guid id, string snapshotId);
     NoteMoveResult Move(Guid id, string targetFolderRelativePath, string? newTitle = null);
@@ -142,6 +144,26 @@ public sealed class NoteCommandService : INoteCommandService
     public NoteDetail? Create(string folderRelativePath, string title, string? markdown = null)
     {
         if (!_paths.IsConfigured) return null;
+        var id = Guid.NewGuid();
+        var now = DateTimeOffset.UtcNow.ToString("O");
+        var body = markdown ?? $"# {title}\n\n";
+        var content =
+            $"---\nid: {id:D}\ntitle: {EscapeYaml(title)}\ncreated: {now}\nmodified: {now}\ntags: []\n---\n\n{body.TrimStart()}";
+        return WriteNewNoteFile(folderRelativePath, title, content, id);
+    }
+
+    public NoteDetail? CreateComplete(string folderRelativePath, string title, string fullMarkdown)
+    {
+        if (!_paths.IsConfigured) return null;
+        if (string.IsNullOrWhiteSpace(fullMarkdown)) return null;
+        var content = fullMarkdown.Replace("\r\n", "\n", StringComparison.Ordinal);
+        var fm = FrontMatterParser.Parse(content);
+        var id = FrontMatterParser.DeriveId(fm.Fields, title);
+        return WriteNewNoteFile(folderRelativePath, title, content, id);
+    }
+
+    private NoteDetail? WriteNewNoteFile(string folderRelativePath, string title, string content, Guid expectedId)
+    {
         var folder = (folderRelativePath ?? "").Replace('\\', '/').Trim('/');
         var safeTitle = SanitizeFileName(title);
         var dir = string.IsNullOrEmpty(folder)
@@ -159,15 +181,10 @@ public sealed class NoteCommandService : INoteCommandService
             n++;
         }
 
-        var id = Guid.NewGuid();
-        var now = DateTimeOffset.UtcNow.ToString("O");
-        var body = markdown ?? $"# {title}\n\n";
-        var content =
-            $"---\nid: {id:D}\ntitle: {EscapeYaml(title)}\ncreated: {now}\nmodified: {now}\ntags: []\n---\n\n{body.TrimStart()}";
-
         AtomicWrite(path, content.Replace("\r\n", "\n", StringComparison.Ordinal));
         _vault.Rescan();
-        return _vault.GetNote(id);
+        return _vault.GetNote(expectedId) ?? _vault.GetNoteByRelativePath(
+            string.IsNullOrEmpty(folder) ? fileName : folder + "/" + fileName);
     }
 
     public bool MoveToTrash(Guid id)

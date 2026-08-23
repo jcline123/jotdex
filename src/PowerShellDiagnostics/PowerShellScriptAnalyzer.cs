@@ -92,8 +92,8 @@ public sealed class PowerShellScriptAnalyzer : IPowerShellScriptAnalyzer
             _initAttempted = true;
             try
             {
-                var moduleRoot = Path.Combine(AppContext.BaseDirectory, "modules", "PSScriptAnalyzer");
-                if (!Directory.Exists(moduleRoot))
+                var manifest = ResolveModuleManifest();
+                if (manifest is null)
                 {
                     _available = false;
                     return;
@@ -101,7 +101,7 @@ public sealed class PowerShellScriptAnalyzer : IPowerShellScriptAnalyzer
 
                 using var ps = PowerShell.Create();
                 ps.AddCommand("Import-Module")
-                    .AddParameter("Name", moduleRoot)
+                    .AddParameter("Name", manifest)
                     .AddParameter("Force");
                 ps.Invoke();
                 _available = !ps.HadErrors;
@@ -111,5 +111,31 @@ public sealed class PowerShellScriptAnalyzer : IPowerShellScriptAnalyzer
                 _available = false;
             }
         }
+    }
+
+    /// <summary>
+    /// Save-Module installs as modules/PSScriptAnalyzer/&lt;version&gt;/PSScriptAnalyzer.psd1.
+    /// Import the .psd1 path so versioned layouts work under the hosted PowerShell SDK.
+    /// </summary>
+    private static string? ResolveModuleManifest()
+    {
+        var roots = new[]
+        {
+            Path.Combine(AppContext.BaseDirectory, "modules", "PSScriptAnalyzer"),
+            Path.Combine(AppContext.BaseDirectory, "modules"),
+        };
+
+        foreach (var root in roots)
+        {
+            if (!Directory.Exists(root)) continue;
+            var manifests = Directory.GetFiles(root, "PSScriptAnalyzer.psd1", SearchOption.AllDirectories);
+            if (manifests.Length > 0)
+            {
+                Array.Sort(manifests, StringComparer.OrdinalIgnoreCase);
+                return manifests[^1]; // highest version path when sorted
+            }
+        }
+
+        return null;
     }
 }

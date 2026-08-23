@@ -7,6 +7,30 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 
 ---
 
+## 2026-08-23 — Portable release 1.1.21 (snippets UX)
+
+**Portable release 1.1.21**
+- Tag `v1.1.21` — Snippet save fix, reserved `Snippets/` folder, folders-rail Snippets manager (edit in note pane), cursor-aware insert, Insert/Save in Edit dialog, PSScriptAnalyzer module path.
+
+---
+
+## 2026-08-23 — Snippets rail, cursor insert, duplicate shortcut guard
+
+- Insert snippet now splices at the code-box cursor instead of replacing the whole block.
+- Notes rail **Snippets** button opens a dedicated manager (edit/delete); snippets stay in `Snippets/` and out of the notes list.
+- Clicking a snippet opens it in the main note pane; **Insert** / **Save as snippet** are on inline code boxes and in the **Edit** dialog.
+- Saving rejects duplicate shortcuts; double-submit on Save as snippet is guarded. (Earlier failed saves + retry could leave `Title (1).md` duplicates — delete extras in Snippets.)
+
+---
+
+## 2026-08-23 — Snippets folder + save fix + PSA module path
+
+- Saving a snippet failed with “Could not create snippet note” because `NoteCommandService.Create` wrapped a second YAML front matter around an already-complete snippet file, so `jotdex_type` was not on the outer block. Create now has `CreateComplete` for full notes.
+- Snippets always go under reserved vault folder `Snippets/`, stay out of the notes list and folders rail (like `Todos.md`), and the save form clarifies Name / Shortcut (Ctrl+Space) / description / tags.
+- PSScriptAnalyzer import now resolves the versioned `PSScriptAnalyzer.psd1` under `modules/` so hosted PowerShell finds the Gallery layout after reboot/portable install.
+
+---
+
 ## 2026-08-22 — Portable release 1.1.20 (mobile code-box chrome)
 
 **Portable release 1.1.20**

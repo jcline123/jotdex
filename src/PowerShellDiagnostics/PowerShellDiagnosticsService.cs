@@ -25,7 +25,7 @@ public sealed class PowerShellDiagnosticsService : IPowerShellDiagnosticsService
 
         var status = analyzerAvailable
             ? "PSScriptAnalyzer (static checks; does not run code)"
-            : "PSScriptAnalyzer not bundled — syntax check only";
+            : "PSScriptAnalyzer unavailable — syntax check only";
 
         return new PowerShellDiagnosticsResult(combined, analyzerAvailable, status);
     }

@@ -50,9 +50,9 @@ plain log / config dump
 
 Never put multi-line commands in inline backticks — use a code box.
 
-In the editor, each code box edits inline like a normal code box (language, Copy, tab indent). **Save as snippet** / **Insert snippet** manage reusable vault snippets. **Edit** opens the advanced CodeMirror dialog (line numbers, fold gutter, find, optional whitespace display, Ctrl+Space snippet completions, parse-only diagnostics). PowerShell and JSON can show syntax / style hints — that does **not** run your code. When PSScriptAnalyzer is installed on the server, PowerShell may also show best-practice warnings.
+In the editor, each code box edits inline like a normal code box (language, Copy, tab indent). **Save as snippet** / **Insert snippet** manage reusable vault snippets. **Edit** opens the advanced CodeMirror dialog (line numbers, fold gutter, find, optional whitespace display, Ctrl+Space snippet completions, parse-only diagnostics). PowerShell and JSON can show syntax / style hints — that does **not** run your code. When PSScriptAnalyzer is available on the server, PowerShell may also show best-practice warnings.
 
-**Reusable snippets** are normal vault notes with front matter \`jotdex_type: code-snippet\`, plus \`jotdex_trigger\` and \`jotdex_language\`. The fenced code block in the note body is the snippet body. Save from a code box or create via the snippets API; insert from the code box toolbar or Ctrl+Space in the Edit dialog.
+**Reusable snippets** live as vault files under a reserved \`Snippets/\` folder with front matter \`jotdex_type: code-snippet\`, plus \`jotdex_trigger\` (shortcut keyword for Ctrl+Space) and \`jotdex_language\`. The fenced code block in the note body is the snippet body. Click a snippet to edit it in the main note pane (full editor). Stored under \`Snippets/\`, separate from your notes list. **Insert** / **Save as snippet** appear on inline code boxes and in the **Edit** dialog.
 
 **Check formatting** (note header) runs remark-lint on the note body only — report-only, never auto-fixes on save.
 

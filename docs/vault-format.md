@@ -76,6 +76,18 @@ Optional notebook-wide to-do list used by the UI rail/tab. Open items only:
 
 Done items are deleted from the file (not kept as `- [x]`). Attributes: `id`, `priority` (`low`|`normal`|`high`|`critical`), optional `due` (ISO-8601), `remind` (`off`|`once:ISO`|`every:30m`|`every:1h`).
 
+### Reserved `Snippets/` folder
+
+Reusable code snippets are ordinary Markdown files under `Snippets/` with:
+
+```yaml
+jotdex_type: code-snippet
+jotdex_language: powershell
+jotdex_trigger: restart-spooler
+```
+
+The body holds a fenced code block (the insertable text). Jotdex hides this folder and these notes from the notes list / folders rail; use **Insert snippet** or Ctrl+Space in the code **Edit** dialog. Files remain editable on disk like any other vault note.
+
 ## Attachments
 
 ```text

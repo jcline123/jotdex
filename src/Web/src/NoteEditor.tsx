@@ -16,7 +16,6 @@ import { Markdown } from 'tiptap-markdown'
 import { Extension } from '@tiptap/core'
 import { TextStyle } from '@tiptap/extension-text-style'
 import { Color } from '@tiptap/extension-color'
-import { SnippetEditorContext, type FolderTreeNode } from './snippetEditorContext'
 import { CodeBlockView } from './CodeBlockView'
 import { CODE_BLOCK_ENABLE_TAB_INDENT, CODE_BLOCK_TAB_SIZE } from './codeBlockSettings'
 import { codeLowlight } from './codeHighlight'
@@ -159,8 +158,6 @@ type Props = {
   onNoteMeta?: (note: { etag?: string; attachments?: AttachmentInfo[]; markdown?: string; htmlSidecars?: unknown }) => void
   onError?: (message: string) => void
   getEtag?: () => string
-  snippetFolder?: string
-  folderTree?: FolderTreeNode | null
 }
 
 type UploadResult = {
@@ -335,8 +332,6 @@ export function NoteEditor({
   onNoteMeta,
   onError,
   getEtag,
-  snippetFolder = '',
-  folderTree = null,
 }: Props) {
   const [uploadStatus, setUploadStatus] = useState<string | null>(null)
   const [pasteMode, setPasteMode] = useState<PasteMode>('smart')
@@ -899,7 +894,6 @@ export function NoteEditor({
   const chromeCollapsed = chromeAuto && chromeScrolled && !chromePeek
 
   return (
-    <SnippetEditorContext.Provider value={{ defaultFolder: snippetFolder, tree: folderTree }}>
     <div
       ref={rootRef}
       className={`rich-editor${chromeAuto ? ' chrome-autohide' : ' chrome-pinned'}${chromeScrolled ? ' is-scrolled' : ''}${chromePeek ? ' chrome-peek' : ''}`}
@@ -1323,7 +1317,6 @@ export function NoteEditor({
         <EditorContent editor={editor} />
       </div>
     </div>
-    </SnippetEditorContext.Provider>
   )
 }
 

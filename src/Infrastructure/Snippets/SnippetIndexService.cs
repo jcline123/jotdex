@@ -41,7 +41,7 @@ public sealed class SnippetIndexService : ISnippetIndex, IVaultRescanObserver, I
         }
 
         var count = 0;
-        foreach (var summary in Vault.ListNotes(null))
+        foreach (var summary in Vault.ListNotes(null, includeSnippetNotes: true))
         {
             var detail = Vault.GetNote(summary.Id);
             if (detail is null) continue;
