@@ -49,9 +49,9 @@ export function SnippetsPane({ fill, activeSnippetId, onCollapse, onChanged, onO
 
   return (
     <aside className={`pane snippets-pane ${fill ? 'fill' : ''}`}>
-      <div className="pane-head">
-        <strong>Snippets</strong>
-        <div className="pane-head-actions">
+      <div className="snippets-pane-head">
+        <strong className="snippets-pane-title">Snippets</strong>
+        <div className="snippets-pane-actions">
           <button type="button" className="ghost" disabled={busy} onClick={() => void load()}>
             Refresh
           </button>
@@ -62,31 +62,28 @@ export function SnippetsPane({ fill, activeSnippetId, onCollapse, onChanged, onO
           )}
         </div>
       </div>
-      <p className="muted snippets-lede">
-        Click a snippet to edit it in the note pane. Stored under <code>Snippets/</code>, separate from your notes list.
-      </p>
-      <label className="snippets-search field">
-        <span className="sr-only">Search snippets</span>
+      <p className="muted snippets-lede">Click to edit in the note pane. Stored in <code>Snippets/</code>.</p>
+      <div className="snippets-search">
+        <label className="sr-only" htmlFor="snippets-search-input">
+          Search snippets
+        </label>
         <input
+          id="snippets-search-input"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search name, shortcut, tags…"
         />
-      </label>
+      </div>
       {error && <p className="banner error">{error}</p>}
-      {hint && <p className="muted">{hint}</p>}
-      <ul className="note-list snippets-list">
+      {hint && <p className="muted snippets-hint">{hint}</p>}
+      <ul className="snippets-list">
         {items.length === 0 && <li className="muted snippets-empty">No snippets yet — save one from a code box.</li>}
         {items.map((s) => (
-          <li key={s.noteId} className="snippet-list-item">
-            <button
-              type="button"
-              className={activeSnippetId === s.noteId ? 'active snippet-row' : 'snippet-row'}
-              onClick={() => onOpenSnippet(s)}
-            >
+          <li key={s.noteId} className={`snippet-list-item${activeSnippetId === s.noteId ? ' is-active' : ''}`}>
+            <button type="button" className="snippet-row" onClick={() => onOpenSnippet(s)}>
               <span className="snippet-row-title">{s.title}</span>
               <span className="snippet-row-meta">
-                <span className="snippet-chip">{s.trigger}</span>
+                <span className="snippet-chip">{s.trigger || '—'}</span>
                 <span className="snippet-lang">{s.language}</span>
               </span>
             </button>

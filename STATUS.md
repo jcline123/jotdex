@@ -9,6 +9,7 @@
 
 ## Just shipped (this session)
 
+- Portable **1.1.22**: Snippets rail layout (header + rows)
 - Portable **1.1.21**: snippets folder, rail manager, cursor insert, Edit-dialog Insert/Save, PSA module path
 - Portable **1.1.20**: mobile code-box toolbar wrap
 
