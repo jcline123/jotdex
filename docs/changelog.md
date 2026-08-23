@@ -10,7 +10,7 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 ## 2026-08-23 — Portable release 1.1.21 (snippets UX)
 
 **Portable release 1.1.21**
-- Tag `v1.1.21` — Snippet save fix, reserved `Snippets/` folder, folders-rail Snippets manager (edit in note pane), cursor-aware insert, Insert/Save in Edit dialog, PSScriptAnalyzer module path.
+- Tag `v1.1.21` (`7c73538`) — Snippet save fix, reserved `Snippets/` folder, folders-rail Snippets manager (edit in note pane), cursor-aware insert, Insert/Save in Edit dialog, PSScriptAnalyzer module path.
 
 ---
 
