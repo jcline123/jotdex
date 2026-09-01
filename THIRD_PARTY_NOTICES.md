@@ -19,8 +19,8 @@ Pinned production dependencies and their licenses (verify upstream at upgrade ti
 |---|---|---|
 | React / react-dom | 19.2.x | MIT |
 | Vite | 8.2.x | MIT |
-| TipTap (+ extensions) | 3.29.x | MIT |
-| tiptap-markdown | 0.9.x | MIT |
+| TipTap (+ extensions) | 3.29.2 | MIT |
+| @tiptap/markdown | 3.29.2 | MIT |
 | DOMPurify | 3.4.x | Apache-2.0 / MPL-2.0 |
 | lowlight | 3.3.x | MIT |
 | CodeMirror 6 (@codemirror/*, codemirror) | 6.x | MIT |

@@ -1,14 +1,18 @@
 import { Editor } from '@tiptap/core'
 import { createEditorExtensions } from '../extensions/createEditorExtensions'
 import { serializeEditorDoc } from '../markdown/EditorMarkdownCodec'
+import { parseOfficialMarkdownToJson } from '../markdown/parseOfficialJson'
 
-export function createTestEditor(markdown = '', options: { element?: HTMLElement } = {}): Editor {
+export function createTestEditor(
+  markdown = '',
+  options: { element?: HTMLElement } = {},
+): Editor {
   const element = options.element ?? document.createElement('div')
   if (!element.isConnected) document.body.appendChild(element)
   const editor = new Editor({
     element,
     extensions: createEditorExtensions({ withReactNodeViews: false }),
-    content: markdown,
+    content: markdown ? parseOfficialMarkdownToJson(markdown) : '',
   })
   const originalDestroy = editor.destroy.bind(editor)
   editor.destroy = () => {
@@ -27,7 +31,7 @@ export function editorMarkdown(editor: Editor): string {
 }
 
 export function dumpEditor(editor: Editor): { json: unknown; markdown: string } {
-  const md = (editor.storage as { markdown?: { getMarkdown?: () => string } }).markdown?.getMarkdown?.() ?? ''
+  const md = editor.getMarkdown?.() ?? ''
   return { json: editor.getJSON(), markdown: md }
 }
 

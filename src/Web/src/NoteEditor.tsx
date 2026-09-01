@@ -16,6 +16,7 @@ import {
 } from './copyCodePlain'
 import { pasteAsCodeBlock, pastePlainIntoCodeBlock, plainTextForCodeBoxPaste } from './pasteCodeBlock'
 import { createEditorExtensions } from './editor/extensions/createEditorExtensions'
+import { insertHtml, insertLiteralText, insertMarkdown, setMarkdownDocument } from './editor/operations/contentInsertion'
 import { dispatchAttachmentInventory } from './editor/assets/AttachmentResolver'
 import { EditorRevisionCoordinator } from './editor/revisions/EditorRevisionCoordinator'
 import { assertSetContentReason } from './editor/operations/operationMeta'
@@ -312,7 +313,7 @@ export function NoteEditor({
       const live = editorRef.current
       if (!live) return
       const label = result.fileName ?? 'attachment'
-      live.chain().focus().insertContent(`[${label}](${result.markdownPath})`).run()
+      insertMarkdown(live, `[${label}](${result.markdownPath})`)
       emitMarkdown(live)
       setUploadStatus('Uploaded')
       window.setTimeout(() => setUploadStatus(null), 1200)
@@ -374,7 +375,7 @@ export function NoteEditor({
 
       const pasteSessionId = crypto.randomUUID()
       const { html: markedHtml, jobs } = rewritePastedImagesToPlaceholders(cleaned, pasteSessionId)
-      ed.chain().focus().insertContent(markedHtml).run()
+      insertHtml(ed, markedHtml)
 
       if (jobs.length) {
         const { imported, failed, lastMeta } = await runPasteSession(
@@ -437,11 +438,8 @@ export function NoteEditor({
     const suggest = wikiSuggestRef.current
     if (!ed || !suggest) return
     const href = relativeMdPath(notePathRef.current, item.relativePath)
-    ed.chain()
-      .focus()
-      .deleteRange({ from: suggest.from, to: suggest.to })
-      .insertContent(`[${item.title}](${href})`)
-      .run()
+    ed.chain().focus().deleteRange({ from: suggest.from, to: suggest.to }).run()
+    insertMarkdown(ed, `[${item.title}](${href})`)
     setWikiSuggest(null)
   }
   applyWikiLinkRef.current = applyWikiLink
@@ -452,7 +450,7 @@ export function NoteEditor({
       wikiOnChange: (s) => wikiOnChangeRef.current(s),
       attachments,
     }),
-    content: markdown,
+    content: '',
     editable,
     editorProps: {
       attributes: {
@@ -489,7 +487,7 @@ export function NoteEditor({
 
         if (mode === 'plain' || shiftPlain) {
           event.preventDefault()
-          ed.chain().focus().insertContent(plain).run()
+          insertLiteralText(ed, plain)
           return true
         }
 
@@ -505,7 +503,7 @@ export function NoteEditor({
         // plain characters so pasting a code-box subset doesn't insert markup.
         if (plain && htmlIsPlainClipboardSnippet(html)) {
           event.preventDefault()
-          ed.chain().focus().insertContent(plain).run()
+          insertLiteralText(ed, plain)
           return true
         }
 
@@ -609,6 +607,7 @@ export function NoteEditor({
       },
     },
     onCreate: ({ editor: ed }) => {
+      setMarkdownDocument(ed, markdown, { emitUpdate: false })
       coordinatorRef.current?.attach(ed)
       dispatchAttachmentInventory(ed, attachmentsRef.current)
       ;(ed.storage as { pendingAsset?: { retry?: (id: string) => void } }).pendingAsset = {
@@ -698,7 +697,7 @@ export function NoteEditor({
     assertSetContentReason('external-version')
     recordSetContent('external-version')
     logEditorDiag({ setContentReason: 'external-version', noteId })
-    editor.commands.setContent(markdown, { emitUpdate: false })
+    setMarkdownDocument(editor, markdown, { emitUpdate: false })
     dispatchAttachmentInventory(editor, attachments)
     lastEmittedRef.current = markdown
     noteSessionRef.current = crypto.randomUUID()

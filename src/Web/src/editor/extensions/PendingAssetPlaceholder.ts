@@ -64,4 +64,8 @@ export const PendingAssetPlaceholder = Node.create({
       },
     }
   },
+
+  renderMarkdown() {
+    return ''
+  },
 })

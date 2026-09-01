@@ -7,6 +7,24 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 
 ---
 
+## 2026-09-01 — Collapsed Todos ticker again
+
+- Windows “reduce motion” was turning the collapsed Todos rail into a static list with a scrollbar. The rail always marquee-scrolls titles again and stays clipped (no scrollbar).
+
+---
+
+## 2026-09-01 — Official Tiptap Markdown (1.2.0)
+
+- Community `tiptap-markdown` is gone. Visual notes parse and serialize through pinned `@tiptap/markdown` 3.29.2 plus Jotdex dialect handlers (block images, Obsidian callouts, style spans, task/todo comments, HTML comments, unresolved wikilinks). Reliability from 1.1.24 is unchanged: codec boundary, paste sessions, no attachment `setContent()`, revision-aware autosave.
+- Canonical callouts are `> [!type]`. Mixed inline image+prose and a few complex HTML notes open Source-only instead of being flattened. Soft newlines in prose become spaces; fences are left alone.
+- `markdown:migrate` audits a *copy* of the vault (MDM-06 on `C:\JotdexMigration\backup`: 649 notes, 610 ok, 39 source-only). `apply` to `C:\JotdexVault` was not run. Portable exe does not need Node; the migrate CLI is a dev-machine tool. Rollback of the program is the previous exe.
+- Copy AI prompt now documents Obsidian callouts as the on-disk form.
+
+**Portable release 1.2.0**
+- Tag `v1.2.0` — Official Tiptap Markdown engine, Jotdex dialect, collapsed Todos ticker restored. Live vault was not rewritten; rollback is the previous exe.
+
+---
+
 ## 2026-09-01 — Editor reliability (codec, paste sessions, headings, autosave)
 
 - Block images now serialize with a closed Markdown block, so a heading immediately after an image cannot reopen as literal `###`.

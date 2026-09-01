@@ -56,33 +56,25 @@ In the editor, each code box edits inline like a normal code box (language, Copy
 
 **Check formatting** (note header) runs remark-lint on the note body only — report-only, never auto-fixes on save.
 
-## Callouts (Jotdex native)
-Use an HTML blockquote with data-callout. Types: note, tip, info, warning, danger.
+## Callouts
+Canonical on disk is Obsidian syntax. Types: note, tip, info, warning, danger.
 
-<blockquote data-callout="tip">
-<p><strong>Tip</strong></p>
-<p>Short helpful guidance.</p>
-</blockquote>
+> [!tip]
+> Short helpful guidance.
 
-<blockquote data-callout="warning">
-<p><strong>Warning</strong></p>
-<p>Something that can break prod.</p>
-</blockquote>
+> [!warning]
+> Something that can break prod.
 
-<blockquote data-callout="danger">
-<p><strong>Danger</strong></p>
-<p>Destructive / irreversible step.</p>
-</blockquote>
+> [!danger]
+> Destructive / irreversible step.
 
-<blockquote data-callout="note">
-<p><strong>Note</strong></p>
-<p>General callout.</p>
-</blockquote>
+> [!note]
+> General callout.
 
-<blockquote data-callout="info">
-<p><strong>Info</strong></p>
-<p>Neutral informational callout.</p>
-</blockquote>
+> [!info]
+> Neutral informational callout.
+
+Older HTML \`<blockquote data-callout="tip">…</blockquote>\` still opens in the editor when a note already has it; prefer \`> [!type]\` for new notes.
 
 ## Tables
 GitHub-style pipes:

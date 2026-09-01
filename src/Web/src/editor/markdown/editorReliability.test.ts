@@ -16,6 +16,7 @@ import {
 import { dispatchAttachmentInventory } from '../assets/AttachmentResolver'
 import { PENDING_ASSET_NODE } from '../extensions/PendingAssetPlaceholder'
 import { EditorRevisionCoordinator } from '../revisions/EditorRevisionCoordinator'
+import { insertLiteralText } from '../operations/contentInsertion'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import type { Editor } from '@tiptap/core'
@@ -239,8 +240,15 @@ describe('headings', () => {
     const md = editorMarkdown(editor)
     expect(md).not.toMatch(/\)###/)
     const again = createTestEditor(md)
-    expect(again.state.doc.lastChild?.type.name).toBe('heading')
-    expect(again.state.doc.lastChild?.textContent).not.toMatch(/^###/)
+    const lastMeaningful = (() => {
+      for (let i = again.state.doc.childCount - 1; i >= 0; i--) {
+        const n = again.state.doc.child(i)
+        if (n.type.name !== 'paragraph' || n.textContent.trim()) return n
+      }
+      return again.state.doc.lastChild
+    })()
+    expect(lastMeaningful?.type.name).toBe('heading')
+    expect(lastMeaningful?.textContent).not.toMatch(/^###/)
     again.destroy()
     editor.destroy()
   })
@@ -288,7 +296,7 @@ describe('headings', () => {
 describe('code clipboard', () => {
   it('CODE-01 multiline paste stays in one code block', () => {
     const editor = createTestEditor('```powershell\nGet-Date\n```')
-    editor.commands.setTextSelection(editor.state.doc.content.size - 2)
+    editor.commands.setTextSelection(Math.max(1, editor.state.doc.firstChild!.nodeSize - 2))
     pastePlainIntoCodeBlock(editor, 'line1\nline2\nline3')
     expect(meaningfulBlocks(editor).filter((b) => b.type === 'codeBlock')).toHaveLength(1)
     expect(editor.state.doc.firstChild?.type.name).toBe('codeBlock')
@@ -298,7 +306,7 @@ describe('code clipboard', () => {
 
   it('CODE-02 HTML/XML stays literal inside a code block', () => {
     const editor = createTestEditor('```html\n')
-    editor.commands.setTextSelection(editor.state.doc.content.size - 2)
+    editor.commands.setTextSelection(Math.max(1, editor.state.doc.firstChild!.nodeSize - 2))
     pastePlainIntoCodeBlock(editor, '<div class="x">hi</div>')
     expect(editor.state.doc.firstChild?.type.name).toBe('codeBlock')
     expect(editor.state.doc.textContent).toContain('<div class="x">hi</div>')
@@ -316,7 +324,7 @@ describe('code clipboard', () => {
 
   it('CODE-06 paste backticks stay in the block', () => {
     const editor = createTestEditor('```text\nx\n```')
-    editor.commands.setTextSelection(editor.state.doc.content.size - 2)
+    editor.commands.setTextSelection(Math.max(1, editor.state.doc.firstChild!.nodeSize - 2))
     pastePlainIntoCodeBlock(editor, '```\ninner\n```')
     expect(editor.state.doc.firstChild?.type.name).toBe('codeBlock')
     expect(editor.state.doc.textContent).toContain('```')
@@ -377,7 +385,7 @@ describe('paste sessions', () => {
       status: 'uploading',
     })
     editor.commands.setTextSelection(editor.state.doc.content.size)
-    editor.commands.insertContent(' typed')
+    insertLiteralText(editor, ' typed')
     await runPasteSession(
       editor,
       {
@@ -635,7 +643,7 @@ describe('stress 50x', () => {
     for (let i = 0; i < 50; i++) {
       const editor = createTestEditor('AAA')
       insertPendingAssetAtSelection(editor, { uploadId: `u${i}`, pasteSessionId: 's', status: 'uploading' })
-      editor.commands.insertContent('Z')
+      insertLiteralText(editor, 'Z')
       await runPasteSession(
         editor,
         {

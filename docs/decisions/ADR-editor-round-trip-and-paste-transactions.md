@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted
+Accepted (1.1.24). Lower-level converter replaced in 1.2.0 — see [0009-official-tiptap-markdown.md](0009-official-tiptap-markdown.md). Reliability architecture here still applies.
 
 ## Context
 
@@ -16,7 +16,7 @@ Visual editing converted to Markdown through `tiptap-markdown` on every transact
 - Paste/upload uses `PasteSessionManager` with non-persistable placeholders resolved by upload id.
 - `EditorRevisionCoordinator` separates dirty vs validated Markdown. `SaveCoordinator` / revision checks prevent an older PUT from marking a newer edit Saved.
 - Exact save equivalence (LF + ignore `modified:`) is shared TypeScript/C# test vectors. Cosmetic blank-line collapsing is not used for dirty/conflict.
-- Official `@tiptap/markdown` is **not** switched in this release (separate parity spike).
+- Official `@tiptap/markdown` shipped later in 1.2.0 (ADR 0009); this ADR froze the reliability boundary first.
 
 ## Consequences
 

@@ -33,3 +33,17 @@ Upload **`artifacts\jotdex-win-x64.zip`** to a GitHub Release (tag like `v1.1.0`
 2. Stop Jotdex.
 3. Download the Release zip, extract over the install folder, **keep `data\`**.
 4. Start `start-portable.cmd`.
+
+## 1.2.0 (official Markdown engine)
+
+1.2.0 replaces the community Markdown bridge with official Tiptap Markdown. Your notes stay ordinary `.md` files. The portable exe is still self-contained — **you do not install Node.js** on the PC that runs Jotdex.
+
+Before switching the running program:
+
+1. Keep a full vault backup (move kit, backup ZIP, or a filesystem copy). Opening notes without editing should not rewrite them; a backup is still the rollback for disk accidents.
+2. After the new exe is running, spot-check a few notes: a callout, a colored span, a task with `<!-- jotdex-task -->`, an image followed by a heading, and `Todos.md`.
+3. Some notes (especially a picture mixed into the same paragraph as text, leftover OneNote HTML, or `javascript:` links) open in **Source** on purpose so Jotdex does not flatten them. That is not data loss.
+
+A vault **audit** (`npm run markdown:migrate`) exists for developers on a machine that already has this repo and Node. It is optional, read-only by default, and must target a *copy* of the vault — never the only live folder. Production installs do not need it.
+
+Rollback of 1.2.0 is the previous portable exe (1.1.24) plus your vault backup. Do not run a bulk “save every note” after upgrade.

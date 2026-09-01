@@ -2,7 +2,7 @@
 
 Mark items `- [x]` when done. IDs are stable for chat (“done M1-04”).
 
-**Active milestone:** ER — Editor reliability
+**Active milestone:** MDM — Official Tiptap Markdown
 
 ---
 
@@ -280,5 +280,23 @@ Mark items `- [x]` when done. IDs are stable for chat (“done M1-04”).
 - [x] `ER-WP7` Docs/ADR/changelog/STATUS; Vitest matrix + Playwright Chromium/Firefox/WebKit; no vault migration
 
 - [x] `ER-GATE` Portable publish 1.1.24; no vault migration (rollback = previous exe)
+
+---
+
+## MDM — Official Tiptap Markdown
+
+Contract: [`docs/decisions/official-tiptap-markdown-migration-contract.md`](docs/decisions/official-tiptap-markdown-migration-contract.md). ADR: [`docs/decisions/0009-official-tiptap-markdown.md`](docs/decisions/0009-official-tiptap-markdown.md).
+
+- [x] `MDM-00` Freeze/recovery: contract copy, 1.1.24 zip retained, `C:\JotdexVault` copied to `C:\JotdexMigration\backup` with SHA-256, spot-restore verified
+- [x] `MDM-01` Official-engine spike in isolation; compatibility table; production still legacy
+- [x] `MDM-02` Dual codec + differential harness; one engine per editor
+- [x] `MDM-03` Jotdex dialect official handlers (images, callouts, styles, task comments, tables, breaks, wikilinks)
+- [x] `MDM-04` Typed content insertion helpers + source audit test
+- [x] `MDM-05` Official reliability + ephemeral-auth Playwright (not live vault)
+- [x] `MDM-06` `markdown:migrate` audit/stage on vault copy; no live apply
+- [x] `MDM-07` Official default; soak on staged copy
+- [x] `MDM-08` Remove `tiptap-markdown`; 1.2.0 docs/version/local zip (GitHub Release waits for publish)
+
+- [x] `MDM-GATE` Official-only runtime; `npm ls tiptap-markdown` empty; live vault untouched
 
 ---

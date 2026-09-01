@@ -8,40 +8,28 @@ import { TableRow } from '@tiptap/extension-table-row'
 import { TableCell } from '@tiptap/extension-table-cell'
 import { TableHeader } from '@tiptap/extension-table-header'
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight'
-import { Markdown } from 'tiptap-markdown'
+import { Markdown } from '@tiptap/markdown'
 import { Extension } from '@tiptap/core'
 import type { Editor, Extensions } from '@tiptap/core'
 import { Plugin, PluginKey } from '@tiptap/pm/state'
-import { TextStyle } from '@tiptap/extension-text-style'
-import { Color } from '@tiptap/extension-color'
 import { ReactNodeViewRenderer } from '@tiptap/react'
-import { Callout } from '../../callout'
 import { HeadingFold } from '../../headingFold'
 import { WikiLinkSuggest, type WikiSuggestState } from '../../wikiLinkSuggest'
 import { CODE_BLOCK_ENABLE_TAB_INDENT, CODE_BLOCK_TAB_SIZE } from '../../codeBlockSettings'
 import { codeLowlight } from '../../codeHighlight'
 import { CodeBlockView } from '../../CodeBlockView'
 import { pastePlainIntoCodeBlock, plainTextForCodeBoxPaste } from '../../pasteCodeBlock'
-import { BlockImage, BlockImageHeadless } from './BlockImageMarkdown'
+import { JotdexBlockImage, JotdexBlockImageHeadless } from './JotdexBlockImageMarkdown'
+import { JotdexCallout } from './JotdexCalloutMarkdown'
+import { JotdexTextStyle, JotdexColor } from './JotdexTextStyleMarkdown'
+import { JotdexTaskMetadata } from './JotdexTaskMetadata'
+import { HtmlCommentParse } from './HtmlCommentParse'
+import { RawHtmlCommentBlock, RawHtmlCommentInline } from './RawHtmlComment'
+import { UnresolvedWikiLink } from './UnresolvedWikiLink'
 import { PendingAssetPlaceholder } from './PendingAssetPlaceholder'
 import { PendingAssetView } from './PendingAssetView'
 import { AttachmentResolver, type AttachmentInfo } from '../assets/AttachmentResolver'
-
-const FontSizeTextStyle = TextStyle.extend({
-  addAttributes() {
-    return {
-      ...this.parent?.(),
-      fontSize: {
-        default: null,
-        parseHTML: (element) => (element as HTMLElement).style.fontSize?.replace(/['"]+/g, '') || null,
-        renderHTML: (attributes) => {
-          if (!attributes.fontSize) return {}
-          return { style: `font-size: ${attributes.fontSize}` }
-        },
-      },
-    }
-  },
-})
+import { CANONICAL_LIST_INDENT } from '../markdown/canonical'
 
 const ConsistentLineBreaks = Extension.create({
   name: 'consistentLineBreaks',
@@ -127,7 +115,7 @@ export function createEditorExtensions(opts: EditorExtensionOptions = {}): Exten
     StarterKit.configure({ codeBlock: false, link: false }),
     CodeBlockExt,
     Link.configure({ openOnClick: false, autolink: true }),
-    withViews ? BlockImage : BlockImageHeadless,
+    withViews ? JotdexBlockImage : JotdexBlockImageHeadless,
     withViews
       ? PendingAssetPlaceholder.extend({
           addNodeView() {
@@ -136,7 +124,7 @@ export function createEditorExtensions(opts: EditorExtensionOptions = {}): Exten
         })
       : PendingAssetPlaceholder,
     AttachmentResolver.configure({ attachments: opts.attachments ?? [] }),
-    Callout,
+    JotdexCallout,
     HeadingFold,
     WikiLinkSuggest.configure({ onChange: opts.wikiOnChange }),
     Placeholder.configure({ placeholder: 'Start writing… Type [[ to link a note' }),
@@ -146,15 +134,19 @@ export function createEditorExtensions(opts: EditorExtensionOptions = {}): Exten
     TableRow,
     TableHeader,
     TableCell,
-    FontSizeTextStyle,
-    Color,
+    JotdexTextStyle,
+    JotdexColor,
+    JotdexTaskMetadata,
+    RawHtmlCommentInline,
+    RawHtmlCommentBlock,
+    UnresolvedWikiLink,
+    HtmlCommentParse,
     ConsistentLineBreaks,
     Markdown.configure({
-      html: true,
-      transformPastedText: false,
-      transformCopiedText: false,
+      indentation: { style: 'space', size: CANONICAL_LIST_INDENT },
+      markedOptions: { gfm: true, breaks: false, pedantic: false },
     }),
   ]
 }
 
-export { FontSizeTextStyle, ConsistentLineBreaks }
+export { ConsistentLineBreaks }

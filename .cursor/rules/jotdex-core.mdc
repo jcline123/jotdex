@@ -14,3 +14,4 @@ alwaysApply: true
 - One writable server per vault. Validate all paths stay inside the configured vault.
 - Editing features require autosave (Saved only after atomic server write) and per-note history/rollback outside the vault.
 - HTML fidelity snapshots belong in `NoteName.assets/` as sanitized files; Markdown remains canonical.
+- Visual Markdown is official `@tiptap/markdown` only (exact-pin with the rest of Tiptap). Use typed helpers in `src/Web/src/editor/operations/contentInsertion.ts`. Persistent custom nodes need official parse/render or Source-only. Never upgrade Tiptap packages casually; never re-add `tiptap-markdown`.

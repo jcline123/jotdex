@@ -18,8 +18,8 @@
 |---|---|
 | Backend | .NET 10, ASP.NET Core, Kestrel, self-contained win-x64 |
 | Frontend | React, TypeScript, Vite |
-| Editor (M5+) | Tiptap (visual-first) |
-| Markdown render | Markdig |
+| Editor (M5+) | Tiptap 3.29.2 (visual-first); official `@tiptap/markdown` only |
+| Markdown render | Markdig (HTML export / server preview) |
 | Search | SQLite FTS5 (word + trigram), rebuildable |
 | Auth (M6+) | Cookie auth, local admin |
 
@@ -35,6 +35,8 @@
 - Path containment: reject `..`, junctions, ADS escapes.
 - Editing requires **autosave** + **per-note history/rollback**.
 - HTML allowed only as sanitized sidecars in `.assets` (Markdown-plus-assets).
+- Markdown engine is official `@tiptap/markdown` only (see [`docs/decisions/0009-official-tiptap-markdown.md`](docs/decisions/0009-official-tiptap-markdown.md)). Do not re-add `tiptap-markdown`. Do not put both Markdown extensions in one editor. Pin every `@tiptap/*` to the **same exact** version — never a casual caret bump.
+- Load and insert note text through [`src/Web/src/editor/operations/contentInsertion.ts`](src/Web/src/editor/operations/contentInsertion.ts) (`setMarkdownDocument`, `insertMarkdown`, `insertHtml`, `insertLiteralText`, `replaceWithJson`). Persistent custom nodes need official `parseMarkdown` / `renderMarkdown` (or force Source-only). Run `npm run test:editor` in `src/Web` when changing the dialect.
 - When changing editor/Markdown formatting features, update [`src/Web/src/jotdexAiPrompt.ts`](src/Web/src/jotdexAiPrompt.ts) in the same change (Copy AI prompt must list all supported formats).
 - When adding/changing app-data folders, config, or install layout, update first-run setup + move-kit + Update-Jotdex scripts/docs in the same change (see `.cursor/rules/jotdex-install-move-kit.mdc`).
 - Portable upgrades: [`docs/upgrading.md`](docs/upgrading.md) — Settings → Updates + `Update-Jotdex.ps1`.

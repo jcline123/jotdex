@@ -1,15 +1,15 @@
 # Jotdex STATUS
 
-**Active milestone:** ER complete (portable 1.1.24)  
+**Active milestone:** MDM complete. Portable **1.2.0** shipping to GitHub Releases.  
 **Last updated:** 2026-09-01
 
 ## In progress
 
-- (none)
+- None. Official `@tiptap/markdown` 3.29.2 is the only editor engine. Live vault `C:\JotdexVault` was **not** written.
 
-## Just shipped (this session)
+## Just shipped
 
-- Portable **1.1.24** — editor reliability WP0–WP7 (codec, headings, paste sessions, attachment resolver, code clipboard, revision-aware autosave). No vault-format change.
+- Portable **1.2.0** — official Markdown engine, Jotdex dialect, `markdown:migrate` (dev-only), collapsed Todos ticker restored. Audit of the vault *copy*: 649 notes, 610 ok, 39 source-only. No live apply.
 
 ## Run (Development + SampleVault)
 
@@ -27,9 +27,17 @@ Optional PSScriptAnalyzer (also auto-installed by `publish-win-x64.ps1`):
 .\scripts\install-psscriptanalyzer.ps1
 ```
 
+Vault audit (dev machine, copy only):
+
+```powershell
+cd src\Web
+npm run markdown:migrate -- audit --vault C:\JotdexMigration\backup
+```
+
 ## Durable memory
 
 - Fix / behavior rationale: [`docs/changelog.md`](docs/changelog.md)
+- Official Markdown ADR: [`docs/decisions/0009-official-tiptap-markdown.md`](docs/decisions/0009-official-tiptap-markdown.md)
 - Architecture decisions: [`docs/decisions/`](docs/decisions/)
 - Code editor ADR: [`docs/decisions/ADR-code-editor-diagnostics.md`](docs/decisions/ADR-code-editor-diagnostics.md)
 
@@ -40,3 +48,4 @@ Optional PSScriptAnalyzer (also auto-installed by `publish-win-x64.ps1`):
 - NuGet NU1903 warning on SQLitePCLRaw (dependency bump later)
 - Cloud backup Dropbox/Google live matrices pending (`docs/cloud-backup-matrices.md`)
 - Mobile Edit dialog still scrolls the page behind it (accepted for 1.1.20)
+- 39 live-vault-copy notes are Source-only (mostly mixed inline image+prose)

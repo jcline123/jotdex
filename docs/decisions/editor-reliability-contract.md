@@ -5,7 +5,8 @@
 **Latest editor release represented by that baseline:** 1.1.23  
 **Prepared:** 2026-09-01  
 **Primary scope:** Visual note editing, Markdown round-trip fidelity, heading commands, rich/plain/code paste, image paste/import, autosave, history, and editor reload behavior  
-**Implementation posture:** Correctness and data safety first. Preserve existing product behavior unless this contract explicitly changes an unsafe or ambiguous behavior.
+**Implementation posture:** Correctness and data safety first. Preserve existing product behavior unless this contract explicitly changes an unsafe or ambiguous behavior.  
+**Follow-up:** 1.2.0 replaced community `tiptap-markdown` with official `@tiptap/markdown` (ADR 0009). The reliability rules in this contract still apply.
 
 ---
 

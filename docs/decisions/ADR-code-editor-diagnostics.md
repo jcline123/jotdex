@@ -17,7 +17,7 @@ Technicians want Obsidian-like code editing (spacing checks, reusable commands, 
 | TipTap `codeBlock` node | Canonical ProseMirror node; serializes to fenced Markdown |
 | `CodeBlockLowlight` + Lowlight | Lightweight in-note view with Highlight.js |
 | `CodeBlockView` | Chrome: language `<select>`, Copy; `NodeViewContent` for inline edit |
-| `tiptap-markdown` | Round-trip to vault `.md` |
+| `@tiptap/markdown` (official, 3.29.2) | Round-trip to vault `.md` via `EditorMarkdownCodec` |
 | Autosave | Debounced `onUpdate` → `PUT /api/notes/{id}` |
 
 ## Decision: CodeMirror 6 (not Monaco)

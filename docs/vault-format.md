@@ -117,3 +117,39 @@ Sanitize invalid chars `< > : " / \ | ? *`, reserved names (`CON`, `PRN`, …), 
 ## Internal links
 
 Prefer relative Markdown links. Unresolved `[[wikilinks]]` are preserved, not deleted.
+
+## Editor Markdown dialect (1.2.0)
+
+The visual editor round-trips through official `@tiptap/markdown` plus Jotdex handlers. On-disk form:
+
+**Callouts** — Obsidian syntax is canonical:
+
+```markdown
+> [!warning]
+> Do not flatten this to a typeless quote.
+```
+
+Types: `note`, `tip`, `info`, `warning`, `danger`. Older HTML `<blockquote data-callout="…">` still parses when present.
+
+**Color / size** — limited spans only (not arbitrary CSS):
+
+```markdown
+<span style="color: #c47b2b">warning text</span>
+<span style="font-size: 1.25em">larger</span>
+```
+
+**Task / inbox metadata** — HTML comments the backend already indexes. Do not strip them:
+
+```markdown
+- [ ] Call vendor <!-- jotdex-task id="…" due="2026-08-20T15:00:00.000Z" priority="high" remind="every:30m" -->
+```
+
+`Todos.md` uses `<!-- jotdex-todo … -->` (see above).
+
+**Wikilinks** — unresolved `[[Title]]` stay in the file until a real note exists.
+
+**Images** — vault-relative `![alt](Note title.assets/file.png)`. A paragraph that is only an image is a block image; the renderer closes the Markdown block so `![x](url)` cannot fuse onto the next `###` heading. Image width/height are not stored. A paragraph that mixes an image with prose is **Source-only** (not silently flattened).
+
+**Unsupported content** — complex raw HTML, `javascript:` URLs, multi-block table cells, and other shapes the dialect cannot represent open in **Source** with a reason. Nothing is dropped on save from Source. Transient upload placeholders are never written to disk.
+
+**Soft breaks** — a newline inside a normal text node is treated as a space. Fenced code is not rewritten.

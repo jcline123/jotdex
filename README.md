@@ -46,7 +46,7 @@ Most notes apps pick two of: *nice editor*, *files you own*, *open it from any d
 Three rules the app will not break:
 
 1. **Files are the product.** SQLite is only a rebuildable search index and app state. Delete it; your notes are still there.
-2. **Nothing is silently dropped.** If the editor cannot represent a bit of Markdown or HTML, it keeps it or asks you to edit source. It will not “helpfully” throw your content away.
+2. **Nothing is silently dropped.** The visual editor uses official Tiptap Markdown plus a Jotdex dialect. If a note cannot be represented (mixed image+text in one paragraph, some raw HTML), it opens in **Source** instead of throwing content away.
 3. **The live vault stays on local disk.** iCloud and OneDrive are a **one-way backup mirror**, not the folder Jotdex writes to.
 
 ---
@@ -324,6 +324,7 @@ Details: [docs/import-format/onenote-md-exporter.md](docs/import-format/onenote-
 | [docs/backup.md](docs/backup.md) | Move kit + backup ZIP |
 | [docs/cloud-backup.md](docs/cloud-backup.md) | Multi-provider cloud backup (API) |
 | [docs/portability.md](docs/portability.md) | Moving vaults safely |
+| [docs/vault-format.md](docs/vault-format.md) | On-disk Markdown dialect (callouts, tasks, Source-only) |
 | [docs/vault-mirror.md](docs/vault-mirror.md) | Vault mirror (filesystem copy) |
 | [docs/changelog.md](docs/changelog.md) | Why recent fixes were made |
 | [AGENTS.md](AGENTS.md) | For contributors / AI agents |
