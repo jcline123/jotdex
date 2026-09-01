@@ -13,7 +13,7 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 - HTML export already escapes HTML inside fenced blocks (Markdig `<pre><code>`); notes corrupted by the old paste path may still show live HTML or literal backticks until re-saved from a proper code box.
 
 **Portable release 1.1.23**
-- Tag `v1.1.23` — Code-box paste stays inside the block; HTML export keeps fenced HTML escaped as source text.
+- Tag `v1.1.23` (`550720d`) — Code-box paste stays inside the block; HTML export keeps fenced HTML escaped as source text.
 
 ---
 
