@@ -2454,6 +2454,27 @@ button {
   color: var(--muted);
 }
 
+.pending-asset {
+  margin: 0.6rem 0;
+  padding: 0.85rem 1rem;
+  border: 1px dashed var(--line, #d4cdc3);
+  border-radius: 8px;
+  background: #f7f3ec;
+  color: #6b6560;
+  font-size: 0.9rem;
+}
+.pending-asset[data-status='failed'],
+.pending-asset.is-failed {
+  border-color: #b42318;
+  color: #b42318;
+}
+
+.pending-asset-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.45rem;
+}
+
 .source-banner {
   display: flex;
   flex-wrap: wrap;

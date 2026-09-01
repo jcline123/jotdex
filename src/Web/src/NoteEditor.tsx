@@ -1,38 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
-import { EditorContent, ReactNodeViewRenderer, useEditor } from '@tiptap/react'
+import { EditorContent, useEditor } from '@tiptap/react'
 import type { Editor } from '@tiptap/react'
-import StarterKit from '@tiptap/starter-kit'
-import Link from '@tiptap/extension-link'
-import Image from '@tiptap/extension-image'
-import Placeholder from '@tiptap/extension-placeholder'
-import TaskList from '@tiptap/extension-task-list'
-import TaskItem from '@tiptap/extension-task-item'
-import { Table } from '@tiptap/extension-table'
-import { TableRow } from '@tiptap/extension-table-row'
-import { TableCell } from '@tiptap/extension-table-cell'
-import { TableHeader } from '@tiptap/extension-table-header'
-import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight'
-import { Markdown } from 'tiptap-markdown'
-import { Extension } from '@tiptap/core'
-import { Plugin, PluginKey } from '@tiptap/pm/state'
-import { TextStyle } from '@tiptap/extension-text-style'
-import { Color } from '@tiptap/extension-color'
-import { CodeBlockView } from './CodeBlockView'
-import { CODE_BLOCK_ENABLE_TAB_INDENT, CODE_BLOCK_TAB_SIZE } from './codeBlockSettings'
-import { codeLowlight } from './codeHighlight'
-import { ImageView } from './ImageView'
 import { applyHeadingToSelection } from './headingSelection'
 import { normalizeBlockSelection } from './selectionUtils'
-import { Callout, type CalloutType } from './callout'
-import { HeadingFold } from './headingFold'
-import { WikiLinkSuggest, type WikiSuggestState } from './wikiLinkSuggest'
+import { type CalloutType } from './callout'
+import { type WikiSuggestState } from './wikiLinkSuggest'
 import { relativeMdPath } from './paths'
-import {
-  cleanPasteHtml,
-  dataUrlToFile,
-  extractHttpImageUrls,
-  rewriteDataImages,
-} from './pasteHtml'
+import { cleanPasteHtml } from './pasteHtml'
 import {
   copyPlainTextFromCodeBox,
   deleteDomSelection,
@@ -40,104 +14,24 @@ import {
   installCodeBoxClipboardGuards,
   plainTextFromClipboard,
 } from './copyCodePlain'
-import { pastePlainIntoCodeBlock, plainTextForCodeBoxPaste } from './pasteCodeBlock'
+import { pasteAsCodeBlock, pastePlainIntoCodeBlock, plainTextForCodeBoxPaste } from './pasteCodeBlock'
+import { createEditorExtensions } from './editor/extensions/createEditorExtensions'
+import { dispatchAttachmentInventory } from './editor/assets/AttachmentResolver'
+import { EditorRevisionCoordinator } from './editor/revisions/EditorRevisionCoordinator'
+import { assertSetContentReason } from './editor/operations/operationMeta'
+import { logEditorDiag } from './editor/diagnostics'
+import { recordSetContent } from './editor/reloadStats'
+import { planEditorReload } from './editor/reloadPolicy'
+import type { NoteServerEvent } from './editor/events/noteServerEvents'
+import {
+  insertPendingAssetAtSelection,
+  retryPendingUpload,
+  runPasteSession,
+  rewritePastedImagesToPlaceholders,
+  type PasteUploadResult,
+} from './editor/paste/PasteSessionManager'
 
-const FontSizeTextStyle = TextStyle.extend({
-  addAttributes() {
-    return {
-      ...this.parent?.(),
-      fontSize: {
-        default: null,
-        parseHTML: (element) => (element as HTMLElement).style.fontSize?.replace(/['"]+/g, '') || null,
-        renderHTML: (attributes) => {
-          if (!attributes.fontSize) return {}
-          return { style: `font-size: ${attributes.fontSize}` }
-        },
-      },
-    }
-  },
-})
 
-/**
- * Accidental Shift+Enter in a plain paragraph/heading inserts an invisible hard
- * break, which spaces differently from an Enter paragraph and confuses spacing
- * (trailing `\` in the vault Markdown). Treat Shift+Enter as Enter there; keep
- * the real line break inside lists, tasks, tables, and blockquotes where a
- * break is the only way to get a new line without changing structure.
- */
-const ConsistentLineBreaks = Extension.create({
-  name: 'consistentLineBreaks',
-  priority: 1000,
-  addKeyboardShortcuts() {
-    return {
-      'Shift-Enter': () => {
-        const { $from } = this.editor.state.selection
-        for (let depth = $from.depth; depth > 0; depth--) {
-          const name = $from.node(depth).type.name
-          if (
-            name === 'listItem' ||
-            name === 'taskItem' ||
-            name === 'tableCell' ||
-            name === 'tableHeader' ||
-            name === 'blockquote' ||
-            name === 'codeBlock'
-          ) {
-            return false
-          }
-        }
-        return this.editor.commands.first(({ commands }) => [
-          () => commands.newlineInCode(),
-          () => commands.createParagraphNear(),
-          () => commands.liftEmptyBlock(),
-          () => commands.splitBlock(),
-        ])
-      },
-    }
-  },
-})
-
-const CodeBlockBox = CodeBlockLowlight.extend({
-  addNodeView() {
-    return ReactNodeViewRenderer(CodeBlockView)
-  },
-  addProseMirrorPlugins() {
-    const parent = this.parent?.() ?? []
-    return [
-      ...parent,
-      new Plugin({
-        key: new PluginKey('codeBlockPlainPaste'),
-        props: {
-          handlePaste: (_view, event) => {
-            const ed = this.editor
-            if (!ed?.isActive('codeBlock')) return false
-            const clipboard = event.clipboardData
-            if (!clipboard) return false
-            event.preventDefault()
-            const html = clipboard.getData('text/html')
-            const rawPlain = clipboard.getData('text/plain')
-            pastePlainIntoCodeBlock(ed, plainTextForCodeBoxPaste(rawPlain, html))
-            return true
-          },
-        },
-      }),
-    ]
-  },
-}).configure({
-  lowlight: codeLowlight,
-  defaultLanguage: 'plaintext',
-  enableTabIndentation: CODE_BLOCK_ENABLE_TAB_INDENT,
-  tabSize: CODE_BLOCK_TAB_SIZE,
-})
-
-const ImageBox = Image.extend({
-  addNodeView() {
-    return ReactNodeViewRenderer(ImageView)
-  },
-}).configure({
-  allowBase64: true,
-  inline: false,
-  HTMLAttributes: { class: 'note-image-img' },
-})
 const TEXT_COLORS = [
   { label: 'Default', value: '' },
   { label: 'Red', value: '#b42318' },
@@ -176,96 +70,24 @@ type Props = {
   /** Bumps when parent applies an external markdown reload (open note / conflict / preserve-page). */
   contentEpoch?: number
   jumpHeading?: { text: string; nonce: number } | null
-  onChange: (markdown: string) => void
+  onChange: (markdown: string, revision?: number) => void
   attachments?: AttachmentInfo[]
   editable?: boolean
+  onServerEvent?: (event: NoteServerEvent) => void
   onNoteMeta?: (note: { etag?: string; attachments?: AttachmentInfo[]; markdown?: string; htmlSidecars?: unknown }) => void
   onError?: (message: string) => void
   getEtag?: () => string
+  onDirty?: () => void
+  onPastePending?: (pending: boolean) => void
+  /** Test/host override for uploads. Production uses the live `/api/notes/...` endpoints. */
+  assetTransport?: AssetTransport
 }
 
-type UploadResult = {
-  success: boolean
-  error?: string
-  markdownPath?: string
-  attachmentId?: string
-  isImage?: boolean
-  fileName?: string
-  note?: { etag?: string; attachments?: AttachmentInfo[]; markdown?: string }
-}
+type UploadResult = PasteUploadResult & { isImage?: boolean }
 
-function getMarkdown(editor: Editor): string {
-  const md = (editor.storage as { markdown?: { getMarkdown?: () => string } }).markdown
-  return md?.getMarkdown?.() ?? ''
-}
-
-function encodeSpaces(value: string) {
-  return Array.from(value)
-    .map((ch) => {
-      const code = ch.codePointAt(0)!
-      if (ch === ' ' || code === 0x00a0 || code === 0x202f || code === 0x2007) return '%20'
-      return ch
-    })
-    .join('')
-}
-
-/** Encode markdown link/image targets so ? # & and odd whitespace don't break the URL. */
-function encodeMdPath(value: string) {
-  return Array.from(value)
-    .map((ch) => {
-      const code = ch.codePointAt(0)!
-      if (ch === ' ') return '%20'
-      if (code === 0x00a0 || code === 0x202f || code === 0x2007) return '%20'
-      if (/[%?#&[\]()'"\\]/.test(ch)) return `%${code.toString(16).toUpperCase().padStart(2, '0')}`
-      if (code < 32 || code === 127) return ''
-      return ch
-    })
-    .join('')
-}
-
-function mdPathFor(stem: string, fileName: string) {
-  return `${encodeMdPath(stem)}.assets/${encodeMdPath(fileName)}`
-}
-
-function markdownForEditor(markdown: string, attachments: AttachmentInfo[]): string {
-  if (!attachments.length) return markdown
-  let result = markdown
-  for (const att of attachments) {
-    const api = `/api/attachments/${att.id}`
-    // Match any markdown image/link target that ends with this attachment file name
-    // (plain, space-encoded, or fully path-encoded), including odd stems like '#tags'.
-    const nameVariants = Array.from(
-      new Set([
-        att.fileName,
-        encodeSpaces(att.fileName),
-        encodeMdPath(att.fileName),
-        encodeURIComponent(att.fileName),
-      ]),
-    )
-    for (const name of nameVariants) {
-      const re = new RegExp(`\\(([^)\\s]*${escapeRegExp('.assets/' + name)})\\)`, 'gi')
-      result = result.replace(re, `(${api})`)
-    }
-  }
-  return result
-}
-
-function escapeRegExp(s: string) {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
-
-function toVaultMarkdown(editor: Editor, attachments: AttachmentInfo[], apiToMd: Map<string, string>, stem: string) {
-  let md = getMarkdown(editor)
-  for (const [api, rel] of apiToMd) {
-    md = md.split(api).join(rel)
-  }
-  for (const att of attachments) {
-    const api = `/api/attachments/${att.id}`
-    if (md.includes(api)) {
-      md = md.split(api).join(mdPathFor(stem, att.fileName))
-    }
-  }
-  return md
+export type AssetTransport = {
+  uploadFile: (noteId: string, file: File) => Promise<UploadResult>
+  importRemote: (noteId: string, url: string) => Promise<PasteUploadResult>
 }
 
 function findInDoc(editor: Editor, term: string, startPos: number, reverse = false): { from: number; to: number } | null {
@@ -300,21 +122,13 @@ async function uploadFile(noteId: string, file: File): Promise<UploadResult> {
   return (await res.json()) as UploadResult
 }
 
-function replaceImageSrc(editor: Editor, fromSrc: string, toSrc: string, alt?: string) {
-  const { state } = editor
-  let tr = state.tr
-  let changed = false
-  state.doc.descendants((node, pos) => {
-    if (node.type.name !== 'image') return
-    if (node.attrs.src !== fromSrc) return
-    tr = tr.setNodeMarkup(pos, undefined, {
-      ...node.attrs,
-      src: toSrc,
-      alt: alt || node.attrs.alt || 'image',
-    })
-    changed = true
+async function defaultImportRemote(noteId: string, url: string): Promise<PasteUploadResult> {
+  const res = await fetch(`/api/notes/${noteId}/import-image`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url }),
   })
-  if (changed) editor.view.dispatch(tr)
+  return (await res.json()) as PasteUploadResult
 }
 
 function findScrollParent(el: HTMLElement | null): HTMLElement | Window {
@@ -353,11 +167,16 @@ export function NoteEditor({
   onChange,
   attachments = [],
   editable = true,
+  onServerEvent,
   onNoteMeta,
   onError,
   getEtag,
+  onDirty,
+  onPastePending,
+  assetTransport,
 }: Props) {
   const [uploadStatus, setUploadStatus] = useState<string | null>(null)
+  const [validationBanner, setValidationBanner] = useState<string | null>(null)
   const [pasteMode, setPasteMode] = useState<PasteMode>('smart')
   const [findOpen, setFindOpen] = useState(false)
   const [findQuery, setFindQuery] = useState('')
@@ -381,7 +200,6 @@ export function NoteEditor({
   const catalogRef = useRef(noteCatalog)
   notePathRef.current = noteRelativePath
   catalogRef.current = noteCatalog
-  const apiToMd = useRef(new Map<string, string>())
   const editorRef = useRef<Editor | null>(null)
   const readyRef = useRef(false)
   const lastEmittedRef = useRef(markdown)
@@ -389,56 +207,119 @@ export function NoteEditor({
   const lastAttKeyRef = useRef(attachments.map((a) => a.id).join(','))
   const pasteModeRef = useRef<PasteMode>('smart')
   const attachmentsRef = useRef(attachments)
-  const stemRef = useRef(noteStem)
   const noteIdRef = useRef(noteId)
+  const noteSessionRef = useRef(crypto.randomUUID())
   attachmentsRef.current = attachments
-  stemRef.current = noteStem
   noteIdRef.current = noteId
   pasteModeRef.current = pasteMode
+  void noteStem
+
+  const transportRef = useRef<AssetTransport>({
+    uploadFile,
+    importRemote: defaultImportRemote,
+  })
+  transportRef.current = {
+    uploadFile: assetTransport?.uploadFile ?? uploadFile,
+    importRemote: assetTransport?.importRemote ?? defaultImportRemote,
+  }
+
+  const coordinatorRef = useRef<EditorRevisionCoordinator | null>(null)
+  if (!coordinatorRef.current) {
+    coordinatorRef.current = new EditorRevisionCoordinator({
+      debounceMs: 400,
+      onDirty: () => onDirty?.(),
+      onValidatedChange: ({ markdown: md, revision }) => {
+        lastEmittedRef.current = md
+        setValidationBanner(null)
+        onChange(md, revision)
+      },
+      onValidationError: ({ diagnostics }) => {
+        const msg = diagnostics.map((d) => d.message).join(' · ')
+        setValidationBanner(msg || 'This note cannot be saved until the editor result is valid.')
+      },
+      onPastePending: (pending) => onPastePending?.(pending),
+    })
+  }
+
+  const emitEvent = (event: NoteServerEvent) => {
+    onServerEvent?.(event)
+    if (event.kind === 'attachments-updated') {
+      onNoteMeta?.({ attachments: event.attachments })
+    } else if (event.kind === 'etag-confirmed') {
+      onNoteMeta?.({ etag: event.etag })
+    } else if (event.kind === 'replace-document') {
+      onNoteMeta?.({ etag: event.etag, markdown: event.markdown })
+    }
+  }
 
   const emitMarkdown = (ed: Editor) => {
-    const md = toVaultMarkdown(ed, attachmentsRef.current, apiToMd.current, stemRef.current)
-    lastEmittedRef.current = md
-    onChange(md)
+    coordinatorRef.current?.attach(ed)
+    coordinatorRef.current?.flush()
   }
 
   const handleUpload = async (file: File) => {
+    const ed = editorRef.current
+    const isImage = file.type.startsWith('image/')
+    const pasteSessionId = crypto.randomUUID()
+    const uploadId = crypto.randomUUID()
+    if (ed && isImage) {
+      insertPendingAssetAtSelection(ed, {
+        uploadId,
+        pasteSessionId,
+        alt: file.name || 'image',
+        status: 'uploading',
+      })
+      onPastePending?.(true)
+    }
     setUploadStatus(`Uploading ${file.name || 'file'}…`)
     try {
-      const result = await uploadFile(noteIdRef.current, file)
+      if (isImage && ed) {
+        const { failed, lastMeta } = await runPasteSession(
+          ed,
+          {
+            noteId: noteIdRef.current,
+            noteSessionId: noteSessionRef.current,
+            uploadFile: (id, f) => transportRef.current.uploadFile(id, f),
+            importRemote: (id, url) => transportRef.current.importRemote(id, url),
+            onAttachments: (atts) => atts && emitEvent({ kind: 'attachments-updated', attachments: atts }),
+            onStatus: setUploadStatus,
+            onError,
+            getNoteSessionId: () => noteSessionRef.current,
+          },
+          [{ uploadId, kind: 'file', file, alt: file.name }],
+        )
+        if (lastMeta?.etag) emitEvent({ kind: 'etag-confirmed', etag: lastMeta.etag })
+        if (failed) onError?.('Image upload failed — Retry from the placeholder or Remove it.')
+        onPastePending?.(false)
+        coordinatorRef.current?.flush()
+        setUploadStatus(failed ? 'Upload failed' : 'Uploaded')
+        window.setTimeout(() => setUploadStatus(null), 1200)
+        return
+      }
+
+      const result = await transportRef.current.uploadFile(noteIdRef.current, file)
       if (!result.success || !result.markdownPath) {
         onError?.(result.error ?? 'Upload failed')
         setUploadStatus(null)
         return
       }
-      if (result.attachmentId) {
-        apiToMd.current.set(`/api/attachments/${result.attachmentId}`, result.markdownPath)
+      if (result.note?.attachments) {
+        emitEvent({ kind: 'attachments-updated', attachments: result.note.attachments })
       }
-      // Attachments only — note.markdown on the upload response is pre-edit disk state.
-      if (result.note) {
-        onNoteMeta?.({
-          etag: result.note.etag,
-          attachments: result.note.attachments,
-        })
+      if (result.note?.etag) {
+        emitEvent({ kind: 'etag-confirmed', etag: result.note.etag })
       }
-
-      const ed = editorRef.current
-      if (!ed) return
-      if (result.isImage && result.attachmentId) {
-        ed.chain()
-          .focus()
-          .setImage({ src: `/api/attachments/${result.attachmentId}`, alt: result.fileName ?? 'image' })
-          .run()
-      } else {
-        const label = result.fileName ?? 'attachment'
-        ed.chain().focus().insertContent(`[${label}](${result.markdownPath})`).run()
-      }
-      emitMarkdown(ed)
+      const live = editorRef.current
+      if (!live) return
+      const label = result.fileName ?? 'attachment'
+      live.chain().focus().insertContent(`[${label}](${result.markdownPath})`).run()
+      emitMarkdown(live)
       setUploadStatus('Uploaded')
       window.setTimeout(() => setUploadStatus(null), 1200)
     } catch (e) {
       onError?.(e instanceof Error ? e.message : 'Upload failed')
       setUploadStatus(null)
+      onPastePending?.(false)
     }
   }
 
@@ -459,11 +340,12 @@ export function NoteEditor({
         setUploadStatus(null)
         return
       }
-      if (data.note) {
-        onNoteMeta?.({
-          etag: data.etag ?? data.note.etag,
-          attachments: data.note.attachments,
+      if (data.note?.markdown) {
+        emitEvent({
+          kind: 'replace-document',
           markdown: data.note.markdown,
+          etag: data.etag ?? data.note.etag,
+          reason: 'preserve-page',
         })
       }
       setUploadStatus('Clipped page saved')
@@ -481,93 +363,51 @@ export function NoteEditor({
     if (!ed) return
 
     setUploadStatus(mode === 'keep' ? 'Pasting HTML…' : 'Pasting…')
+    onPastePending?.(true)
     try {
       const cleaned = cleanPasteHtml(html, { keepMore: mode === 'keep' })
       if (!cleaned) {
         setUploadStatus(null)
+        onPastePending?.(false)
         return
       }
 
-      const { html: markedHtml, items } = rewriteDataImages(cleaned)
-      const remoteUrls = extractHttpImageUrls(markedHtml).filter((u) => !u.includes('paste.invalid'))
-
+      const pasteSessionId = crypto.randomUUID()
+      const { html: markedHtml, jobs } = rewritePastedImagesToPlaceholders(cleaned, pasteSessionId)
       ed.chain().focus().insertContent(markedHtml).run()
 
-      let lastMeta: UploadResult['note'] | undefined
-      let imported = 0
-      let failed = 0
-
-      for (const item of items) {
-        try {
-          const file = dataUrlToFile(item.mime, item.bytesBase64, item.fileName)
-          const result = await uploadFile(noteIdRef.current, file)
-          if (!result.success || !result.attachmentId) {
-            failed++
-            continue
-          }
-          if (result.markdownPath) {
-            apiToMd.current.set(`/api/attachments/${result.attachmentId}`, result.markdownPath)
-          }
-          replaceImageSrc(ed, item.marker, `/api/attachments/${result.attachmentId}`, result.fileName)
-          lastMeta = result.note ?? lastMeta
-          imported++
-        } catch {
-          failed++
-        }
-      }
-
-      for (const url of remoteUrls.slice(0, 20)) {
-        try {
-          const res = await fetch(`/api/notes/${noteIdRef.current}/import-image`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url }),
-          })
-          const data = (await res.json()) as {
-            success?: boolean
-            attachmentId?: string
-            markdownPath?: string
-            fileName?: string
-            note?: UploadResult['note']
-            error?: string
-          }
-          if (!res.ok || !data.success || !data.attachmentId) {
-            failed++
-            continue
-          }
-          if (data.markdownPath) {
-            apiToMd.current.set(`/api/attachments/${data.attachmentId}`, data.markdownPath)
-          }
-          replaceImageSrc(ed, url, `/api/attachments/${data.attachmentId}`, data.fileName)
-          lastMeta = data.note ?? lastMeta
-          imported++
-        } catch {
-          failed++
-        }
-      }
-
-      emitMarkdown(ed)
-      // Attachment APIs return disk markdown *before* this paste is saved — never push
-      // that body into the parent or the editor will reload and the paste vanishes.
-      if (lastMeta) {
-        onNoteMeta?.({
-          etag: lastMeta.etag,
-          attachments: lastMeta.attachments,
-        })
-      }
-
-      if (imported > 0 || failed > 0) {
+      if (jobs.length) {
+        const { imported, failed, lastMeta } = await runPasteSession(
+          ed,
+          {
+            noteId: noteIdRef.current,
+            noteSessionId: noteSessionRef.current,
+            uploadFile: (id, f) => transportRef.current.uploadFile(id, f),
+            importRemote: (id, url) => transportRef.current.importRemote(id, url),
+            onAttachments: (atts) => atts && emitEvent({ kind: 'attachments-updated', attachments: atts }),
+            onStatus: setUploadStatus,
+            onError,
+            getNoteSessionId: () => noteSessionRef.current,
+          },
+          jobs,
+        )
+        if (lastMeta?.etag) emitEvent({ kind: 'etag-confirmed', etag: lastMeta.etag })
+        onPastePending?.(false)
+        coordinatorRef.current?.flush()
         const parts = []
         if (imported) parts.push(`${imported} image${imported === 1 ? '' : 's'} saved`)
         if (failed) parts.push(`${failed} failed`)
         setUploadStatus(parts.join(' · ') || 'Pasted')
       } else {
+        onPastePending?.(false)
+        coordinatorRef.current?.flush()
         setUploadStatus('Pasted')
       }
       window.setTimeout(() => setUploadStatus(null), 1800)
     } catch (e) {
       onError?.(e instanceof Error ? e.message : 'Paste failed')
       setUploadStatus(null)
+      onPastePending?.(false)
     }
   }
   const pasteRichRef = useRef(pasteRich)
@@ -607,35 +447,12 @@ export function NoteEditor({
   applyWikiLinkRef.current = applyWikiLink
 
   const editor = useEditor({
-    extensions: [
-      StarterKit.configure({ codeBlock: false }),
-      CodeBlockBox,
-      Link.configure({ openOnClick: false, autolink: true }),
-      ImageBox,
-      Callout,
-      HeadingFold,
-      WikiLinkSuggest.configure({
-        onChange: (s) => wikiOnChangeRef.current(s),
-      }),
-      Placeholder.configure({ placeholder: 'Start writing… Type [[ to link a note' }),
-      TaskList,
-      TaskItem.configure({ nested: true }),
-      Table.configure({ resizable: true }),
-      TableRow,
-      TableHeader,
-      TableCell,
-      FontSizeTextStyle,
-      Color,
-      ConsistentLineBreaks,
-      Markdown.configure({
-        // Allow <span style="color/font-size"> so color & size round-trip in the vault.
-        html: true,
-        // We handle rich paste ourselves so formatting/images aren't stripped by MD transform.
-        transformPastedText: false,
-        transformCopiedText: false,
-      }),
-    ],
-    content: markdownForEditor(markdown, attachments),
+    extensions: createEditorExtensions({
+      withReactNodeViews: true,
+      wikiOnChange: (s) => wikiOnChangeRef.current(s),
+      attachments,
+    }),
+    content: markdown,
     editable,
     editorProps: {
       attributes: {
@@ -679,18 +496,8 @@ export function NoteEditor({
         if (mode === 'code') {
           event.preventDefault()
           const codeText = plainTextForCodeBoxPaste(rawPlain, html)
-          if (ed.isActive('codeBlock')) {
-            pastePlainIntoCodeBlock(ed, codeText)
-          } else {
-            ed.chain()
-              .focus()
-              .insertContent({
-                type: 'codeBlock',
-                attrs: { language: 'powershell' },
-                content: codeText ? [{ type: 'text', text: codeText }] : undefined,
-              })
-              .run()
-          }
+          if (ed.isActive('codeBlock')) pastePlainIntoCodeBlock(ed, codeText)
+          else pasteAsCodeBlock(ed, codeText, 'powershell')
           return true
         }
 
@@ -801,20 +608,42 @@ export function NoteEditor({
         return false
       },
     },
-    onCreate: () => {
+    onCreate: ({ editor: ed }) => {
+      coordinatorRef.current?.attach(ed)
+      dispatchAttachmentInventory(ed, attachmentsRef.current)
+      ;(ed.storage as { pendingAsset?: { retry?: (id: string) => void } }).pendingAsset = {
+        retry: (uploadId: string) => {
+          onPastePending?.(true)
+          void retryPendingUpload(ed, uploadId).then(({ failed }) => {
+            if (failed) onError?.('Image upload failed — Retry from the placeholder or Remove it.')
+            onPastePending?.(false)
+            coordinatorRef.current?.flush()
+          })
+        },
+      }
       window.setTimeout(() => {
         readyRef.current = true
       }, 0)
     },
-    onUpdate: ({ editor: ed }) => {
+    onTransaction: ({ editor: ed, transaction }) => {
       if (!readyRef.current) return
-      emitMarkdown(ed)
+      coordinatorRef.current?.attach(ed)
+      coordinatorRef.current?.observeTransaction(transaction)
     },
   })
 
   useEffect(() => {
     editorRef.current = editor
+    if (editor) coordinatorRef.current?.attach(editor)
   }, [editor])
+
+  useEffect(() => {
+    const flush = () => {
+      coordinatorRef.current?.flush()
+    }
+    window.addEventListener('jotdex-editor-flush', flush)
+    return () => window.removeEventListener('jotdex-editor-flush', flush)
+  }, [])
 
   useEffect(() => {
     if (!editor) return
@@ -844,26 +673,41 @@ export function NoteEditor({
     }
   }, [jumpHeading, editor])
 
-  // Only reload editor document on external content changes (note open / conflict / preserve-page),
-  // or when attachments arrive so local image paths can be rewritten to /api/attachments/{id}.
+  // Reload only on explicit document replacement (epoch), not attachment inventory.
   useEffect(() => {
     if (!editor) return
     const attKey = attachments.map((a) => a.id).join(',')
-    const epochChanged = appliedEpochRef.current !== contentEpoch
-    const markdownChanged = markdown !== lastEmittedRef.current
     const attachmentsChanged = attKey !== lastAttKeyRef.current
-    if (!epochChanged && !markdownChanged && !attachmentsChanged) return
+    const epochChanged = appliedEpochRef.current !== contentEpoch
+    const plan = planEditorReload({
+      epochChanged,
+      markdownEqualsLastEmitted: markdown === lastEmittedRef.current,
+      attachmentsChanged,
+    })
+    if (plan.updateResolver) {
+      lastAttKeyRef.current = attKey
+      dispatchAttachmentInventory(editor, attachments)
+    }
+    if (!plan.replaceDocument) {
+      if (markdown !== lastEmittedRef.current) lastEmittedRef.current = markdown
+      return
+    }
 
     appliedEpochRef.current = contentEpoch
-    lastAttKeyRef.current = attKey
     readyRef.current = false
-    const display = markdownForEditor(markdown, attachments)
-    editor.commands.setContent(display, { emitUpdate: false })
+    assertSetContentReason('external-version')
+    recordSetContent('external-version')
+    logEditorDiag({ setContentReason: 'external-version', noteId })
+    editor.commands.setContent(markdown, { emitUpdate: false })
+    dispatchAttachmentInventory(editor, attachments)
     lastEmittedRef.current = markdown
+    noteSessionRef.current = crypto.randomUUID()
+    coordinatorRef.current?.resetSession()
+    coordinatorRef.current?.attach(editor)
     window.setTimeout(() => {
       readyRef.current = true
     }, 0)
-  }, [markdown, attachments, contentEpoch, editor])
+  }, [markdown, attachments, contentEpoch, editor, noteId])
 
   useEffect(() => {
     if (!editor) return
@@ -1015,7 +859,10 @@ export function NoteEditor({
           type="button"
           className={editor.isActive('heading', { level: 1 }) ? 'on' : ''}
           title="Heading 1 — with a selection, only the selected text becomes the heading"
-          onClick={() => applyHeadingToSelection(editor, 1)}
+          onClick={() => {
+            const r = applyHeadingToSelection(editor, 1)
+            if (!r.ok && r.reason) onError?.(r.reason)
+          }}
         >
           H1
         </button>
@@ -1023,7 +870,10 @@ export function NoteEditor({
           type="button"
           className={editor.isActive('heading', { level: 2 }) ? 'on' : ''}
           title="Heading 2 — with a selection, only the selected text becomes the heading"
-          onClick={() => applyHeadingToSelection(editor, 2)}
+          onClick={() => {
+            const r = applyHeadingToSelection(editor, 2)
+            if (!r.ok && r.reason) onError?.(r.reason)
+          }}
         >
           H2
         </button>
@@ -1031,7 +881,10 @@ export function NoteEditor({
           type="button"
           className={editor.isActive('heading', { level: 3 }) ? 'on' : ''}
           title="Heading 3 — with a selection, only the selected text becomes the heading"
-          onClick={() => applyHeadingToSelection(editor, 3)}
+          onClick={() => {
+            const r = applyHeadingToSelection(editor, 3)
+            if (!r.ok && r.reason) onError?.(r.reason)
+          }}
         >
           H3
         </button>
@@ -1176,15 +1029,7 @@ export function NoteEditor({
           title="Paste clipboard as code box"
           onClick={() => {
             void navigator.clipboard.readText().then((text) => {
-              editor
-                .chain()
-                .focus()
-                .insertContent({
-                  type: 'codeBlock',
-                  attrs: { language: 'powershell' },
-                  content: text ? [{ type: 'text', text }] : undefined,
-                })
-                .run()
+              pasteAsCodeBlock(editor, text, 'powershell')
             }).catch(() => onError?.('Could not read clipboard'))
           }}
         >
@@ -1348,6 +1193,14 @@ export function NoteEditor({
             {filterCatalog(noteCatalog, wikiSuggest.query).length === 0 && (
               <div className="wiki-suggest-empty">No matching notes — keep typing or finish with ]]</div>
             )}
+          </div>
+        )}
+        {validationBanner && (
+          <div className="source-banner" role="alert">
+            <p>{validationBanner}</p>
+            <button type="button" className="ghost" onClick={() => setValidationBanner(null)}>
+              Continue editing
+            </button>
           </div>
         )}
         <EditorContent editor={editor} />

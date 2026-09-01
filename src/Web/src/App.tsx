@@ -51,6 +51,27 @@ function countRemoteImages(markdown: string): number {
   return n
 }
 
+type SaveStatus = 'saved' | 'editing' | 'saving' | 'conflict' | 'error' | 'uploading'
+
+function saveChipLabel(status: SaveStatus): string {
+  switch (status) {
+    case 'saved':
+      return 'Saved'
+    case 'editing':
+      return 'Editing'
+    case 'saving':
+      return 'Saving'
+    case 'uploading':
+      return 'Finishing paste'
+    case 'conflict':
+      return 'Conflict'
+    case 'error':
+      return 'Error'
+    default:
+      return status
+  }
+}
+
 type FolderNode = {
   id: string
   name: string
@@ -231,7 +252,7 @@ function App() {
   const [draft, setDraft] = useState('')
   const [frontMatter, setFrontMatter] = useState('')
   const [etag, setEtag] = useState('')
-  const [saveStatus, setSaveStatus] = useState<'saved' | 'editing' | 'saving' | 'conflict' | 'error'>('saved')
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>('saved')
   const [history, setHistory] = useState<
     { snapshotId: string; createdUtc: string; summary?: string; preview?: string; sizeBytes?: number }[]
   >([])
@@ -252,7 +273,10 @@ function App() {
   const frontMatterRef = useRef('')
   const baselineRef = useRef('')
   const savingRef = useRef(false)
-  const saveStatusRef = useRef<'saved' | 'editing' | 'saving' | 'conflict' | 'error'>('saved')
+  const saveStatusRef = useRef<SaveStatus>('saved')
+  const editorRevisionRef = useRef(0)
+  const savedRevisionRef = useRef(0)
+  const pastePendingRef = useRef(false)
   const selectedIdRef = useRef<string | null>(null)
   const [editorEpoch, setEditorEpoch] = useState(0)
   saveStatusRef.current = saveStatus
@@ -644,6 +668,7 @@ function App() {
       }
       savingRef.current = true
       setSaveStatus('saving')
+      const revisionSent = editorRevisionRef.current
       // Always use the latest known ETag — callers may pass a stale value
       const etagToSend = etagRef.current || currentEtag
       const markdown = joinFrontMatter(frontMatterRef.current, bodyMarkdown)
@@ -712,6 +737,7 @@ function App() {
         setEtag(newEtag)
         etagRef.current = newEtag
         baselineRef.current = markdown
+        savedRevisionRef.current = revisionSent
         if (data.note) {
           const serverMd = typeof data.note.markdown === 'string' ? data.note.markdown : markdown
           const serverSplit = splitFrontMatter(serverMd)
@@ -736,7 +762,7 @@ function App() {
             setNote({ ...data.note, markdown: joinFrontMatter(frontMatterRef.current, latestBody) })
           }
         }
-        setSaveStatus('saved')
+        setSaveStatus(editorRevisionRef.current === revisionSent ? 'saved' : 'editing')
         setConflictDisk(null)
         setError(null)
         setTasksRefreshKey((k) => k + 1)
@@ -813,6 +839,8 @@ function App() {
   // keepalive lets the PUT finish after the window is gone (Chrome + Safari).
   useEffect(() => {
     const flushPendingSave = () => {
+      window.dispatchEvent(new Event('jotdex-editor-flush'))
+      if (pastePendingRef.current) return
       if (saveTimer.current) {
         window.clearTimeout(saveTimer.current)
         saveTimer.current = null
@@ -931,6 +959,12 @@ function App() {
       }
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
         e.preventDefault()
+        if (pastePendingRef.current) {
+          setError('Wait for image uploads to finish before saving.')
+          setSaveStatus('uploading')
+          return
+        }
+        window.dispatchEvent(new Event('jotdex-editor-flush'))
         if (saveTimer.current) window.clearTimeout(saveTimer.current)
         void saveNote(draftRef.current, etagRef.current)
         return
@@ -2032,8 +2066,8 @@ function App() {
                 <h1 title={note.relativePath}>{note.title}</h1>
               </div>
               <div className="popout-bar-actions">
-                <span className={`save-chip ${saveStatus}`} title={saveStatus}>
-                  {saveStatus === 'saved' ? 'ok' : saveStatus === 'editing' ? '…' : saveStatus === 'saving' ? '…' : saveStatus}
+                <span className={`save-chip ${saveStatus}`} title={saveChipLabel(saveStatus)}>
+                  {saveChipLabel(saveStatus)}
                 </span>
                 <button
                   type="button"
@@ -2089,7 +2123,16 @@ function App() {
                 contentEpoch={editorEpoch}
                 jumpHeading={jumpHeading}
                 attachments={note.attachments}
-                onChange={setDraft}
+                onChange={(md, rev) => {
+                  draftRef.current = md
+                  setDraft(md)
+                  if (typeof rev === 'number') editorRevisionRef.current = rev
+                }}
+                onPastePending={(pending) => {
+                  pastePendingRef.current = pending
+                  if (pending) setSaveStatus('uploading')
+                  else if (saveStatusRef.current === 'uploading') setSaveStatus('editing')
+                }}
                 onError={(msg) => setError(msg)}
                 getEtag={() => etagRef.current}
                 onNoteMeta={(n) => {
@@ -4056,7 +4099,9 @@ function App() {
                   <p className="note-path">{note.relativePath}</p>
                 </div>
                 <div className="actions">
-                  <span className={`save-chip ${saveStatus}`}>{saveStatus}</span>
+                  <span className={`save-chip ${saveStatus}`} title={saveChipLabel(saveStatus)}>
+                    {saveChipLabel(saveStatus)}
+                  </span>
                   <button
                     type="button"
                     className="ghost"
@@ -4190,7 +4235,16 @@ function App() {
                   contentEpoch={editorEpoch}
                   jumpHeading={jumpHeading}
                   attachments={note.attachments}
-                  onChange={setDraft}
+                  onChange={(md, rev) => {
+                    draftRef.current = md
+                    setDraft(md)
+                    if (typeof rev === 'number') editorRevisionRef.current = rev
+                  }}
+                  onPastePending={(pending) => {
+                    pastePendingRef.current = pending
+                    if (pending) setSaveStatus('uploading')
+                    else if (saveStatusRef.current === 'uploading') setSaveStatus('editing')
+                  }}
                   onError={(msg) => setError(msg)}
                   getEtag={() => etagRef.current}
                   onNoteMeta={(n) => {

@@ -2,7 +2,7 @@
 
 Mark items `- [x]` when done. IDs are stable for chat (“done M1-04”).
 
-**Active milestone:** CE — Code editing, diagnostics, and reusable snippets
+**Active milestone:** ER — Editor reliability
 
 ---
 
@@ -263,3 +263,22 @@ Mark items `- [x]` when done. IDs are stable for chat (“done M1-04”).
 - [x] `CE-07` Polish: fold gutter + whitespace in Edit dialog (inline CM rolled back — basic TipTap edit kept)
 
 - [x] `CE-GATE` CE-00–03 verified; changelog; THIRD_PARTY_NOTICES; portable publish ~63 MB zip (+~18 MB vs pre-CE)
+
+---
+
+## ER — Editor reliability
+
+**Active milestone.** Contract: [`docs/decisions/editor-reliability-contract.md`](docs/decisions/editor-reliability-contract.md). ADR: [`docs/decisions/ADR-editor-round-trip-and-paste-transactions.md`](docs/decisions/ADR-editor-round-trip-and-paste-transactions.md).
+
+- [x] `ER-WP0` Vitest/Playwright harness, torture fixture, failing-then-fixed image/heading + reload-policy tests
+- [x] `ER-WP1` `EditorMarkdownCodec`, owned block-image serializer, save-safety validator
+- [x] `ER-WP2` Deterministic whole-block heading replacement; nested-context refuse partial split
+- [x] `ER-WP3` AttachmentResolver; attachment inventory does not `setContent`
+- [x] `ER-WP4` PasteSessionManager + pending placeholders; resolve by upload id
+- [x] `ER-WP5` Shared code clipboard command; no trim; keep 1.1.23 `insertText`
+- [x] `ER-WP6` Revision coordinator + save revision acknowledgment; shared sameness vectors
+- [x] `ER-WP7` Docs/ADR/changelog/STATUS; Vitest matrix + Playwright Chromium/Firefox/WebKit; no vault migration
+
+- [x] `ER-GATE` Portable publish 1.1.24; no vault migration (rollback = previous exe)
+
+---

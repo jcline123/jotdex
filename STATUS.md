@@ -1,7 +1,7 @@
 # Jotdex STATUS
 
-**Active milestone:** CE complete (CE-00–07) + snippet UX polish  
-**Last updated:** 2026-08-23
+**Active milestone:** ER complete (portable 1.1.24)  
+**Last updated:** 2026-09-01
 
 ## In progress
 
@@ -9,9 +9,7 @@
 
 ## Just shipped (this session)
 
-- Portable **1.1.22**: Snippets rail layout (header + rows)
-- Portable **1.1.21**: snippets folder, rail manager, cursor insert, Edit-dialog Insert/Save, PSA module path
-- Portable **1.1.20**: mobile code-box toolbar wrap
+- Portable **1.1.24** — editor reliability WP0–WP7 (codec, headings, paste sessions, attachment resolver, code clipboard, revision-aware autosave). No vault-format change.
 
 ## Run (Development + SampleVault)
 

@@ -634,31 +634,7 @@ public sealed class NoteCommandService : INoteCommandService
     };
 
     private static bool SameDocument(string a, string b) =>
-        string.Equals(NormalizeDoc(a), NormalizeDoc(b), StringComparison.Ordinal);
-
-    private static string NormalizeDoc(string content)
-    {
-        var n = content
-            .Replace("\r\n", "\n", StringComparison.Ordinal)
-            .Replace("\r", "\n", StringComparison.Ordinal)
-            .TrimEnd();
-        // Server rewrites `modified:` on every save; ignore it for sameness / conflict checks.
-        if (n.StartsWith("---", StringComparison.Ordinal))
-        {
-            var end = n.IndexOf("\n---", 3, StringComparison.Ordinal);
-            if (end > 0)
-            {
-                var header = n[3..end];
-                header = Regex.Replace(
-                    header,
-                    @"^modified:\s*.*$",
-                    "modified:",
-                    RegexOptions.Multiline | RegexOptions.IgnoreCase);
-                n = "---" + header + n[end..];
-            }
-        }
-        return n;
-    }
+        Jotdex.Core.Markdown.DocumentSameness.EqualsExactSave(a, b);
 
     private static string Hash(string content) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(content))).ToLowerInvariant();

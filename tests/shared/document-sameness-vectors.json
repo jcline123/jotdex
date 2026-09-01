@@ -1,0 +1,34 @@
+{
+  "vectors": [
+    {
+      "id": "crlf-vs-lf",
+      "a": "hello\r\nworld\n",
+      "b": "hello\nworld",
+      "exactSaveEqual": true
+    },
+    {
+      "id": "interior-blank-lines-kept",
+      "a": "a\n\n\nb",
+      "b": "a\n\nb",
+      "exactSaveEqual": false
+    },
+    {
+      "id": "line-trailing-spaces-kept",
+      "a": "hello  \nworld",
+      "b": "hello\nworld",
+      "exactSaveEqual": false
+    },
+    {
+      "id": "modified-yaml-ignored",
+      "a": "---\nmodified: 2026-01-01\ntitle: Hi\n---\nBody",
+      "b": "---\nmodified: 2026-12-31\ntitle: Hi\n---\nBody",
+      "exactSaveEqual": true
+    },
+    {
+      "id": "body-change-is-different",
+      "a": "---\nmodified: 1\n---\nA",
+      "b": "---\nmodified: 1\n---\nB",
+      "exactSaveEqual": false
+    }
+  ]
+}

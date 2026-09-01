@@ -7,7 +7,19 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 
 ---
 
-## 2026-09-01 — Code box paste stays inside block; export keeps fenced HTML escaped
+## 2026-09-01 — Editor reliability (codec, paste sessions, headings, autosave)
+
+- Block images now serialize with a closed Markdown block, so a heading immediately after an image cannot reopen as literal `###`.
+- Partial heading conversion replaces the whole text block (left remainder + heading + right remainder) instead of inserting a heading at an inline position.
+- Image and rich paste use stable placeholders and paste sessions; the finished image stays at the original insertion point. Attachment metadata updates the display resolver and does not reparse the note.
+- Code paste paths share one exact-text command (no trim). Autosave serializes validated revisions, not every transaction; incomplete placeholder documents are not saved.
+- Status chips distinguish Editing, Finishing paste, Saving, Saved, Conflict, and Error. Failed image uploads offer Retry/Remove and cannot mark the note Saved while a placeholder remains.
+- Vitest covers H-01–H-12, paste sessions, code clipboard, and 50× stress on H-08/IMG-02/IMG-03/CODE-01/LOC-01/SAVE-02/SAVE-03. Playwright probes health, clipboard conversion, and idle open-without-edit across Chromium/Firefox/WebKit.
+
+**Portable release 1.1.24**
+- Tag `v1.1.24` — Editor reliability: round-trip codec, deterministic headings, transactional image paste, revision-aware autosave. No vault-format change; rollback is the previous exe.
+
+---
 
 - Pasting into an active code box (HTML, multiline text, or **Paste: Code**) now always inserts plain characters via `insertText` instead of rich HTML or new block nodes — fixes content spilling below the box and broken `` ``` `` fences in saved Markdown.
 - HTML export already escapes HTML inside fenced blocks (Markdig `<pre><code>`); notes corrupted by the old paste path may still show live HTML or literal backticks until re-saved from a proper code box.

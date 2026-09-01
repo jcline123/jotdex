@@ -25,4 +25,7 @@
     <ProjectReference Include="..\..\..\src\PowerShellDiagnostics\Jotdex.PowerShellDiagnostics.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Content Include="..\..\shared\document-sameness-vectors.json" CopyToOutputDirectory="PreserveNewest" Link="document-sameness-vectors.json" />
+  </ItemGroup>
 </Project>

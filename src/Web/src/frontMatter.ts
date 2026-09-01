@@ -1,3 +1,5 @@
+import { exactSaveEqual } from './editor/markdown/documentSameness'
+
 /** Split YAML front matter from Markdown body for safe rich editing. */
 export function splitFrontMatter(markdown: string): { frontMatter: string; body: string } {
   if (!markdown.startsWith('---')) {
@@ -73,6 +75,7 @@ export function normalizeMarkdown(markdown: string): string {
   return n
 }
 
+/** Compare docs for save/conflict: LF + ignore `modified:` only. */
 export function sameMarkdown(a: string, b: string): boolean {
-  return normalizeMarkdown(a) === normalizeMarkdown(b)
+  return exactSaveEqual(a, b)
 }

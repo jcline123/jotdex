@@ -38,7 +38,7 @@ function writePlainOnly(event: ClipboardEvent, text: string): void {
   }
 }
 
-function looksLikeEscapedHtmlSnippet(s: string): boolean {
+export function looksLikeEscapedHtmlSnippet(s: string): boolean {
   return /&lt;!--StartFragment--&gt;|&lt;span[\s&]|&lt;\/span&gt;/i.test(s)
 }
 
@@ -58,7 +58,7 @@ function stripClipboardHtmlToText(source: string): string {
     .replace(/<!--EndFragment-->/gi, '')
     .replace(/<!--[\s\S]*?-->/g, '')
     .replace(/<\/?(html|body|head|meta|span|font|pre|code)[^>]*>/gi, '')
-  return decodeBasicEntities(inner).replace(/\u00a0/g, ' ').trim()
+  return decodeBasicEntities(inner).replace(/\u00a0/g, ' ')
 }
 
 /** Word/Chrome HTML wrapper around a text snippet — not a real rich document. */

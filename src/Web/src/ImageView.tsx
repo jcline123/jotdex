@@ -1,14 +1,16 @@
 import { NodeViewWrapper } from '@tiptap/react'
 import type { NodeViewProps } from '@tiptap/react'
 import { useState } from 'react'
+import { displayUrlForSrc, getAttachmentResolverState } from './editor/assets/AttachmentResolver'
 
 /** TipTap image with select chrome, broken-state UI, and one-click Remove. */
 export function ImageView({ node, selected, deleteNode, editor }: NodeViewProps) {
-  const src = String(node.attrs.src ?? '')
+  const canonical = String(node.attrs.src ?? '')
+  const src = displayUrlForSrc(getAttachmentResolverState(editor), canonical)
   const alt = String(node.attrs.alt ?? '')
   const title = String(node.attrs.title ?? '')
   const [broken, setBroken] = useState(false)
-  const label = alt || title || fileNameFromSrc(src) || 'Image'
+  const label = alt || title || fileNameFromSrc(canonical) || 'Image'
 
   return (
     <NodeViewWrapper
