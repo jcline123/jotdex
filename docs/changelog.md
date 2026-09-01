@@ -17,7 +17,7 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 - Vitest covers H-01–H-12, paste sessions, code clipboard, and 50× stress on H-08/IMG-02/IMG-03/CODE-01/LOC-01/SAVE-02/SAVE-03. Playwright probes health, clipboard conversion, and idle open-without-edit across Chromium/Firefox/WebKit.
 
 **Portable release 1.1.24**
-- Tag `v1.1.24` — Editor reliability: round-trip codec, deterministic headings, transactional image paste, revision-aware autosave. No vault-format change; rollback is the previous exe.
+- Tag `v1.1.24` (`47e80c6`) — Editor reliability: round-trip codec, deterministic headings, transactional image paste, revision-aware autosave. No vault-format change; rollback is the previous exe.
 
 ---
 
