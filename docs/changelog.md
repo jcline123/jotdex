@@ -21,7 +21,7 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 - Copy AI prompt now documents Obsidian callouts as the on-disk form.
 
 **Portable release 1.2.0**
-- Tag `v1.2.0` — Official Tiptap Markdown engine, Jotdex dialect, collapsed Todos ticker restored. Live vault was not rewritten; rollback is the previous exe.
+- Tag `v1.2.0` (`66240be`) — Official Tiptap Markdown engine, Jotdex dialect, collapsed Todos ticker restored. Live vault was not rewritten; rollback is the previous exe.
 
 ---
 

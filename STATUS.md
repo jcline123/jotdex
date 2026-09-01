@@ -1,6 +1,6 @@
 # Jotdex STATUS
 
-**Active milestone:** MDM complete. Portable **1.2.0** shipping to GitHub Releases.  
+**Active milestone:** None. Portable **1.2.0** (`v1.2.0` @ `66240be`).  
 **Last updated:** 2026-09-01
 
 ## In progress
@@ -9,7 +9,7 @@
 
 ## Just shipped
 
-- Portable **1.2.0** — official Markdown engine, Jotdex dialect, `markdown:migrate` (dev-only), collapsed Todos ticker restored. Audit of the vault *copy*: 649 notes, 610 ok, 39 source-only. No live apply.
+- Portable **1.2.0** (`v1.2.0` @ `66240be`) — official Markdown engine, Jotdex dialect, `markdown:migrate` (dev-only), collapsed Todos ticker restored. Audit of the vault *copy*: 649 notes, 610 ok, 39 source-only. No live apply.
 
 ## Run (Development + SampleVault)
 
