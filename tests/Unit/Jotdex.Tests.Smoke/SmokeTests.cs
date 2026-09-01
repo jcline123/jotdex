@@ -575,6 +575,49 @@ public class SmokeTests : IClassFixture<WebApplicationFactory<Program>>
     }
 
     [Fact]
+    public async Task Export_html_renders_code_fence_not_raw_html()
+    {
+        var body = """
+            # Export code
+
+            ```html
+            <div class="test">Hello</div>
+            ```
+            """;
+
+        var create = await _client.PostAsJsonAsync("/api/notes", new
+        {
+            title = "ExportCode " + Guid.NewGuid().ToString("N")[..6],
+            folder = "",
+            markdown = body
+        });
+        Assert.Equal(HttpStatusCode.OK, create.StatusCode);
+        var note = await create.Content.ReadFromJsonAsync<NoteDetailDto>();
+        Assert.NotNull(note);
+
+        try
+        {
+            var get = await _client.GetFromJsonAsync<NoteDetailDto>($"/api/notes/{note!.Id}");
+            Assert.NotNull(get);
+            Assert.Contains("<pre", get!.Html, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("&lt;div", get.Html, StringComparison.Ordinal);
+            Assert.DoesNotContain("<div class=\"test\">Hello</div>", get.Html, StringComparison.Ordinal);
+
+            var export = await _client.GetAsync($"/api/notes/{note.Id}/export-html");
+            Assert.Equal(HttpStatusCode.OK, export.StatusCode);
+            var exported = await export.Content.ReadAsStringAsync();
+            Assert.Contains("<pre", exported, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("&lt;div", exported, StringComparison.Ordinal);
+            Assert.DoesNotContain("<div class=\"test\">Hello</div>", exported, StringComparison.Ordinal);
+            Assert.DoesNotContain("<p>```", exported, StringComparison.Ordinal);
+        }
+        finally
+        {
+            await _client.DeleteAsync($"/api/notes/{note!.Id}");
+        }
+    }
+
+    [Fact]
     public async Task Duplicate_titles_never_overwrite()
     {
         var title = "DupTitle " + Guid.NewGuid().ToString("N")[..6];
@@ -779,6 +822,7 @@ public class SmokeTests : IClassFixture<WebApplicationFactory<Program>>
         public Guid Id { get; set; }
         public string Title { get; set; } = "";
         public string Markdown { get; set; } = "";
+        public string Html { get; set; } = "";
         public string ETag { get; set; } = "";
     }
 

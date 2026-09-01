@@ -14,6 +14,7 @@ import { TableHeader } from '@tiptap/extension-table-header'
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight'
 import { Markdown } from 'tiptap-markdown'
 import { Extension } from '@tiptap/core'
+import { Plugin, PluginKey } from '@tiptap/pm/state'
 import { TextStyle } from '@tiptap/extension-text-style'
 import { Color } from '@tiptap/extension-color'
 import { CodeBlockView } from './CodeBlockView'
@@ -39,6 +40,7 @@ import {
   installCodeBoxClipboardGuards,
   plainTextFromClipboard,
 } from './copyCodePlain'
+import { pastePlainIntoCodeBlock, plainTextForCodeBoxPaste } from './pasteCodeBlock'
 
 const FontSizeTextStyle = TextStyle.extend({
   addAttributes() {
@@ -97,6 +99,28 @@ const ConsistentLineBreaks = Extension.create({
 const CodeBlockBox = CodeBlockLowlight.extend({
   addNodeView() {
     return ReactNodeViewRenderer(CodeBlockView)
+  },
+  addProseMirrorPlugins() {
+    const parent = this.parent?.() ?? []
+    return [
+      ...parent,
+      new Plugin({
+        key: new PluginKey('codeBlockPlainPaste'),
+        props: {
+          handlePaste: (_view, event) => {
+            const ed = this.editor
+            if (!ed?.isActive('codeBlock')) return false
+            const clipboard = event.clipboardData
+            if (!clipboard) return false
+            event.preventDefault()
+            const html = clipboard.getData('text/html')
+            const rawPlain = clipboard.getData('text/plain')
+            pastePlainIntoCodeBlock(ed, plainTextForCodeBoxPaste(rawPlain, html))
+            return true
+          },
+        },
+      }),
+    ]
   },
 }).configure({
   lowlight: codeLowlight,
@@ -639,6 +663,13 @@ export function NoteEditor({
         const rawPlain = clipboard.getData('text/plain')
         const plain = plainTextFromClipboard(rawPlain, html)
 
+        // Rich/HTML paste must never split a code box — keep every line inside the block.
+        if (ed.isActive('codeBlock')) {
+          event.preventDefault()
+          pastePlainIntoCodeBlock(ed, plainTextForCodeBoxPaste(rawPlain, html))
+          return true
+        }
+
         if (mode === 'plain' || shiftPlain) {
           event.preventDefault()
           ed.chain().focus().insertContent(plain).run()
@@ -647,14 +678,19 @@ export function NoteEditor({
 
         if (mode === 'code') {
           event.preventDefault()
-          ed.chain()
-            .focus()
-            .insertContent({
-              type: 'codeBlock',
-              attrs: { language: 'powershell' },
-              content: plain ? [{ type: 'text', text: plain }] : undefined,
-            })
-            .run()
+          const codeText = plainTextForCodeBoxPaste(rawPlain, html)
+          if (ed.isActive('codeBlock')) {
+            pastePlainIntoCodeBlock(ed, codeText)
+          } else {
+            ed.chain()
+              .focus()
+              .insertContent({
+                type: 'codeBlock',
+                attrs: { language: 'powershell' },
+                content: codeText ? [{ type: 'text', text: codeText }] : undefined,
+              })
+              .run()
+          }
           return true
         }
 

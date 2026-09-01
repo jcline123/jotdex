@@ -7,7 +7,15 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 
 ---
 
-## 2026-08-23 — Portable release 1.1.22 (snippets rail layout)
+## 2026-09-01 — Code box paste stays inside block; export keeps fenced HTML escaped
+
+- Pasting into an active code box (HTML, multiline text, or **Paste: Code**) now always inserts plain characters via `insertText` instead of rich HTML or new block nodes — fixes content spilling below the box and broken `` ``` `` fences in saved Markdown.
+- HTML export already escapes HTML inside fenced blocks (Markdig `<pre><code>`); notes corrupted by the old paste path may still show live HTML or literal backticks until re-saved from a proper code box.
+
+**Portable release 1.1.23**
+- Tag `v1.1.23` — Code-box paste stays inside the block; HTML export keeps fenced HTML escaped as source text.
+
+---
 
 **Portable release 1.1.22**
 - Tag `v1.1.22` (`070f8b3`) — Snippets rail header and list rows no longer stack (notes-list `width: 100%` button CSS was crushing Delete/Refresh/Close).
