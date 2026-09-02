@@ -7,6 +7,14 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 
 ---
 
+## 2026-09-02 — Todos rail: note chip and quieter add
+
+- Checkboxes from a note already listed the note name, but it was not a control. The expanded rail now has a small note chip that opens that note for context; the task title still opens Edit.
+- Adding from the rail was opening Edit every time. Add now drops the item on the list and keeps the box focused so you can keep typing. Click the item when you want due/priority/reminders.
+
+**Portable release 1.3.1**
+- Target tag `v1.3.1` — Todos rail note chip and quieter add. Rollback is the previous exe (1.3.0).
+
 ## 2026-09-02 — Screenshot paste and visual-first long notes
 
 - Snipping Tool (and other clipboard) pictures uploaded fine but the editor showed **Missing or broken**: the image node was inserted with a vault-relative `src` before attachment inventory was applied, ImageView 404'd, and `broken` never cleared when the API URL arrived. Inventory is applied first; ImageView retries when `src` resolves; clipboard `items` is read when `files` is empty.

@@ -108,6 +108,7 @@ export function TodosRail({
   markdownRef.current = markdownBase
   const [error, setError] = useState<string | null>(null)
   const [draft, setDraft] = useState('')
+  const draftInputRef = useRef<HTMLInputElement>(null)
   const [selection, setSelection] = useState<Selection | null>(null)
   const [busy, setBusy] = useState(false)
   const [pendingUndo, setPendingUndo] = useState<PendingUndo | null>(null)
@@ -261,8 +262,9 @@ export function TodosRail({
       remind: 'off',
     }
     setDraft('')
+    setSelection(null)
     queueSave(sortTodos([item, ...items]))
-    setSelection({ kind: 'local', id: item.id })
+    window.setTimeout(() => draftInputRef.current?.focus(), 0)
     if (isFirst) void promptTodoNotifications({ force: true })
   }
 
@@ -435,6 +437,7 @@ export function TodosRail({
           }}
         >
           <input
+            ref={draftInputRef}
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             placeholder="Add a to-do…"
@@ -506,21 +509,41 @@ export function TodosRail({
                         aria-label={`Complete ${t.text}`}
                         onChange={() => void completeVaultTask(t.id)}
                       />
-                      <button
-                        type="button"
-                        className="todos-row-main"
-                        onClick={() => setSelection({ kind: 'vault', id: t.id })}
-                      >
-                        <span className="todos-title">{t.text}</span>
-                        <span className="todos-meta">
-                          <span className={`todos-pri pri-${pri}`}>{pri}</span>
-                          {formatDueLabel(t.due ?? null) && (
-                            <span className="todos-due">{formatDueLabel(t.due ?? null)}</span>
-                          )}
-                          {t.remind && t.remind !== 'off' && <span className="todos-remind">remind</span>}
-                        </span>
-                        <span className="todos-note-link muted">{t.noteTitle}</span>
-                      </button>
+                      <div className="todos-row-body">
+                        <button
+                          type="button"
+                          className="todos-row-main"
+                          onClick={() => setSelection({ kind: 'vault', id: t.id })}
+                        >
+                          <span className="todos-title">{t.text}</span>
+                          <span className="todos-meta">
+                            <span className={`todos-pri pri-${pri}`}>{pri}</span>
+                            {formatDueLabel(t.due ?? null) && (
+                              <span className="todos-due">{formatDueLabel(t.due ?? null)}</span>
+                            )}
+                            {t.remind && t.remind !== 'off' && <span className="todos-remind">remind</span>}
+                          </span>
+                        </button>
+                        {onOpenNote ? (
+                          <button
+                            type="button"
+                            className="todos-note-open"
+                            title={`Open note: ${t.noteTitle || 'Untitled'}`}
+                            onClick={(e) => {
+                              e.preventDefault()
+                              e.stopPropagation()
+                              onOpenNote(t.noteId)
+                            }}
+                          >
+                            <span className="todos-note-open-mark" aria-hidden>
+                              ↗
+                            </span>
+                            <span className="todos-note-open-title">{t.noteTitle || 'Open note'}</span>
+                          </button>
+                        ) : (
+                          t.noteTitle && <span className="todos-note-link muted">{t.noteTitle}</span>
+                        )}
+                      </div>
                     </div>
                   </li>
                 )
@@ -682,7 +705,7 @@ export function TodosRail({
             </select>
           </label>
           <p className="muted todos-hint">
-            Saved into the note as a checklist comment. Open the note to see it in context.
+            Saved into the note as a checklist comment. Use the note chip on the item, or Open note, to see it in context.
           </p>
           <div className="todos-detail-actions">
             <button type="button" className="ghost" onClick={() => onOpenNote?.(selectedVault.noteId)}>

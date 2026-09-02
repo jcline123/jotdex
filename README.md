@@ -63,7 +63,7 @@ SQLite FTS5 with a word index **and** a trigram index. Find a hostname, an error
 **Clip page** fetches a URL on the server and drops in title, description, and an excerpt. A bookmarklet saves the page you are looking at. Home shows recently viewed, created, and updated notes — the same on every device.
 
 ### Todos where you wrote them
-Checkboxes in notes show up in a **Todos** rail with priority, due date, and reminders. Finish the task in the note it belongs to. A standalone inbox lives in `Todos.md` if you want a scratch list.
+Checkboxes in notes show up in a **Todos** rail with priority, due date, reminders, and a chip that opens the source note. Finish the task in the note it belongs to. A standalone inbox lives in `Todos.md` if you want a scratch list.
 
 ### Safety net, not a leap of faith
 Every edit **autosaves**. Per-note **history** lives outside the vault so you can compare and roll back a bad change. Trash (restore or delete). Optional password, idle lock, and TOTP. **Share HTML** downloads one note as a clean single file you can email — no Jotdex branding, recipient does not need the app.

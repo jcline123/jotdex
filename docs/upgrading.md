@@ -34,6 +34,10 @@ Upload **`artifacts\jotdex-win-x64.zip`** to a GitHub Release (tag like `v1.1.0`
 3. Download the Release zip, extract over the install folder, **keep `data\`**.
 4. Start `start-portable.cmd`.
 
+## 1.3.1 (todos rail)
+
+1.3.1 is a small follow-up to 1.3.0. Checkboxes from a note show a chip that opens that note. Adding a to-do from the rail puts it on the list without opening Edit — click the item when you want due/priority/reminders. Rollback is the previous portable exe (1.3.0).
+
 ## 1.3.0 (editor UX)
 
 1.3.0 adds slash `/`, gutter `+` (on the 1.2.2 gap cursor), bubble formatting, block move, table chrome, image inspector/figures, link popover and bookmark cards, Details, highlight/underline/sub/sup, alignment comments, titled/collapsible callouts, live outline, and bundled KaTeX. Snipping Tool / clipboard pictures show after paste. Long notes with HTML in code fences open in **Visual**; switch to Source yourself if you need it (`script` / `iframe` / `javascript:` still force Source). On-disk notes stay ordinary Markdown (dialect v2). Rollback is the previous portable exe (1.2.2). 1.2.2 Source can still read the new Markdown; visual dialect features need 1.3.0.
