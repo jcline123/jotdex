@@ -19,7 +19,7 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 - Typography stays off unless `localStorage jotdex.typography=1`. Bookmark cards do not fetch Open Graph (SSRF). Spreadsheet paste fills the current table and grows it; merges are stripped.
 
 **Portable release 1.3.0**
-- Target tag `v1.3.0` — Editor UX expansion plus screenshot-paste and visual-first long notes. Rollback is the previous exe (1.2.2). 1.2.2 Source can still read the new Markdown; visual dialect features need 1.3.0.
+- Tag `v1.3.0` (`3a5b561`) — Editor UX expansion plus screenshot-paste and visual-first long notes. Rollback is the previous exe (1.2.2). 1.2.2 Source can still read the new Markdown; visual dialect features need 1.3.0.
 
 ---
 
