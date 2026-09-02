@@ -12,7 +12,7 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 - Two fenced code boxes (or a picture then a code box) with no paragraph between them had no place to put the caret: code-block ArrowDown jumped into the next box, and ProseMirror would not treat a code block as a gap-cursor edge. Arrow keys now stop on a thin accent line between those blocks; Enter or typing inserts a normal paragraph. Layout of the boxes themselves is unchanged.
 
 **Portable release 1.2.2**
-- Tag `v1.2.2` — Caret between stacked code boxes and images. Rollback is the previous exe (1.2.1).
+- Tag `v1.2.2` (`559d061`) — Caret between stacked code boxes and images. Rollback is the previous exe (1.2.1).
 
 ---
 
