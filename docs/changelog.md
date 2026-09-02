@@ -12,7 +12,7 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 - Visual notes now save Obsidian `> [!warning]` callouts. Markdig already turns those into `div.markdown-alert`, but Share HTML and static export still used generic blockquote CSS, so exported callouts looked like plain text. Export styles now cover GitHub-alert divs and older `data-callout` blockquotes, and a titled first line (`> [!warning] Title`) is split so Markdig still recognizes the alert.
 
 **Portable release 1.2.1**
-- Tag `v1.2.1` — Share/static export styles Obsidian callouts; titled `> [!type] Title` lines export as typed alerts. Search meta no longer prints `undefined` if the mode field is missing. Rollback is the previous exe (1.2.0).
+- Tag `v1.2.1` (`9472b80`) — Share/static export styles Obsidian callouts; titled `> [!type] Title` lines export as typed alerts. Search meta no longer prints `undefined` if the mode field is missing. Rollback is the previous exe (1.2.0).
 
 ---
 

@@ -1,6 +1,6 @@
 # Jotdex STATUS
 
-**Active milestone:** None. Portable **1.2.1** (`v1.2.1`).  
+**Active milestone:** None. Portable **1.2.1** (`v1.2.1` @ `9472b80`).  
 **Last updated:** 2026-09-01
 
 ## In progress
@@ -9,7 +9,7 @@
 
 ## Just shipped
 
-- Portable **1.2.1** (`v1.2.1`) — Share HTML / static export style Obsidian callouts; titled alert lines export correctly. Live vault was not rewritten.
+- Portable **1.2.1** (`v1.2.1` @ `9472b80`) — Share HTML / static export style Obsidian callouts; titled alert lines export correctly. Live vault was not rewritten.
 - Portable **1.2.0** (`v1.2.0` @ `66240be`) — official Markdown engine, Jotdex dialect, `markdown:migrate` (dev-only), collapsed Todos ticker restored. Audit of the vault *copy*: 649 notes, 610 ok, 39 source-only. No live apply.
 
 ## Run (Development + SampleVault)
