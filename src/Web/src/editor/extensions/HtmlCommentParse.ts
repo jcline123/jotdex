@@ -1,5 +1,5 @@
 import { Extension } from '@tiptap/core'
-import type { MarkdownToken } from '@tiptap/core'
+import type { MarkdownParseHelpers, MarkdownToken } from '@tiptap/core'
 import { JOTDEX_TASK_META } from './JotdexTaskMetadata'
 import { RAW_HTML_COMMENT_INLINE } from './RawHtmlComment'
 
@@ -11,11 +11,18 @@ function parseAttrs(raw: string): Record<string, string> {
   return out
 }
 
+const HTML_MARK: Record<string, string> = {
+  u: 'underline',
+  sub: 'subscript',
+  sup: 'superscript',
+  mark: 'highlight',
+}
+
 /** Catch HTML comment tokens that Marked emits as `html` instead of custom tokens. */
 export const HtmlCommentParse = Extension.create({
   name: 'htmlCommentParse',
   markdownTokenName: 'html',
-  parseMarkdown: (token: MarkdownToken) => {
+  parseMarkdown: (token: MarkdownToken, helpers: MarkdownParseHelpers) => {
     const raw = String(token.raw ?? '').trim()
     const task = /<!--\s*(jotdex-task|jotdex-todo)\s+([^>]*)-->/.exec(raw)
     if (task) {
@@ -31,6 +38,12 @@ export const HtmlCommentParse = Extension.create({
           remind: attrs.remind ?? '',
         },
       }
+    }
+    const htmlMark = /^<(u|sub|sup|mark)>([\s\S]*?)<\/\1>$/i.exec(raw)
+    if (htmlMark) {
+      const mark = HTML_MARK[htmlMark[1]!.toLowerCase()]
+      const inner = htmlMark[2] ?? ''
+      if (mark) return helpers.applyMark(mark, [helpers.createTextNode(inner)])
     }
     if (/^<!--[\s\S]*-->$/.test(raw) && !raw.includes('\n')) {
       return { type: RAW_HTML_COMMENT_INLINE, attrs: { raw } }

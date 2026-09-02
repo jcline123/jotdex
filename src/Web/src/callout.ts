@@ -25,6 +25,22 @@ export const Callout = Node.create({
         parseHTML: (element) => element.getAttribute('data-callout') || 'note',
         renderHTML: (attributes) => ({ 'data-callout': attributes.type }),
       },
+      title: {
+        default: '',
+        parseHTML: (element) => element.getAttribute('data-callout-title') || '',
+        renderHTML: (attributes) =>
+          attributes.title ? { 'data-callout-title': attributes.title } : {},
+      },
+      collapse: {
+        default: null as null | 'collapsed' | 'expanded',
+        parseHTML: (element) => {
+          const v = element.getAttribute('data-callout-collapse')
+          if (v === 'collapsed' || v === 'expanded') return v
+          return null
+        },
+        renderHTML: (attributes) =>
+          attributes.collapse ? { 'data-callout-collapse': attributes.collapse } : {},
+      },
     }
   },
 
@@ -34,11 +50,26 @@ export const Callout = Node.create({
 
   renderHTML({ node, HTMLAttributes }) {
     const type = (node.attrs.type as string) || 'note'
+    const title = String(node.attrs.title ?? '')
+    const collapse = node.attrs.collapse as string | null
+    if (collapse === 'collapsed' || collapse === 'expanded') {
+      const open = collapse === 'expanded' ? { open: '' } : {}
+      return [
+        'details',
+        mergeAttributes(HTMLAttributes, open, {
+          'data-callout': type,
+          class: `callout callout-${type} callout-collapsible`,
+        }),
+        ['summary', { class: 'callout-summary' }, title || labelFor(type as CalloutType)],
+        ['div', { class: 'callout-body' }, 0],
+      ]
+    }
     return [
       'blockquote',
       mergeAttributes(HTMLAttributes, {
         'data-callout': type,
         class: `callout callout-${type}`,
+        ...(title ? { 'data-callout-title': title } : {}),
       }),
       0,
     ]

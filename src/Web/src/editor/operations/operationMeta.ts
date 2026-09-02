@@ -11,6 +11,9 @@ export type JotdexOperationKind =
   | 'external-load'
   | 'history-restore'
   | 'source-convert'
+  | 'ui-transient'
+  | 'disclosure'
+  | 'block-move'
 
 export type JotdexOperationMeta = {
   operationId: string

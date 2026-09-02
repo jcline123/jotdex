@@ -60,7 +60,7 @@ export class EditorRevisionCoordinator {
   observeTransaction(tr: Transaction): void {
     const meta = getOperationMeta(tr)
     if (!tr.docChanged) return
-    if (meta?.kind === 'attachment-metadata') return
+    if (meta?.kind === 'attachment-metadata' || meta?.kind === 'ui-transient' || meta?.kind === 'disclosure') return
 
     this.editorRevision += 1
     this.opts.onDirty?.({ revision: this.editorRevision, operationId: meta?.operationId })

@@ -11,6 +11,7 @@ const NESTED_BLOCKS = new Set([
   'tableHeader',
   'blockquote',
   'callout',
+  'details',
   'codeBlock',
 ])
 

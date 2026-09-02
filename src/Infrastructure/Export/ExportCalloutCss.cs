@@ -19,5 +19,16 @@ internal static class ExportCalloutCss
         .markdown-alert-info, .markdown-alert-important, blockquote[data-callout="info"], blockquote.callout-info { border-left-color: #175cd3; background: rgba(23,92,211,.1); }
         .markdown-alert-warning, blockquote[data-callout="warning"], blockquote.callout-warning { border-left-color: #b54708; background: rgba(181,71,8,.12); }
         .markdown-alert-danger, .markdown-alert-caution, blockquote[data-callout="danger"], blockquote.callout-danger { border-left-color: #b42318; background: rgba(180,35,24,.12); }
+        mark { background: #f5d565; padding: 0 .12em; }
+        .jotdex-details { border: 1px solid #d0d5dd; border-radius: 8px; padding: .5rem .85rem; margin: 1rem 0; }
+        .jotdex-details > summary { font-weight: 650; cursor: pointer; }
+        .jotdex-align-center { text-align: center; }
+        .jotdex-align-right { text-align: right; }
+        .jotdex-align-justify { text-align: justify; }
+        .jotdex-figure { margin: 1rem 0; }
+        .jotdex-figure img { max-width: 100%; height: auto; }
+        .jotdex-figure figcaption { font-size: .9rem; color: #667085; }
+        .jotdex-math { font-family: Cambria, 'Times New Roman', serif; }
+        .jotdex-link-card { border: 1px solid #d0d5dd; border-radius: 8px; padding: .65rem .85rem; margin: .75rem 0; }
         """;
 }

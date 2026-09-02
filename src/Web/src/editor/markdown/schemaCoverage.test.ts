@@ -74,6 +74,24 @@ describe('persistent schema coverage', () => {
           md = 'ok'
         } else if (name === 'paragraph') {
           md = editorMarkdown(createTestEditor('hello'))
+        } else if (name === 'details') {
+          const e = createTestEditor('<!-- jotdex-details -->\nSum\n\nBody\n<!-- /jotdex-details -->\n')
+          md = editorMarkdown(e)
+          e.destroy()
+        } else if (name === 'mathInline') {
+          const e = createTestEditor('\\(x\\)')
+          md = editorMarkdown(e)
+          e.destroy()
+        } else if (name === 'mathBlock') {
+          const e = createTestEditor('\\[x=1\\]')
+          md = editorMarkdown(e)
+          e.destroy()
+        } else if (name === 'bookmarkCard') {
+          const e = createTestEditor('<!-- jotdex-link-card -->\n[t](https://example.com)\n')
+          md = editorMarkdown(e)
+          e.destroy()
+        } else if (name === 'jotdexAlignMarker') {
+          md = 'ok'
         } else {
           md = 'skip'
         }

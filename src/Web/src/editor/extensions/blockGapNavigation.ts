@@ -22,6 +22,9 @@ const HARD_BLOCKS = new Set([
   'table',
   'pendingAsset',
   'callout',
+  'details',
+  'mathBlock',
+  'bookmarkCard',
 ])
 
 const INTERACTIVE = 'button, select, input, textarea, a, option'
@@ -39,7 +42,8 @@ function atEndOfTextblock($from: { parent: PmNode; parentOffset: number }): bool
 
 function applyGapCursor(tr: Transaction, pos: number): boolean {
   const $pos = tr.doc.resolve(pos)
-  if (!GapCursor.valid($pos)) return false
+  const valid = (GapCursor as unknown as { valid: (p: typeof $pos) => boolean }).valid
+  if (!valid($pos)) return false
   tr.setSelection(new GapCursor($pos))
   return true
 }
@@ -147,7 +151,7 @@ export const BlockGapNavigation = Extension.create({
           const { $from } = state.selection
           if ($from.parent.type.name !== 'codeBlock') return false
           const after = $from.after()
-          if (!GapCursor.valid(state.doc.resolve(after))) return false
+          if (!(GapCursor as unknown as { valid: (p: ReturnType<typeof state.doc.resolve>) => boolean }).valid(state.doc.resolve(after))) return false
           return insertParagraphOn(tr, after)
         }),
     }

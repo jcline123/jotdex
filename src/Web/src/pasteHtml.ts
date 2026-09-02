@@ -34,6 +34,9 @@ const ALLOWED_TAGS = new Set([
   'TH',
   'THEAD',
   'TR',
+  'MARK',
+  'DETAILS',
+  'SUMMARY',
   'U',
   'UL',
 ])

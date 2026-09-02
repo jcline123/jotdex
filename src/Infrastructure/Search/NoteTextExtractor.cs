@@ -109,7 +109,9 @@ public static partial class NoteTextExtractor
             }
             else
             {
-                bodySb.AppendLine(line);
+                var stripped = StripDialectNoise(line);
+                stripped = stripped.Replace("\\[", " ", StringComparison.Ordinal).Replace("\\]", " ", StringComparison.Ordinal);
+                bodySb.AppendLine(stripped);
             }
         }
 
@@ -117,6 +119,31 @@ public static partial class NoteTextExtractor
         body = bodySb.ToString();
         code = codeSb.ToString();
     }
+
+    private static string StripDialectNoise(string line)
+    {
+        var s = CommentNoise().Replace(line, " ");
+        s = HighlightMarks().Replace(s, "$1");
+        s = InlineMath().Replace(s, " $1 ");
+        s = ImageAlt().Replace(s, " $1 $2 ");
+        s = HtmlTags().Replace(s, " ");
+        return s;
+    }
+
+    [GeneratedRegex(@"<!--\s*/?jotdex-[^>]*-->")]
+    private static partial Regex CommentNoise();
+
+    [GeneratedRegex(@"==([^=]+)==")]
+    private static partial Regex HighlightMarks();
+
+    [GeneratedRegex(@"\\\(([\s\S]*?)\\\)")]
+    private static partial Regex InlineMath();
+
+    [GeneratedRegex(@"!\[([^\]]*)\]\(([^)]+)\)")]
+    private static partial Regex ImageAlt();
+
+    [GeneratedRegex(@"<[^>]+>")]
+    private static partial Regex HtmlTags();
 
     [GeneratedRegex(@"^#{1,6}\s+(.+)$")]
     private static partial Regex HeadingLineRegex();

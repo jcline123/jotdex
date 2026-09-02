@@ -13,7 +13,9 @@ public sealed class MarkdigMarkdownRenderer : IMarkdownRenderer
         .Build();
 
     public string ToHtml(string markdown) =>
-        Markdig.Markdown.ToHtml(ObsidianCalloutNormalizer.NormalizeTitledMarkers(markdown ?? ""), _pipeline);
+        Markdig.Markdown.ToHtml(
+            DialectV2HtmlNormalizer.Normalize(ObsidianCalloutNormalizer.NormalizeTitledMarkers(markdown ?? "")),
+            _pipeline);
 }
 
 public sealed class VaultFileWatcher : IHostedService, IDisposable

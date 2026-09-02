@@ -32,10 +32,15 @@ internal static partial class ObsidianCalloutNormalizer
             if (fenceChar == '\0')
             {
                 var m = TitledMarker().Match(line);
-                if (m.Success)
+                if (m.Success && (m.Groups[2].Length > 0 || m.Groups[3].Length > 0))
                 {
                     AppendLine(sb, $"> [!{m.Groups[1].Value}]", keepNewline: true);
-                    AppendLine(sb, $"> {m.Groups[2].Value}", i < lines.Length - 1);
+                    if (m.Groups[3].Length > 0)
+                        AppendLine(sb, $"> {m.Groups[3].Value}", i < lines.Length - 1);
+                    else if (i < lines.Length - 1)
+                    {
+                        /* collapse marker only — keep following body lines as-is */
+                    }
                     continue;
                 }
             }
@@ -81,6 +86,6 @@ internal static partial class ObsidianCalloutNormalizer
         return false;
     }
 
-    [GeneratedRegex(@"^>\s*\[!(\w+)\]\s+(\S.*)$", RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"^>\s*\[!(\w+)\]([+-])?(?:\s+(\S.*))?$", RegexOptions.CultureInvariant)]
     private static partial Regex TitledMarker();
 }

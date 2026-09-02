@@ -194,13 +194,15 @@ export async function runPasteSession(
           return
         }
         retryJobs.delete(job.uploadId)
+        // Resolver must know the new file before the image node mounts, or ImageView
+        // loads a vault-relative src against the app origin, 404s, and sticks on broken.
+        if (result.note?.attachments) deps.onAttachments?.(result.note.attachments)
         replacePendingByUploadId(
           editor,
           job.uploadId,
           { src: result.markdownPath, alt: result.fileName ?? job.alt },
           pasteSessionId,
         )
-        if (result.note?.attachments) deps.onAttachments?.(result.note.attachments)
         lastMeta = result.note ?? lastMeta
         imported++
       } catch (e) {
@@ -234,10 +236,7 @@ export function rewritePastedImagesToPlaceholders(
   const doc = new DOMParser().parseFromString(`<div id="jotdex-root">${html}</div>`, 'text/html')
   const root = doc.getElementById('jotdex-root') ?? doc.body
   const jobs: PasteImageJob[] = []
-  for (const img of Array.from(root.querySelectorAll('img[src]'))) {
-    const src = img.getAttribute('src')?.trim() ?? ''
-    const alt = img.getAttribute('alt') ?? 'image'
-    const uploadId = crypto.randomUUID()
+  const replaceWithPlaceholder = (img: Element, uploadId: string, alt: string) => {
     const placeholder = doc.createElement('div')
     placeholder.setAttribute('data-pending-asset', '1')
     placeholder.setAttribute('data-upload-id', uploadId)
@@ -245,11 +244,25 @@ export function rewritePastedImagesToPlaceholders(
     placeholder.setAttribute('data-alt', alt)
     placeholder.setAttribute('data-status', 'uploading')
     img.replaceWith(placeholder)
+  }
+  for (const img of Array.from(root.querySelectorAll('img[src]'))) {
+    const src = img.getAttribute('src')?.trim() ?? ''
+    const alt = img.getAttribute('alt') ?? 'image'
+    const uploadId = crypto.randomUUID()
     if (src.startsWith('data:image/')) {
       const file = dataImageToFile(src, `pasted-${jobs.length + 1}.png`)
-      if (file) jobs.push({ uploadId, kind: 'data', file, alt })
+      if (file) {
+        replaceWithPlaceholder(img, uploadId, alt)
+        jobs.push({ uploadId, kind: 'data', file, alt })
+      } else {
+        img.remove()
+      }
     } else if (/^https?:\/\//i.test(src) && !src.includes('paste.invalid')) {
+      replaceWithPlaceholder(img, uploadId, alt)
       jobs.push({ uploadId, kind: 'remote', remoteUrl: src, alt })
+    } else if (/^(file:|blob:)/i.test(src)) {
+      // Browser cannot read file://; a jobless placeholder would sit forever.
+      img.remove()
     }
   }
   return { html: root.innerHTML, jobs }

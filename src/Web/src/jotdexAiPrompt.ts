@@ -13,7 +13,14 @@ Return ONLY the note body as Markdown I can paste into Jotdex. Do not wrap the w
 ## Emphasis & inline
 - **bold**, *italic*, \`inline code\`, ~~strikethrough~~ (line through text you want to keep but ignore)
 - Strikethrough stores as \`~~text~~\`; the formatting bar can also clear marks/block styles from a selection
+- Highlight: \`==text==\` (one default color). Pasted \`<mark>\` becomes \`==\` after you edit.
+- Underline / sub / sup: \`<u>text</u>\`, \`<sub>text</sub>\`, \`<sup>text</sup>\`
 - Links: \`[label](https://example.com)\` or relative note links \`[Other note](Folder/Other note.md)\`
+- Bookmark / link card (empty-line URL paste):
+  \`\`\`markdown
+  <!-- jotdex-link-card -->
+  [Example](https://example.com)
+  \`\`\`
 - Optional limited color/size via HTML spans (use sparingly):
   \`<span style="color: #c47b2b">warning text</span>\`
   \`<span style="font-size: 1.25em">larger</span>\`
@@ -75,6 +82,43 @@ Canonical on disk is Obsidian syntax. Types: note, tip, info, warning, danger.
 > Neutral informational callout.
 
 Older HTML \`<blockquote data-callout="tip">…</blockquote>\` still opens in the editor when a note already has it; prefer \`> [!type]\` for new notes.
+
+Optional title on the marker line. \`-\` = collapsed by default, \`+\` = expanded by default. Opening/closing in the UI does **not** change the file.
+
+> [!warning] Prod change
+> Read this first.
+
+> [!tip]- Extra help
+> Hidden until opened.
+
+## Details (fold)
+Open/closed is not saved. First block is the summary:
+
+\`\`\`markdown
+<!-- jotdex-details -->
+Summary
+Hidden until expanded.
+<!-- /jotdex-details -->
+\`\`\`
+
+## Alignment
+Left is the default (no marker). Immediately before a top-level paragraph or heading:
+
+\`\`\`markdown
+<!-- jotdex-align: center -->
+Centered paragraph.
+\`\`\`
+
+Values: \`center\`, \`right\`, \`justify\`.
+
+## Math
+Inline \`\\(a+b\\)\` and block \`\\[x=1\\]\`. Never use \`$\` / \`$$\` — those are currency and PowerShell.
+
+## Emoji
+Unicode characters only (no \`:shortcode:\` rewrite).
+
+## Figures
+A plain image stays \`![alt](Note.assets/file.png)\`. Use \`<figure>\` only when caption, width, or alignment is set.
 
 ## Tables
 GitHub-style pipes:

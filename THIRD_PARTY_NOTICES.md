@@ -21,6 +21,8 @@ Pinned production dependencies and their licenses (verify upstream at upgrade ti
 | Vite | 8.2.x | MIT |
 | TipTap (+ extensions) | 3.29.2 | MIT |
 | @tiptap/markdown | 3.29.2 | MIT |
+| KaTeX | 0.16.22 | MIT |
+| @floating-ui/dom | 1.7.6 | MIT |
 | DOMPurify | 3.4.x | Apache-2.0 / MPL-2.0 |
 | lowlight | 3.3.x | MIT |
 | CodeMirror 6 (@codemirror/*, codemirror) | 6.x | MIT |

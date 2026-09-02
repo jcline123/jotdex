@@ -13,7 +13,7 @@ import {
   runPasteSession,
   rewritePastedImagesToPlaceholders,
 } from '../paste/PasteSessionManager'
-import { dispatchAttachmentInventory } from '../assets/AttachmentResolver'
+import { dispatchAttachmentInventory, displayUrlForSrc, getAttachmentResolverState } from '../assets/AttachmentResolver'
 import { PENDING_ASSET_NODE } from '../extensions/PendingAssetPlaceholder'
 import { EditorRevisionCoordinator } from '../revisions/EditorRevisionCoordinator'
 import { insertLiteralText } from '../operations/contentInsertion'
@@ -409,6 +409,40 @@ describe('paste sessions', () => {
     editor.destroy()
   })
 
+  it('IMG-02b attachment inventory is applied before the image node replaces the placeholder', async () => {
+    const editor = createTestEditor('hi')
+    insertPendingAssetAtSelection(editor, {
+      uploadId: 'u1',
+      pasteSessionId: 's1',
+      alt: 'shot',
+      status: 'uploading',
+    })
+    await runPasteSession(
+      editor,
+      {
+        noteId: 'n',
+        noteSessionId: 'sess',
+        uploadFile: async () => ({
+          success: true,
+          markdownPath: 'n.assets/shot.png',
+          fileName: 'shot.png',
+          note: { attachments: [{ id: 'att-shot', fileName: 'shot.png', contentType: 'image/png' }] },
+        }),
+        importRemote: async () => ({ success: false }),
+        onAttachments: (atts) => {
+          expect(pendingCount(editor)).toBe(1)
+          dispatchAttachmentInventory(editor, atts)
+        },
+        getNoteSessionId: () => 'sess',
+      },
+      [{ uploadId: 'u1', kind: 'file', file: new File([new Uint8Array([1])], 'shot.png', { type: 'image/png' }) }],
+    )
+    expect(pendingCount(editor)).toBe(0)
+    expect(imageSrcs(editor)[0]).toBe('n.assets/shot.png')
+    expect(displayUrlForSrc(getAttachmentResolverState(editor), 'n.assets/shot.png')).toBe('/api/attachments/att-shot')
+    editor.destroy()
+  })
+
   it('IMG-03 reverse completion keeps original placeholder order', async () => {
     const editor = createTestEditor('start')
     editor.commands.setTextSelection(editor.state.doc.content.size)
@@ -513,6 +547,16 @@ describe('paste sessions', () => {
     expect(html).toContain('data-pending-asset')
     expect(jobs).toHaveLength(1)
     expect(jobs[0]?.kind).toBe('data')
+  })
+
+  it('IMG-04b file:// clipboard images are dropped, not left as jobless placeholders', () => {
+    const { html, jobs } = rewritePastedImagesToPlaceholders(
+      '<img src="file:///C:/Users/me/AppData/Local/Temp/snip.png" alt="snip">',
+      'sess',
+    )
+    expect(html).not.toContain('file:')
+    expect(html).not.toContain('data-pending-asset')
+    expect(jobs).toHaveLength(0)
   })
 })
 

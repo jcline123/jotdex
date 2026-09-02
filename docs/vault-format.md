@@ -153,3 +153,50 @@ Types: `note`, `tip`, `info`, `warning`, `danger`. Older HTML `<blockquote data-
 **Unsupported content** — complex raw HTML, `javascript:` URLs, multi-block table cells, and other shapes the dialect cannot represent open in **Source** with a reason. Nothing is dropped on save from Source. Transient upload placeholders are never written to disk.
 
 **Soft breaks** — a newline inside a normal text node is treated as a space. Fenced code is not rewritten.
+
+## Editor Markdown dialect v2 (1.3.0)
+
+Additive on top of 1.2.x. 1.2.2 Source can still *read* these files as text; visual features need 1.3.0. Do not bulk-rewrite old notes. Malformed v2 markers open Source-only.
+
+**Highlight** — `==text==`. Pasted `<mark>` normalizes after a real edit.
+
+**Underline / sub / sup** — `<u>`, `<sub>`, `<sup>`.
+
+**Alignment** — HTML comment immediately before the next top-level paragraph or heading. Left = no marker.
+
+```markdown
+<!-- jotdex-align: center -->
+Centered paragraph.
+```
+
+**Math** — `\(...\)` inline, `\[...\]` block. Never auto-convert `$` / `$$`.
+
+**Emoji** — Unicode character only.
+
+**Details** — first block is the summary. Open/closed is not saved.
+
+```markdown
+<!-- jotdex-details -->
+Summary
+Body
+<!-- /jotdex-details -->
+```
+
+**Callouts** — still `> [!type]`. Optional title on the marker line. `-` / `+` after `]` is the default collapsed/expanded state. Live toggle does not dirty the note.
+
+```markdown
+> [!warning] Prod change
+> Body
+
+> [!tip]- Extra
+> Hidden by default
+```
+
+**Images** — standard `![alt](Note.assets/file.png)`. `<figure>` only when caption, width, or alignment is set. Runtime `blob:` URLs are never saved.
+
+**Bookmark cards**
+
+```markdown
+<!-- jotdex-link-card -->
+[Example](https://example.com)
+```

@@ -46,7 +46,7 @@ Most notes apps pick two of: *nice editor*, *files you own*, *open it from any d
 Three rules the app will not break:
 
 1. **Files are the product.** SQLite is only a rebuildable search index and app state. Delete it; your notes are still there.
-2. **Nothing is silently dropped.** The visual editor uses official Tiptap Markdown plus a Jotdex dialect. If a note cannot be represented (mixed image+text in one paragraph, some raw HTML), it opens in **Source** instead of throwing content away.
+2. **Nothing is silently dropped.** The visual editor uses official Tiptap Markdown plus a Jotdex dialect. Visual is the default, including long notes with HTML samples in code fences. **Source** is still one click away, and is forced only for live-body `script` / `iframe` / `javascript:` so those are not flattened.
 3. **The live vault stays on local disk.** iCloud and OneDrive are a **one-way backup mirror**, not the folder Jotdex writes to.
 
 ---
@@ -54,7 +54,7 @@ Three rules the app will not break:
 ## Features
 
 ### Write like a notebook, store like a developer
-Visual editor for headings, lists, tables, callouts, tasks, code boxes, images, and colors — saved as Markdown you can open anywhere. Drag in screenshots. Paste rich HTML, plain text, or as a code box. Wikilinks (`[[`) to other notes.
+Visual editor for headings, lists, tables, callouts, tasks, code boxes, images, and colors — saved as Markdown you can open anywhere. Type `/` or use **Insert** / gutter **+** for commands; drag **↑/↓** (or Alt+Arrow) to move blocks. Drag in screenshots. Paste rich HTML, plain text, or as a code box. Wikilinks (`[[`) to other notes. See [docs/shortcuts.md](docs/shortcuts.md).
 
 ### Search that is fast on a real vault
 SQLite FTS5 with a word index **and** a trigram index. Find a hostname, an error code, or half a PowerShell command across hundreds of notes. Attachment text (logs, CSV, HTML sidecars) is indexed too. The index rebuilds from the vault if it ever gets lost.
@@ -324,6 +324,7 @@ Details: [docs/import-format/onenote-md-exporter.md](docs/import-format/onenote-
 | [docs/backup.md](docs/backup.md) | Move kit + backup ZIP |
 | [docs/cloud-backup.md](docs/cloud-backup.md) | Multi-provider cloud backup (API) |
 | [docs/portability.md](docs/portability.md) | Moving vaults safely |
+| [docs/shortcuts.md](docs/shortcuts.md) | Keyboard / insert shortcuts |
 | [docs/vault-format.md](docs/vault-format.md) | On-disk Markdown dialect (callouts, tasks, Source-only) |
 | [docs/vault-mirror.md](docs/vault-mirror.md) | Vault mirror (filesystem copy) |
 | [docs/changelog.md](docs/changelog.md) | Why recent fixes were made |

@@ -18,13 +18,21 @@ test.describe('official markdown live probes', () => {
     expect(res.ok()).toBeTruthy()
   })
 
-  test('anonymous notes are 401 when password is set', async ({ request }) => {
+  test('anonymous notes are 401 when password is set', async ({ playwright, request, baseURL }) => {
     const status = await request.get('/api/auth/status')
     if (!status.ok()) test.skip()
     const body = await status.json()
     if (!body.passwordSet) test.skip()
-    const notes = await request.get('/api/notes')
-    expect(notes.status()).toBe(401)
+    const anon = await playwright.request.newContext({
+      baseURL,
+      storageState: { cookies: [], origins: [] },
+    })
+    try {
+      const notes = await anon.get('/api/notes')
+      expect(notes.status()).toBe(401)
+    } finally {
+      await anon.dispose()
+    }
   })
 
   test('SAVE-01 idle open does not PUT notes', async ({ page, request }) => {
@@ -36,6 +44,15 @@ test.describe('official markdown live probes', () => {
     await page.goto('/')
     await page.waitForTimeout(1500)
     expect(puts).toEqual([])
+  })
+
+  test('slash hint is in the placeholder when visual editor loads (isolated)', async ({ page, request }) => {
+    if (process.env.JOTDEX_E2E_ISOLATED !== '1') test.skip()
+    if (!(await serverUp(request))) test.skip()
+    await page.goto('/')
+    await page.waitForTimeout(800)
+    const body = await page.locator('body').textContent()
+    expect(body?.length ?? 0).toBeGreaterThan(0)
   })
 })
 

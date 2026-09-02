@@ -2,7 +2,7 @@
 
 Mark items `- [x]` when done. IDs are stable for chat (“done M1-04”).
 
-**Active milestone:** MDM — Official Tiptap Markdown
+**Active milestone:** EUX — Editor UX 1.3.0 (shipped)
 
 ---
 
@@ -300,3 +300,24 @@ Contract: [`docs/decisions/official-tiptap-markdown-migration-contract.md`](docs
 - [x] `MDM-GATE` Official-only runtime; `npm ls tiptap-markdown` empty; live vault untouched
 
 ---
+
+## EUX — Editor UX expansion (Jotdex 1.3.0)
+
+Contract: [`docs/decisions/editor-ux-expansion-contract.md`](docs/decisions/editor-ux-expansion-contract.md). ADR: [`docs/decisions/0010-editor-ux-and-jotdex-dialect-v2.md`](docs/decisions/0010-editor-ux-and-jotdex-dialect-v2.md). Baseline portable **1.2.2**. Do not start a later package until the previous checkbox is done.
+
+- [x] `EUX-00` Copy contract; ADR 0010 skeleton; inventory toolbar/commands/nodes/paste/export/search; retain 1.2.2 zip; isolated vault + hashed vault copy; protected E2E instance starts; open-without-edit = no PUT
+- [x] `EUX-01` Command registry + overlay coordinator + selection bookmarks; existing toolbar calls registry with no behavior change
+- [x] `EUX-02` Slash menu + gutter `+` on 1.2.2 gaps (temp empty paragraph cancel = no save); keep GAP tests green
+- [x] `EUX-03` Bubble menu + highlight/underline/sub/sup + More formatting + clear; export/search/sanitizer; 20-cycle mark round-trips
+- [x] `EUX-04` Drag handle + block actions + keyboard move; metadata (align comments, figure attrs) stays with the block; one undo step
+- [x] `EUX-05` Table insert UI + row/col/align; **no merged cells**; spreadsheet paste; tableCompatibility stays
+- [x] `EUX-06` Image inspector; standard vs `<figure>`; resize/replace/alt/caption/align/lightbox; runtime URLs never saved; paste sessions stay green
+- [x] `EUX-07` Link popover/dialog, selected-text URL paste, note picker, empty-line URL vs card; bookmark dialect; SSRF-safe metadata if server-side; unsafe schemes blocked
+- [x] `EUX-08` Details dialect + callout titles/collapse; disclosure-only = no save; legacy `> [!type]` still round-trips
+- [x] `EUX-09` Live outline plugin (not markdown-string scrape only), scroll spy, fold integration, deep links, section reorder; no persistent heading IDs on every file
+- [x] `EUX-10` Align comments; KaTeX bundled locally, `trust: false`; emoji Unicode; typography **off** by default, never inside code/links/comments
+- [x] `EUX-11` Combined stress fixture; vault-copy audit report; Chromium/Firefox/WebKit + mobile E2E; performance; no live apply
+- [x] `EUX-12` vault-format, changelog, README/shortcuts, AI prompt, THIRD_PARTY_NOTICES, portable zip, clean-machine smoke, upgrade 1.2.2→1.3.0 and rollback
+
+- [x] `EUX-GATE` Definition of Done in the contract; ship **1.3.0** only then
+

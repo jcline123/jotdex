@@ -34,6 +34,10 @@ Upload **`artifacts\jotdex-win-x64.zip`** to a GitHub Release (tag like `v1.1.0`
 3. Download the Release zip, extract over the install folder, **keep `data\`**.
 4. Start `start-portable.cmd`.
 
+## 1.3.0 (editor UX)
+
+1.3.0 adds slash `/`, gutter `+` (on the 1.2.2 gap cursor), bubble formatting, block move, table chrome, image inspector/figures, link popover and bookmark cards, Details, highlight/underline/sub/sup, alignment comments, titled/collapsible callouts, live outline, and bundled KaTeX. Snipping Tool / clipboard pictures show after paste. Long notes with HTML in code fences open in **Visual**; switch to Source yourself if you need it (`script` / `iframe` / `javascript:` still force Source). On-disk notes stay ordinary Markdown (dialect v2). Rollback is the previous portable exe (1.2.2). 1.2.2 Source can still read the new Markdown; visual dialect features need 1.3.0.
+
 ## 1.2.2 (caret between stacked blocks)
 
 1.2.2 is a small editor follow-up. Two code boxes (or a picture against a code box) with no line between them now take a blinking accent caret in the seam — Arrow Down from the end of the first box, or a click in that gap, then Enter or type. The boxes themselves look the same. Rollback is the previous portable exe (1.2.1).

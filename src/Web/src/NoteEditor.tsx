@@ -1,7 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { EditorContent, useEditor } from '@tiptap/react'
 import type { Editor } from '@tiptap/react'
-import { applyHeadingToSelection } from './headingSelection'
 import { normalizeBlockSelection } from './selectionUtils'
 import { type CalloutType } from './callout'
 import { type WikiSuggestState } from './wikiLinkSuggest'
@@ -18,6 +17,7 @@ import { pasteAsCodeBlock, pastePlainIntoCodeBlock, plainTextForCodeBoxPaste } f
 import { createEditorExtensions } from './editor/extensions/createEditorExtensions'
 import { insertHtml, insertLiteralText, insertMarkdown, setMarkdownDocument } from './editor/operations/contentInsertion'
 import { dispatchAttachmentInventory } from './editor/assets/AttachmentResolver'
+import { imageFileFromClipboard } from './editor/paste/clipboardImage'
 import { EditorRevisionCoordinator } from './editor/revisions/EditorRevisionCoordinator'
 import { assertSetContentReason } from './editor/operations/operationMeta'
 import { logEditorDiag } from './editor/diagnostics'
@@ -31,6 +31,18 @@ import {
   rewritePastedImagesToPlaceholders,
   type PasteUploadResult,
 } from './editor/paste/PasteSessionManager'
+import { createEditorCommandRegistry } from './editor/commands/createEditorCommandRegistry'
+import { OverlayCoordinator } from './editor/menus/overlayCoordinator'
+import { SlashMenu, slashKeydown } from './editor/slash/SlashMenu'
+import { slashMenuKey, type SlashMenuState } from './editor/slash/slashMenuPlugin'
+import type { GutterPlusState } from './editor/gaps/gutterPlusPlugin'
+import { deleteTransientEmptyParagraph, insertTransientParagraphAt } from './editor/gaps/gutterPlusPlugin'
+import { FormattingBubbleMenu } from './editor/menus/FormattingBubbleMenu'
+import { LinkPopover } from './editor/links/LinkPopover'
+import { isSafeHref, looksLikeBareUrl } from './editor/links/linkSchemes'
+import { EmojiPicker } from './editor/emoji/EmojiPicker'
+import { TableChrome } from './editor/tables/TableChrome'
+import { extractLiveOutline, moveSection, type LiveOutlineItem } from './editor/outline/liveOutline'
 
 
 const TEXT_COLORS = [
@@ -70,7 +82,7 @@ type Props = {
   markdown: string
   /** Bumps when parent applies an external markdown reload (open note / conflict / preserve-page). */
   contentEpoch?: number
-  jumpHeading?: { text: string; nonce: number } | null
+  jumpHeading?: { text: string; nonce: number; pos?: number } | null
   onChange: (markdown: string, revision?: number) => void
   attachments?: AttachmentInfo[]
   editable?: boolean
@@ -80,6 +92,7 @@ type Props = {
   getEtag?: () => string
   onDirty?: () => void
   onPastePending?: (pending: boolean) => void
+  onOutline?: (items: LiveOutlineItem[]) => void
   /** Test/host override for uploads. Production uses the live `/api/notes/...` endpoints. */
   assetTransport?: AssetTransport
 }
@@ -175,6 +188,7 @@ export function NoteEditor({
   onDirty,
   onPastePending,
   assetTransport,
+  onOutline,
 }: Props) {
   const [uploadStatus, setUploadStatus] = useState<string | null>(null)
   const [validationBanner, setValidationBanner] = useState<string | null>(null)
@@ -187,6 +201,17 @@ export function NoteEditor({
   const [chromePinned, setChromePinned] = useState(loadEditorChromePinned)
   const [chromeScrolled, setChromeScrolled] = useState(false)
   const [chromePeek, setChromePeek] = useState(false)
+  const [slashState, setSlashState] = useState<SlashMenuState>(null)
+  const [slashIndex, setSlashIndex] = useState(0)
+  const [plusState, setPlusState] = useState<GutterPlusState>(null)
+  const [dragPos, setDragPos] = useState<{ top: number; left: number; pos: number } | null>(null)
+  const [linkOpen, setLinkOpen] = useState(false)
+  const [linkHref, setLinkHref] = useState('')
+  const [emojiOpen, setEmojiOpen] = useState(false)
+  const [emojiQuery, setEmojiQuery] = useState('')
+  const [moreFormatting, setMoreFormatting] = useState(false)
+  const overlaysRef = useRef(new OverlayCoordinator())
+  const registry = useMemo(() => createEditorCommandRegistry(), [])
   const chromeRef = useRef<HTMLDivElement>(null)
   const rootRef = useRef<HTMLDivElement>(null)
   const findInputRef = useRef<HTMLInputElement>(null)
@@ -253,6 +278,13 @@ export function NoteEditor({
     }
   }
 
+  const applyUploadedAttachments = (atts: AttachmentInfo[] | undefined) => {
+    if (!atts?.length) return
+    const live = editorRef.current
+    if (live) dispatchAttachmentInventory(live, atts)
+    emitEvent({ kind: 'attachments-updated', attachments: atts })
+  }
+
   const emitMarkdown = (ed: Editor) => {
     coordinatorRef.current?.attach(ed)
     coordinatorRef.current?.flush()
@@ -282,7 +314,7 @@ export function NoteEditor({
             noteSessionId: noteSessionRef.current,
             uploadFile: (id, f) => transportRef.current.uploadFile(id, f),
             importRemote: (id, url) => transportRef.current.importRemote(id, url),
-            onAttachments: (atts) => atts && emitEvent({ kind: 'attachments-updated', attachments: atts }),
+            onAttachments: applyUploadedAttachments,
             onStatus: setUploadStatus,
             onError,
             getNoteSessionId: () => noteSessionRef.current,
@@ -305,7 +337,7 @@ export function NoteEditor({
         return
       }
       if (result.note?.attachments) {
-        emitEvent({ kind: 'attachments-updated', attachments: result.note.attachments })
+        applyUploadedAttachments(result.note.attachments)
       }
       if (result.note?.etag) {
         emitEvent({ kind: 'etag-confirmed', etag: result.note.etag })
@@ -385,7 +417,7 @@ export function NoteEditor({
             noteSessionId: noteSessionRef.current,
             uploadFile: (id, f) => transportRef.current.uploadFile(id, f),
             importRemote: (id, url) => transportRef.current.importRemote(id, url),
-            onAttachments: (atts) => atts && emitEvent({ kind: 'attachments-updated', attachments: atts }),
+            onAttachments: applyUploadedAttachments,
             onStatus: setUploadStatus,
             onError,
             getNoteSessionId: () => noteSessionRef.current,
@@ -427,6 +459,14 @@ export function NoteEditor({
     setFindStatus('')
   }
 
+  const slashStateRef = useRef(slashState)
+  slashStateRef.current = slashState
+  const slashIndexRef = useRef(slashIndex)
+  slashIndexRef.current = slashIndex
+  const plusStateRef = useRef(plusState)
+  plusStateRef.current = plusState
+  const insertPressRef = useRef<{ timer: number; x: number; y: number } | null>(null)
+
   const wikiSuggestRef = useRef(wikiSuggest)
   const wikiIndexRef = useRef(wikiIndex)
   wikiSuggestRef.current = wikiSuggest
@@ -444,10 +484,47 @@ export function NoteEditor({
   }
   applyWikiLinkRef.current = applyWikiLink
 
+  const openAttachPicker = () => {
+    const input = document.createElement('input')
+    input.type = 'file'
+    input.accept = 'image/*,*/*'
+    input.onchange = () => {
+      const file = input.files?.[0]
+      if (file) void handleUpload(file)
+    }
+    input.click()
+  }
+
+  const commandCtx = () => ({
+    editor: editorRef.current!,
+    onError,
+    onRequestUpload: openAttachPicker,
+    onRequestLink: () => {
+      const ed = editorRef.current
+      const existing = ed?.getAttributes('link').href as string | undefined
+      setLinkHref(existing ?? '')
+      setLinkOpen(true)
+      overlaysRef.current.open('link')
+    },
+    onRequestEmoji: () => {
+      setEmojiQuery('')
+      setEmojiOpen(true)
+      overlaysRef.current.open('emoji')
+    },
+  })
+
   const editor = useEditor({
     extensions: createEditorExtensions({
       withReactNodeViews: true,
       wikiOnChange: (s) => wikiOnChangeRef.current(s),
+      slashOnChange: (s) => {
+        setSlashState(s)
+        setSlashIndex(0)
+        if (s?.active) overlaysRef.current.open(s.source === 'plus' ? 'plus' : 'slash')
+        else if (overlaysRef.current.primary === 'slash') overlaysRef.current.close('slash')
+      },
+      plusOnChange: setPlusState,
+      dragOnChange: setDragPos,
       attachments,
     }),
     content: '',
@@ -462,8 +539,7 @@ export function NoteEditor({
         if (!clipboard) return false
         const mode = pasteModeRef.current
 
-        const files = Array.from(clipboard.files)
-        const image = files.find((f) => f.type.startsWith('image/'))
+        const image = imageFileFromClipboard(clipboard)
         if (image && mode !== 'code') {
           event.preventDefault()
           void uploadRef.current(image)
@@ -477,6 +553,25 @@ export function NoteEditor({
         const html = clipboard.getData('text/html')
         const rawPlain = clipboard.getData('text/plain')
         const plain = plainTextFromClipboard(rawPlain, html)
+
+        if (
+          mode !== 'code' &&
+          looksLikeBareUrl(plain) &&
+          isSafeHref(plain.trim()) &&
+          ed.state.selection.empty &&
+          ed.state.selection.$from.parent.type.name === 'paragraph' &&
+          ed.state.selection.$from.parent.textContent.trim() === ''
+        ) {
+          event.preventDefault()
+          insertMarkdown(ed, `<!-- jotdex-link-card -->\n[${plain.trim()}](${plain.trim()})\n`)
+          return true
+        }
+
+        if (ed.state.selection.empty === false && looksLikeBareUrl(plain) && isSafeHref(plain.trim()) && (!html || html.length < 40)) {
+          event.preventDefault()
+          ed.chain().focus().extendMarkRange('link').setLink({ href: plain.trim() }).run()
+          return true
+        }
 
         // Rich/HTML paste must never split a code box — keep every line inside the block.
         if (ed.isActive('codeBlock')) {
@@ -568,6 +663,49 @@ export function NoteEditor({
         return true
       },
       handleKeyDown: (_view, event) => {
+        if (event.key === 'Escape' && overlaysRef.current.handleEscape()) {
+          setLinkOpen(false)
+          setEmojiOpen(false)
+          setMoreFormatting(false)
+          if (slashStateRef.current?.source === 'plus') {
+            const ed = editorRef.current
+            if (ed) deleteTransientEmptyParagraph(ed)
+          }
+          setSlashState(null)
+          editorRef.current?.view.dispatch(editorRef.current.state.tr.setMeta(slashMenuKey, { clear: true }))
+          return true
+        }
+        if ((event.altKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) && editorRef.current) {
+          event.preventDefault()
+          registry.execute(event.key === 'ArrowUp' ? 'block.moveUp' : 'block.moveDown', commandCtx())
+          return true
+        }
+        const slash = slashStateRef.current
+        if (slash?.active && editorRef.current) {
+          const items = (slash.source === 'plus' ? registry.plusItems(slash.query) : registry.slashItems(slash.query)).filter(
+            (c) => c.isEnabled(editorRef.current!),
+          )
+          const handled = slashKeydown(
+            event,
+            items,
+            slashIndexRef.current,
+            setSlashIndex,
+            (cmd) => {
+              if (slash.source === 'slash') {
+                editorRef.current?.chain().focus().deleteRange({ from: slash.from, to: slash.to }).run()
+              }
+              registry.execute(cmd.id, commandCtx())
+              setSlashState(null)
+              overlaysRef.current.close()
+            },
+            () => {
+              if (slash.source === 'plus' && editorRef.current) deleteTransientEmptyParagraph(editorRef.current)
+              setSlashState(null)
+              overlaysRef.current.close()
+            },
+          )
+          if (handled) return true
+        }
         const suggest = wikiSuggestRef.current
         if (suggest?.active) {
           const filtered = filterCatalog(catalogRef.current, suggest.query).slice(0, 12)
@@ -610,7 +748,7 @@ export function NoteEditor({
       setMarkdownDocument(ed, markdown, { emitUpdate: false })
       coordinatorRef.current?.attach(ed)
       dispatchAttachmentInventory(ed, attachmentsRef.current)
-      ;(ed.storage as { pendingAsset?: { retry?: (id: string) => void } }).pendingAsset = {
+      ;(ed.storage as { pendingAsset?: { retry?: (id: string) => void }; jotdexReplaceImage?: () => void }).pendingAsset = {
         retry: (uploadId: string) => {
           onPastePending?.(true)
           void retryPendingUpload(ed, uploadId).then(({ failed }) => {
@@ -620,14 +758,17 @@ export function NoteEditor({
           })
         },
       }
+      ;(ed.storage as { jotdexReplaceImage?: () => void }).jotdexReplaceImage = openAttachPicker
       window.setTimeout(() => {
         readyRef.current = true
+        onOutline?.(extractLiveOutline(ed.state.doc))
       }, 0)
     },
     onTransaction: ({ editor: ed, transaction }) => {
       if (!readyRef.current) return
       coordinatorRef.current?.attach(ed)
       coordinatorRef.current?.observeTransaction(transaction)
+      if (transaction.docChanged) onOutline?.(extractLiveOutline(ed.state.doc))
     },
   })
 
@@ -635,6 +776,17 @@ export function NoteEditor({
     editorRef.current = editor
     if (editor) coordinatorRef.current?.attach(editor)
   }, [editor])
+
+  useEffect(() => {
+    const onMove = (ev: Event) => {
+      const ed = editorRef.current
+      const detail = (ev as CustomEvent<{ pos: number; dir: -1 | 1 }>).detail
+      if (!ed || !detail) return
+      moveSection(ed, detail.pos, detail.dir)
+    }
+    window.addEventListener('jotdex-move-section', onMove)
+    return () => window.removeEventListener('jotdex-move-section', onMove)
+  }, [])
 
   useEffect(() => {
     const flush = () => {
@@ -654,13 +806,22 @@ export function NoteEditor({
     const target = jumpHeading.text.trim().toLowerCase()
     let from = -1
     let to = -1
-    editor.state.doc.descendants((node, pos) => {
-      if (from >= 0 || node.type.name !== 'heading') return
-      if (node.textContent.trim().toLowerCase() === target) {
-        from = pos + 1
-        to = pos + node.nodeSize - 1
+    if (jumpHeading.pos != null) {
+      const node = editor.state.doc.nodeAt(jumpHeading.pos)
+      if (node?.type.name === 'heading') {
+        from = jumpHeading.pos + 1
+        to = jumpHeading.pos + node.nodeSize - 1
       }
-    })
+    }
+    if (from < 0) {
+      editor.state.doc.descendants((node, pos) => {
+        if (from >= 0 || node.type.name !== 'heading') return
+        if (node.textContent.trim().toLowerCase() === target) {
+          from = pos + 1
+          to = pos + node.nodeSize - 1
+        }
+      })
+    }
     if (from < 0) return
     editor.chain().focus().setTextSelection({ from, to }).run()
     try {
@@ -767,7 +928,26 @@ export function NoteEditor({
     return () => scroller.removeEventListener('scroll', onScroll)
   }, [editor, noteId])
 
+  const runCmd = (id: Parameters<typeof registry.execute>[0]) => {
+    if (!editor) return
+    registry.execute(id, commandCtx())
+  }
+
   if (!editor) return null
+
+  const openInsertMenu = (fromGap: boolean) => {
+    const plus = plusStateRef.current
+    if (fromGap && plus?.fromGap) insertTransientParagraphAt(editor.view, plus.pos)
+    const next = {
+      active: true as const,
+      from: editor.state.selection.from,
+      to: editor.state.selection.to,
+      query: '',
+      source: 'plus' as const,
+    }
+    editor.view.dispatch(editor.state.tr.setMeta(slashMenuKey, next))
+    overlaysRef.current.open('plus')
+  }
 
   const chromeAuto = !chromePinned
   const chromeCollapsed = chromeAuto && chromeScrolled && !chromePeek
@@ -858,10 +1038,7 @@ export function NoteEditor({
           type="button"
           className={editor.isActive('heading', { level: 1 }) ? 'on' : ''}
           title="Heading 1 — with a selection, only the selected text becomes the heading"
-          onClick={() => {
-            const r = applyHeadingToSelection(editor, 1)
-            if (!r.ok && r.reason) onError?.(r.reason)
-          }}
+          onClick={() => runCmd('heading.1')}
         >
           H1
         </button>
@@ -869,10 +1046,7 @@ export function NoteEditor({
           type="button"
           className={editor.isActive('heading', { level: 2 }) ? 'on' : ''}
           title="Heading 2 — with a selection, only the selected text becomes the heading"
-          onClick={() => {
-            const r = applyHeadingToSelection(editor, 2)
-            if (!r.ok && r.reason) onError?.(r.reason)
-          }}
+          onClick={() => runCmd('heading.2')}
         >
           H2
         </button>
@@ -880,10 +1054,7 @@ export function NoteEditor({
           type="button"
           className={editor.isActive('heading', { level: 3 }) ? 'on' : ''}
           title="Heading 3 — with a selection, only the selected text becomes the heading"
-          onClick={() => {
-            const r = applyHeadingToSelection(editor, 3)
-            if (!r.ok && r.reason) onError?.(r.reason)
-          }}
+          onClick={() => runCmd('heading.3')}
         >
           H3
         </button>
@@ -891,20 +1062,14 @@ export function NoteEditor({
         <button
           type="button"
           className={editor.isActive('bold') ? 'on' : ''}
-          onClick={() => {
-            normalizeBlockSelection(editor)
-            editor.chain().focus().toggleBold().run()
-          }}
+          onClick={() => runCmd('mark.bold')}
         >
           Bold
         </button>
         <button
           type="button"
           className={editor.isActive('italic') ? 'on' : ''}
-          onClick={() => {
-            normalizeBlockSelection(editor)
-            editor.chain().focus().toggleItalic().run()
-          }}
+          onClick={() => runCmd('mark.italic')}
         >
           Italic
         </button>
@@ -912,30 +1077,21 @@ export function NoteEditor({
           type="button"
           className={`strike-btn${editor.isActive('strike') ? ' on' : ''}`}
           title="Strikethrough — keep the text, mark it to ignore"
-          onClick={() => {
-            normalizeBlockSelection(editor)
-            editor.chain().focus().toggleStrike().run()
-          }}
+          onClick={() => runCmd('mark.strike')}
         >
           Strike
         </button>
         <button
           type="button"
           className={editor.isActive('code') ? 'on' : ''}
-          onClick={() => {
-            normalizeBlockSelection(editor)
-            editor.chain().focus().toggleCode().run()
-          }}
+          onClick={() => runCmd('mark.code')}
         >
           Code
         </button>
         <button
           type="button"
           title="Remove formatting from the selection (bold, color, lists, headings, …)"
-          onClick={() => {
-            normalizeBlockSelection(editor)
-            editor.chain().focus().unsetAllMarks().clearNodes().run()
-          }}
+          onClick={() => runCmd('format.clear')}
         >
           Clear
         </button>
@@ -984,30 +1140,21 @@ export function NoteEditor({
         <button
           type="button"
           className={editor.isActive('bulletList') ? 'on' : ''}
-          onClick={() => {
-            normalizeBlockSelection(editor)
-            editor.chain().focus().toggleBulletList().run()
-          }}
+          onClick={() => runCmd('block.bulletList')}
         >
           List
         </button>
         <button
           type="button"
           className={editor.isActive('orderedList') ? 'on' : ''}
-          onClick={() => {
-            normalizeBlockSelection(editor)
-            editor.chain().focus().toggleOrderedList().run()
-          }}
+          onClick={() => runCmd('block.orderedList')}
         >
           1.
         </button>
         <button
           type="button"
           className={editor.isActive('taskList') ? 'on' : ''}
-          onClick={() => {
-            normalizeBlockSelection(editor)
-            editor.chain().focus().toggleTaskList().run()
-          }}
+          onClick={() => runCmd('block.taskList')}
           title="Turn selection into a checklist todo (appears under Todos → From notes)"
         >
           Todo
@@ -1016,10 +1163,7 @@ export function NoteEditor({
           type="button"
           className={editor.isActive('codeBlock') ? 'on' : ''}
           title="Insert a code box (PowerShell, shell, etc.)"
-          onClick={() => {
-            normalizeBlockSelection(editor)
-            editor.chain().focus().toggleCodeBlock({ language: 'powershell' }).run()
-          }}
+          onClick={() => runCmd('block.codeBlock')}
         >
           Code box
         </button>
@@ -1037,11 +1181,7 @@ export function NoteEditor({
         <span className="sep" />
         <button
           type="button"
-          onClick={() => {
-            const url = window.prompt('Link URL')
-            if (!url) return
-            editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run()
-          }}
+          onClick={() => runCmd('insert.link')}
         >
           Link
         </button>
@@ -1054,7 +1194,7 @@ export function NoteEditor({
               const v = e.target.value as CalloutType | ''
               e.target.value = ''
               if (!v) return
-              editor.chain().focus().setCallout(v).run()
+              runCmd(`block.callout.${v}` as Parameters<typeof registry.execute>[0])
             }}
           >
             <option value="" disabled>
@@ -1067,28 +1207,34 @@ export function NoteEditor({
             <option value="danger">Danger</option>
           </select>
         </label>
-        <button type="button" onClick={() => editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}>
+        <button
+          type="button"
+          className="jotdex-toolbar-insert"
+          aria-label="Insert block"
+          title="Insert a block (type / or use + in a gap)"
+          onClick={() => openInsertMenu(false)}
+        >
+          Insert
+        </button>
+        <button type="button" onClick={() => runCmd('block.table')}>
           Table
+        </button>
+        <button type="button" onClick={() => runCmd('block.details')}>
+          Details
+        </button>
+        <button type="button" onClick={() => runCmd('insert.emoji')}>
+          Emoji
         </button>
         <button
           type="button"
-          onClick={() => {
-            const input = document.createElement('input')
-            input.type = 'file'
-            input.accept = 'image/*,*/*'
-            input.onchange = () => {
-              const file = input.files?.[0]
-              if (file) void handleUpload(file)
-            }
-            input.click()
-          }}
+          onClick={() => runCmd('insert.image')}
         >
           Attach
         </button>
-        <button type="button" onClick={() => editor.chain().focus().undo().run()}>
+        <button type="button" onClick={() => runCmd('history.undo')}>
           Undo
         </button>
-        <button type="button" onClick={() => editor.chain().focus().redo().run()}>
+        <button type="button" onClick={() => runCmd('history.redo')}>
           Redo
         </button>
         <button
@@ -1168,7 +1314,32 @@ export function NoteEditor({
       {uploadStatus && <div className="upload-status">{uploadStatus}</div>}
       </div>
       </div>
-      <div className="editor-stage">
+      <div
+        className="editor-stage"
+        onPointerDown={(e) => {
+          if (e.pointerType !== 'touch') return
+          const timer = window.setTimeout(() => {
+            openInsertMenu(Boolean(plusStateRef.current?.fromGap))
+          }, 500)
+          insertPressRef.current = { timer, x: e.clientX, y: e.clientY }
+        }}
+        onPointerMove={(e) => {
+          const press = insertPressRef.current
+          if (!press) return
+          if (Math.hypot(e.clientX - press.x, e.clientY - press.y) > 12) {
+            window.clearTimeout(press.timer)
+            insertPressRef.current = null
+          }
+        }}
+        onPointerUp={() => {
+          if (insertPressRef.current) window.clearTimeout(insertPressRef.current.timer)
+          insertPressRef.current = null
+        }}
+        onPointerCancel={() => {
+          if (insertPressRef.current) window.clearTimeout(insertPressRef.current.timer)
+          insertPressRef.current = null
+        }}
+      >
         {wikiSuggest?.active && (
           <div className="wiki-suggest" role="listbox" aria-label="Link to note">
             {filterCatalog(noteCatalog, wikiSuggest.query)
@@ -1203,6 +1374,91 @@ export function NoteEditor({
           </div>
         )}
         <EditorContent editor={editor} />
+        <FormattingBubbleMenu
+          editor={editor}
+          registry={registry}
+          ctx={commandCtx()}
+          overlays={overlaysRef.current}
+          moreOpen={moreFormatting}
+          onMore={setMoreFormatting}
+        />
+        <TableChrome editor={editor} />
+        {slashState?.active && (
+          <SlashMenu
+            editor={editor}
+            state={slashState}
+            registry={registry}
+            ctx={commandCtx()}
+            index={slashIndex}
+            onIndex={setSlashIndex}
+            onClose={() => {
+              editor.view.dispatch(editor.state.tr.setMeta(slashMenuKey, { clear: true }))
+              overlaysRef.current.close()
+            }}
+          />
+        )}
+        {plusState?.visible && !slashState?.active && (
+          <button
+            type="button"
+            className="jotdex-gutter-plus"
+            style={{ top: plusState.top, left: Math.max(8, plusState.left - 28) }}
+            aria-label="Insert at gap"
+            onMouseDown={(e) => {
+              e.preventDefault()
+              openInsertMenu(plusState.fromGap)
+            }}
+          >
+            +
+          </button>
+        )}
+        {dragPos && editor.isEditable && (
+          <div className="jotdex-drag-handle" style={{ top: dragPos.top, left: Math.max(4, dragPos.left - 22) }}>
+            <button
+              type="button"
+              title="Move block up"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => runCmd('block.moveUp')}
+            >
+              ↑
+            </button>
+            <button
+              type="button"
+              title="Move block down"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => runCmd('block.moveDown')}
+            >
+              ↓
+            </button>
+          </div>
+        )}
+        {linkOpen && (
+          <LinkPopover
+            editor={editor}
+            href={linkHref}
+            onHref={setLinkHref}
+            notes={noteCatalog}
+            relativeFor={(path) => relativeMdPath(notePathRef.current, path)}
+            onClose={() => {
+              setLinkOpen(false)
+              overlaysRef.current.close('link')
+            }}
+          />
+        )}
+        {emojiOpen && (
+          <EmojiPicker
+            query={emojiQuery}
+            onQuery={setEmojiQuery}
+            onPick={(ch) => {
+              registry.execute('insert.emoji', { ...commandCtx(), extra: ch })
+              setEmojiOpen(false)
+              overlaysRef.current.close('emoji')
+            }}
+            onClose={() => {
+              setEmojiOpen(false)
+              overlaysRef.current.close('emoji')
+            }}
+          />
+        )}
       </div>
     </div>
   )

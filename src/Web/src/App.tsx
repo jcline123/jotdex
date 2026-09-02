@@ -19,6 +19,7 @@ import { FirstRunWizard, LoginScreen } from './AuthScreens'
 import { TrashPane } from './TrashPane'
 import { SnippetsPane } from './SnippetsPane'
 import { extractOutline } from './outline'
+import { type LiveOutlineItem } from './editor/outline/liveOutline'
 import {
   NOTE_TEMPLATES,
   isNetworkDoc,
@@ -305,7 +306,8 @@ function App() {
   const [backlinks, setBacklinks] = useState<
     { noteId: string; title: string; relativePath: string; folderPath: string; context?: string }[]
   >([])
-  const [jumpHeading, setJumpHeading] = useState<{ text: string; nonce: number } | null>(null)
+  const [jumpHeading, setJumpHeading] = useState<{ text: string; nonce: number; pos?: number } | null>(null)
+  const [liveOutline, setLiveOutline] = useState<LiveOutlineItem[]>([])
   const [templateMenu, setTemplateMenu] = useState(false)
   const [templateMenuPos, setTemplateMenuPos] = useState<{ top: number; left: number } | null>(null)
   const templateBtnRef = useRef<HTMLButtonElement>(null)
@@ -2124,6 +2126,7 @@ function App() {
                 markdown={draft}
                 contentEpoch={editorEpoch}
                 jumpHeading={jumpHeading}
+                onOutline={setLiveOutline}
                 attachments={note.attachments}
                 onChange={(md, rev) => {
                   draftRef.current = md
@@ -4236,6 +4239,7 @@ function App() {
                   markdown={draft}
                   contentEpoch={editorEpoch}
                   jumpHeading={jumpHeading}
+                  onOutline={setLiveOutline}
                   attachments={note.attachments}
                   onChange={(md, rev) => {
                     draftRef.current = md
@@ -4281,23 +4285,74 @@ function App() {
               {outlineOpen && (
                 <div className="history-panel">
                   <h3>Outline</h3>
-                  {extractOutline(draft).length === 0 ? (
-                    <p className="muted">No headings in this note yet. Use H1–H3 in the toolbar.</p>
-                  ) : (
-                    <ul className="outline-list">
-                      {extractOutline(draft).map((item, i) => (
-                        <li key={`${item.level}-${item.text}-${i}`} style={{ paddingLeft: `${(item.level - 1) * 0.75}rem` }}>
-                          <button
-                            type="button"
-                            className="ghost outline-item"
-                            onClick={() => setJumpHeading({ text: item.text, nonce: Date.now() })}
+                  {(() => {
+                    const items = showSource
+                      ? extractOutline(draft).map((item, i) => ({
+                          ...item,
+                          pos: undefined as number | undefined,
+                          slug: item.text,
+                          i,
+                        }))
+                      : liveOutline.map((item, i) => ({ ...item, i }))
+                    if (items.length === 0) {
+                      return <p className="muted">No headings in this note yet. Use H1–H3 in the toolbar.</p>
+                    }
+                    return (
+                      <ul className="outline-list">
+                        {items.map((item) => (
+                          <li
+                            key={`${item.level}-${item.text}-${item.i}`}
+                            style={{ paddingLeft: `${(item.level - 1) * 0.75}rem` }}
                           >
-                            {item.text}
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
+                            <button
+                              type="button"
+                              className="ghost outline-item"
+                              onClick={() => {
+                                setJumpHeading({ text: item.text, nonce: Date.now(), pos: item.pos })
+                                if ('slug' in item && item.slug) {
+                                  try {
+                                    window.history.replaceState(null, '', `#${item.slug}`)
+                                  } catch {
+                                    /* ignore */
+                                  }
+                                }
+                              }}
+                            >
+                              {item.text}
+                            </button>
+                            {!showSource && item.pos != null && (
+                              <span className="outline-move">
+                                <button
+                                  type="button"
+                                  className="ghost"
+                                  title="Move section up"
+                                  onClick={() =>
+                                    window.dispatchEvent(
+                                      new CustomEvent('jotdex-move-section', { detail: { pos: item.pos, dir: -1 } }),
+                                    )
+                                  }
+                                >
+                                  ↑
+                                </button>
+                                <button
+                                  type="button"
+                                  className="ghost"
+                                  title="Move section down"
+                                  onClick={() =>
+                                    window.dispatchEvent(
+                                      new CustomEvent('jotdex-move-section', { detail: { pos: item.pos, dir: 1 } }),
+                                    )
+                                  }
+                                >
+                                  ↓
+                                </button>
+                              </span>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    )
+                  })()}
                 </div>
               )}
               {backlinksOpen && (

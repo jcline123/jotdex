@@ -20,6 +20,30 @@ export function inspectMarkdown(markdownBody: string, doc: JSONContent | undefin
   if (/jotdex-task|jotdex-todo/.test(markdownBody)) features.push('task-meta')
   if (/\[\[/.test(markdownBody)) features.push('wikilink')
   if (/<span\s+style=/.test(markdownBody)) features.push('style-span')
+  if (/==[^=]+==/.test(markdownBody)) features.push('highlight')
+  if (/\\[\(\[]/.test(markdownBody)) features.push('math')
+  if (/jotdex-details/.test(markdownBody)) features.push('details')
+  if (/jotdex-align:/.test(markdownBody)) features.push('align')
+  if (/jotdex-link-card/.test(markdownBody)) features.push('bookmark')
+
+  const opens = (markdownBody.match(/<!--\s*jotdex-details\s*-->/g) ?? []).length
+  const closes = (markdownBody.match(/<!--\s*\/jotdex-details\s*-->/g) ?? []).length
+  if (opens !== closes) {
+    return {
+      sourceOnly: true,
+      reason: 'Unclosed jotdex-details marker cannot be represented visually.',
+      features,
+      diagnostics: [{ code: 'details-unclosed', severity: 'error', message: 'Unclosed details marker' }],
+    }
+  }
+  if (/<!--\s*jotdex-align:\s*(?!center|right|justify)\w+/i.test(markdownBody)) {
+    return {
+      sourceOnly: true,
+      reason: 'Invalid jotdex-align value. Use center, right, or justify.',
+      features,
+      diagnostics: [{ code: 'align-invalid', severity: 'error', message: 'Invalid alignment marker' }],
+    }
+  }
 
   const unsafe = looksUnsafeForVisual(markdownBody)
   if (unsafe.unsafe) {

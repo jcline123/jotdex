@@ -13,13 +13,14 @@ import { Extension } from '@tiptap/core'
 import type { Editor, Extensions } from '@tiptap/core'
 import { Plugin, PluginKey } from '@tiptap/pm/state'
 import { ReactNodeViewRenderer } from '@tiptap/react'
+import Typography from '@tiptap/extension-typography'
 import { HeadingFold } from '../../headingFold'
 import { WikiLinkSuggest, type WikiSuggestState } from '../../wikiLinkSuggest'
 import { CODE_BLOCK_ENABLE_TAB_INDENT, CODE_BLOCK_TAB_SIZE } from '../../codeBlockSettings'
 import { codeLowlight } from '../../codeHighlight'
 import { CodeBlockView } from '../../CodeBlockView'
 import { pastePlainIntoCodeBlock, plainTextForCodeBoxPaste } from '../../pasteCodeBlock'
-import { JotdexBlockImage, JotdexBlockImageHeadless } from './JotdexBlockImageMarkdown'
+import { JotdexBlockImage, JotdexBlockImageHeadless, JotdexFigureParse } from './JotdexBlockImageMarkdown'
 import { JotdexCallout } from './JotdexCalloutMarkdown'
 import { JotdexTextStyle, JotdexColor } from './JotdexTextStyleMarkdown'
 import { JotdexTaskMetadata } from './JotdexTaskMetadata'
@@ -31,6 +32,16 @@ import { BlockGapNavigation } from './blockGapNavigation'
 import { PendingAssetView } from './PendingAssetView'
 import { AttachmentResolver, type AttachmentInfo } from '../assets/AttachmentResolver'
 import { CANONICAL_LIST_INDENT } from '../markdown/canonical'
+import { JotdexHighlight, JotdexUnderline, JotdexSubscript, JotdexSuperscript } from '../formatting/inlineMarks'
+import { JotdexAlignMarker, JotdexAlignment, JotdexHeading, JotdexParagraph } from '../formatting/alignment'
+import { JotdexMathBlock, JotdexMathInline } from '../math/JotdexMath'
+import { JotdexDetails } from '../details/JotdexDetails'
+import { JotdexBookmarkCard } from '../links/bookmarkCard'
+import { SlashMenuPlugin, type SlashMenuState } from '../slash/slashMenuPlugin'
+import { GutterPlusPlugin, type GutterPlusState } from '../gaps/gutterPlusPlugin'
+import { DragHandlePlugin } from '../blocks/dragHandlePlugin'
+import { isSafeHref } from '../links/linkSchemes'
+import { parseSpreadsheet, pasteSpreadsheetIntoTable, stripTableMerges } from '../tables/spreadsheetPaste'
 
 const ConsistentLineBreaks = Extension.create({
   name: 'consistentLineBreaks',
@@ -48,7 +59,8 @@ const ConsistentLineBreaks = Extension.create({
             name === 'tableHeader' ||
             name === 'blockquote' ||
             name === 'callout' ||
-            name === 'codeBlock'
+            name === 'codeBlock' ||
+            name === 'details'
           ) {
             return false
           }
@@ -67,7 +79,11 @@ const ConsistentLineBreaks = Extension.create({
 export type EditorExtensionOptions = {
   withReactNodeViews?: boolean
   wikiOnChange?: (s: WikiSuggestState) => void
+  slashOnChange?: (s: SlashMenuState) => void
+  plusOnChange?: (s: GutterPlusState) => void
+  dragOnChange?: (s: { top: number; left: number; pos: number } | null) => void
   attachments?: AttachmentInfo[]
+  enableTypography?: boolean
 }
 
 function codeBlockPastePlugin(getEditor: () => Editor | null) {
@@ -87,6 +103,33 @@ function codeBlockPastePlugin(getEditor: () => Editor | null) {
       },
     },
   })
+}
+
+function tableSpreadsheetPlugin(getEditor: () => Editor | null) {
+  return new Plugin({
+    key: new PluginKey('tableSpreadsheetPaste'),
+    props: {
+      transformPastedHTML: (html) => stripTableMerges(html),
+      handlePaste: (_view, event) => {
+        const ed = getEditor()
+        if (!ed?.isActive('table')) return false
+        const plain = event.clipboardData?.getData('text/plain') ?? ''
+        const grid = parseSpreadsheet(plain)
+        if (!grid) return false
+        event.preventDefault()
+        return pasteSpreadsheetIntoTable(ed, grid)
+      },
+    },
+  })
+}
+
+function typographyOn(): boolean {
+  if (typeof localStorage === 'undefined') return false
+  try {
+    return localStorage.getItem('jotdex.typography') === '1'
+  } catch {
+    return false
+  }
 }
 
 export function createEditorExtensions(opts: EditorExtensionOptions = {}): Extensions {
@@ -113,11 +156,37 @@ export function createEditorExtensions(opts: EditorExtensionOptions = {}): Exten
     tabSize: CODE_BLOCK_TAB_SIZE,
   })
 
-  return [
-    StarterKit.configure({ codeBlock: false, link: false }),
+  const TableExt = Table.extend({
+    addProseMirrorPlugins() {
+      return [...(this.parent?.() ?? []), tableSpreadsheetPlugin(() => this.editor)]
+    },
+  }).configure({ resizable: true })
+
+  const extensions: Extensions = [
+    StarterKit.configure({
+      codeBlock: false,
+      link: false,
+      paragraph: false,
+      heading: false,
+      underline: false,
+    }),
+    JotdexParagraph,
+    JotdexHeading,
     CodeBlockExt,
-    Link.configure({ openOnClick: false, autolink: true }),
+    Link.configure({
+      openOnClick: false,
+      autolink: true,
+      shouldAutoLink: (url) => isSafeHref(url),
+      isAllowedUri: (url, ctx) => {
+        if (!isSafeHref(url)) return false
+        if (url.startsWith('#') || url.startsWith('/') || url.startsWith('./') || url.startsWith('../')) return true
+        if (!/^[a-z][a-z0-9+.-]*:/i.test(url)) return true
+        return ctx.defaultValidate(url)
+      },
+      HTMLAttributes: { rel: 'noreferrer noopener' },
+    }),
     withViews ? JotdexBlockImage : JotdexBlockImageHeadless,
+    JotdexFigureParse,
     withViews
       ? PendingAssetPlaceholder.extend({
           addNodeView() {
@@ -127,12 +196,25 @@ export function createEditorExtensions(opts: EditorExtensionOptions = {}): Exten
       : PendingAssetPlaceholder,
     AttachmentResolver.configure({ attachments: opts.attachments ?? [] }),
     JotdexCallout,
+    JotdexDetails,
+    JotdexBookmarkCard,
+    JotdexMathInline,
+    JotdexMathBlock,
+    JotdexHighlight,
+    JotdexUnderline,
+    JotdexSubscript,
+    JotdexSuperscript,
+    JotdexAlignMarker,
+    JotdexAlignment,
     HeadingFold,
     WikiLinkSuggest.configure({ onChange: opts.wikiOnChange }),
-    Placeholder.configure({ placeholder: 'Start writing… Type [[ to link a note' }),
+    SlashMenuPlugin.configure({ onChange: opts.slashOnChange }),
+    GutterPlusPlugin.configure({ onChange: opts.plusOnChange }),
+    DragHandlePlugin.configure({ onChange: opts.dragOnChange }),
+    Placeholder.configure({ placeholder: 'Start writing… Type / for commands, or [[ to link a note' }),
     TaskList,
     TaskItem.configure({ nested: true }),
-    Table.configure({ resizable: true }),
+    TableExt,
     TableRow,
     TableHeader,
     TableCell,
@@ -150,6 +232,12 @@ export function createEditorExtensions(opts: EditorExtensionOptions = {}): Exten
       markedOptions: { gfm: true, breaks: false, pedantic: false },
     }),
   ]
+
+  if (opts.enableTypography ?? typographyOn()) {
+    extensions.push(Typography)
+  }
+
+  return extensions
 }
 
 export { ConsistentLineBreaks }

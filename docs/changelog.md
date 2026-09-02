@@ -7,6 +7,22 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 
 ---
 
+## 2026-09-02 — Screenshot paste and visual-first long notes
+
+- Snipping Tool (and other clipboard) pictures uploaded fine but the editor showed **Missing or broken**: the image node was inserted with a vault-relative `src` before attachment inventory was applied, ImageView 404'd, and `broken` never cleared when the API URL arrived. Inventory is applied first; ImageView retries when `src` resolves; clipboard `items` is read when `files` is empty.
+- Long notes with HTML email templates in fenced code (e.g. Workflow Rules) auto-opened Source because every `<html>`/`<head>`/`<body>` counted as “complex raw HTML.” That heuristic is gone. Visual is the default; Source is still forced only for live-body `script`/`iframe`/`object`/`embed`/`form`, event handlers, and `javascript:` URLs. Fenced samples are ignored. Switch to Source yourself if a note misbehaves.
+
+## 2026-09-02 — Editor UX expansion (dialect v2)
+
+- Slash `/`, gutter `+` (on the 1.2.2 gap cursor), bubble formatting, block move, table chrome, image inspector, link popover, Details, highlight/underline/sub/sup, alignment comments, titled/collapsible callouts, live outline, Unicode emoji, and bundled KaTeX (`trust: false`) are in the visual editor. On disk they stay ordinary Markdown (dialect v2). Open-without-edit still does not PUT. Live vault was not rewritten.
+- Official `@tiptap/markdown` 3.29.2 only. Drag-handle / mathematics / emoji Tiptap packages were not used (Yjs, katex peer mismatch, shortcode nodes). HTML `<u>`/`<sub>`/`<sup>` are brace-protected before parse so `>` cannot become a blockquote.
+- Typography stays off unless `localStorage jotdex.typography=1`. Bookmark cards do not fetch Open Graph (SSRF). Spreadsheet paste fills the current table and grows it; merges are stripped.
+
+**Portable release 1.3.0**
+- Target tag `v1.3.0` — Editor UX expansion plus screenshot-paste and visual-first long notes. Rollback is the previous exe (1.2.2). 1.2.2 Source can still read the new Markdown; visual dialect features need 1.3.0.
+
+---
+
 ## 2026-09-02 — Click/caret between stacked code boxes and images
 
 - Two fenced code boxes (or a picture then a code box) with no paragraph between them had no place to put the caret: code-block ArrowDown jumped into the next box, and ProseMirror would not treat a code block as a gap-cursor edge. Arrow keys now stop on a thin accent line between those blocks; Enter or typing inserts a normal paragraph. Layout of the boxes themselves is unchanged.

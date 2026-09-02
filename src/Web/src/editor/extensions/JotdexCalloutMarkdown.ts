@@ -3,14 +3,20 @@ import { Callout, type CalloutType } from '../../callout'
 
 const TYPES = new Set(['note', 'tip', 'warning', 'info', 'danger'])
 
-function calloutType(raw: string): CalloutType | null {
-  const m = /\[!(\w+)\]/i.exec(raw)
+function parseMarker(raw: string): { type: CalloutType; collapse: 'collapsed' | 'expanded' | null; title: string } | null {
+  const m = /\[!(\w+)\]([+-])?(?:\s+(.*))?/i.exec(raw)
   const t = m?.[1]?.toLowerCase()
-  if (t && TYPES.has(t)) return t as CalloutType
-  const html = /data-callout="(\w+)"/i.exec(raw)
-  const h = html?.[1]?.toLowerCase()
-  if (h && TYPES.has(h)) return h as CalloutType
-  return null
+  if (!t || !TYPES.has(t)) {
+    const html = /data-callout="(\w+)"/i.exec(raw)
+    const h = html?.[1]?.toLowerCase()
+    if (h && TYPES.has(h)) {
+      return { type: h as CalloutType, collapse: null, title: '' }
+    }
+    return null
+  }
+  const collapse = m?.[2] === '-' ? 'collapsed' : m?.[2] === '+' ? 'expanded' : null
+  const title = (m?.[3] ?? '').trim()
+  return { type: t as CalloutType, collapse, title }
 }
 
 export const JotdexCallout = Callout.extend({
@@ -18,20 +24,28 @@ export const JotdexCallout = Callout.extend({
   markdownTokenName: 'blockquote',
   parseMarkdown: (token: MarkdownToken, helpers: MarkdownParseHelpers) => {
     const raw = String((token as { raw?: string }).raw ?? '')
-    const type = calloutType(raw)
-    if (!type) return []
+    const parsed = parseMarker(raw)
+    if (!parsed) return []
     const tokens = (token as { tokens?: MarkdownToken[] }).tokens ?? []
     const content = helpers.parseChildren(tokens)
-    return helpers.createNode('callout', { type }, content.length ? content : [{ type: 'paragraph' }])
+    return helpers.createNode(
+      'callout',
+      { type: parsed.type, title: parsed.title, collapse: parsed.collapse },
+      content.length ? content : [{ type: 'paragraph' }],
+    )
   },
   renderMarkdown: (node: JSONContent, helpers: MarkdownRendererHelpers) => {
     const type = String(node.attrs?.type ?? 'note')
+    const title = String(node.attrs?.title ?? '').trim()
+    const collapse = node.attrs?.collapse
+    const mark = collapse === 'collapsed' ? '-' : collapse === 'expanded' ? '+' : ''
+    const titlePart = title ? ` ${title}` : ''
     const inner = helpers.renderChildren(node.content || []).replace(/\n$/, '')
     const body = inner
       .split('\n')
       .map((line) => (line.length ? `> ${line}` : '>'))
       .join('\n')
-    return `> [!${type}]\n${body}\n\n`
+    return `> [!${type}]${mark}${titlePart}\n${body}\n\n`
   },
   markdownTokenizer: {
     name: 'blockquote',
@@ -50,15 +64,21 @@ export const JotdexCallout = Callout.extend({
       }
       if (!taken.length) return
       const raw = taken.join('\n')
-      const type = calloutType(raw)
-      if (!type) return
-      const inner = taken.map((l) => l.replace(/^>\s?/, '')).join('\n').replace(/^\[!\w+\]\s*\n?/, '')
+      const parsed = parseMarker(raw)
+      if (!parsed) return
+      const firstInner = taken[0]!.replace(/^>\s?/, '')
+      const rest = taken.slice(1).map((l) => l.replace(/^>\s?/, ''))
+      const withoutMarker = firstInner.replace(/^\[!\w+\][+-]?(?:\s+.*)?/, '').trim()
+      const innerParts = [...(withoutMarker ? [withoutMarker] : []), ...rest]
+      const inner = innerParts.join('\n')
       return {
         type: 'blockquote',
         raw: raw + (src[raw.length] === '\n' ? '\n' : ''),
         text: inner,
         tokens: lexer.blockTokens(inner),
-        jotdexCallout: type,
+        jotdexCallout: parsed.type,
+        jotdexCalloutTitle: parsed.title,
+        jotdexCalloutCollapse: parsed.collapse,
       }
     },
   },
