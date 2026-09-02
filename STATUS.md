@@ -9,7 +9,7 @@
 
 ## Just shipped
 
-- Portable **1.3.1** — Todos rail note chip (open source note) and Add no longer opens Edit. Live vault was **not** rewritten. Rollback is the previous exe (1.3.0); keep `artifacts/jotdex-win-x64-1.3.0.zip` and `C:\JotdexBackupHold\jotdex-win-x64-1.3.0.zip`.
+- Portable **1.3.1** (`v1.3.1` @ `acfead2`) — Todos rail note chip (open source note) and Add no longer opens Edit. Live vault was **not** rewritten. Rollback is the previous exe (1.3.0); keep `artifacts/jotdex-win-x64-1.3.0.zip` and `C:\JotdexBackupHold\jotdex-win-x64-1.3.0.zip`.
 - Portable **1.3.0** (`v1.3.0` @ `3a5b561`) — slash `/`, gutter `+`, bubble formatting, block move, table chrome, image inspector, link popover/bookmarks, Details, highlight/u/sub/sup, alignment comments, titled/collapsible callouts, live outline, Unicode emoji, bundled KaTeX; Snipping Tool paste no longer sticks on “Missing or broken”; long notes with HTML in fences open Visual. Live vault was **not** rewritten. Rollback is the previous exe (1.2.2); keep `artifacts/jotdex-win-x64-1.2.2.zip` and `C:\JotdexBackupHold\jotdex-win-x64-1.2.2.zip`.
 - Screenshot paste + visual-first long notes (included in 1.3.0).
 - Portable **1.2.2** (`v1.2.2` @ `559d061`) — caret between stacked code boxes / images. Live vault was not rewritten.

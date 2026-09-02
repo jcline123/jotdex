@@ -13,7 +13,7 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 - Adding from the rail was opening Edit every time. Add now drops the item on the list and keeps the box focused so you can keep typing. Click the item when you want due/priority/reminders.
 
 **Portable release 1.3.1**
-- Target tag `v1.3.1` — Todos rail note chip and quieter add. Rollback is the previous exe (1.3.0).
+- Tag `v1.3.1` (`acfead2`) — Todos rail note chip and quieter add. Rollback is the previous exe (1.3.0).
 
 ## 2026-09-02 — Screenshot paste and visual-first long notes
 
