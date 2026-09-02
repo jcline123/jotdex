@@ -626,10 +626,12 @@ function App() {
     const handle = window.setTimeout(() => {
       fetch(`/api/search?q=${encodeURIComponent(query)}`)
         .then((r) => r.json())
-        .then((data: { mode: string; hits: SearchHit[]; warning?: string }) => {
-          setHits(data.hits)
+        .then((data: { mode?: string; hits?: SearchHit[]; warning?: string }) => {
+          const hits = Array.isArray(data.hits) ? data.hits : []
+          const mode = data.mode || 'smart'
+          setHits(hits)
           setSearchIndex(0)
-          setSearchMeta(`${data.mode} · ${data.hits.length} results${data.warning ? ` · ${data.warning}` : ''}`)
+          setSearchMeta(`${mode} · ${hits.length} results${data.warning ? ` · ${data.warning}` : ''}`)
           setSearchOpen(true)
         })
         .catch(() => setError('Search failed'))
@@ -2276,7 +2278,7 @@ function App() {
                         setSearchOpen(false)
                       }}
                     >
-                      <span className="note-title">{h.title}</span>
+                      <span className="note-title">{h.title || 'Untitled'}</span>
                       <span className="note-path">{h.folderPath || '/'}</span>
                       {h.snippet && (
                         <span

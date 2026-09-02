@@ -233,6 +233,7 @@ public sealed partial class NoteShareExportService : INoteShareExportService
         a { color: var(--accent); }
         img { max-width: 100%; height: auto; border-radius: 8px; }
         blockquote { margin: 1rem 0; padding: .2rem 1rem; border-left: 3px solid var(--accent); color: var(--muted); }
+        """ + ExportCalloutCss.Rules + """
         table { border-collapse: collapse; width: 100%; margin: 1rem 0; font-size: .95rem; }
         th, td { border: 1px solid var(--line); padding: .45rem .6rem; text-align: left; }
         .code-wrap { position: relative; margin: 1rem 0; }

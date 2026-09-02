@@ -618,6 +618,52 @@ public class SmokeTests : IClassFixture<WebApplicationFactory<Program>>
     }
 
     [Fact]
+    public async Task Export_html_styles_obsidian_callouts()
+    {
+        var body = """
+            # Callout export
+
+            > [!warning]
+            > Careful with the firewall
+
+            > [!tip] Shortcut
+            > Use the rail
+            """;
+
+        var create = await _client.PostAsJsonAsync("/api/notes", new
+        {
+            title = "ExportCallout " + Guid.NewGuid().ToString("N")[..6],
+            folder = "",
+            markdown = body
+        });
+        Assert.Equal(HttpStatusCode.OK, create.StatusCode);
+        var note = await create.Content.ReadFromJsonAsync<NoteDetailDto>();
+        Assert.NotNull(note);
+
+        try
+        {
+            var get = await _client.GetFromJsonAsync<NoteDetailDto>($"/api/notes/{note!.Id}");
+            Assert.NotNull(get);
+            Assert.Contains("markdown-alert-warning", get!.Html, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("[!warning]", get.Html, StringComparison.OrdinalIgnoreCase);
+
+            var export = await _client.GetAsync($"/api/notes/{note.Id}/export-html");
+            Assert.Equal(HttpStatusCode.OK, export.StatusCode);
+            var exported = await export.Content.ReadAsStringAsync();
+            Assert.Contains("markdown-alert-warning", exported, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("markdown-alert-tip", exported, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains(".markdown-alert-warning", exported, StringComparison.Ordinal);
+            Assert.Contains("Careful with the firewall", exported, StringComparison.Ordinal);
+            Assert.Contains("Shortcut", exported, StringComparison.Ordinal);
+            Assert.DoesNotContain("[!warning]", exported, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            await _client.DeleteAsync($"/api/notes/{note!.Id}");
+        }
+    }
+
+    [Fact]
     public async Task Duplicate_titles_never_overwrite()
     {
         var title = "DupTitle " + Guid.NewGuid().ToString("N")[..6];

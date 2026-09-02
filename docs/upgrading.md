@@ -34,6 +34,10 @@ Upload **`artifacts\jotdex-win-x64.zip`** to a GitHub Release (tag like `v1.1.0`
 3. Download the Release zip, extract over the install folder, **keep `data\`**.
 4. Start `start-portable.cmd`.
 
+## 1.2.1 (Share/export callouts)
+
+1.2.1 is a small follow-up to 1.2.0. Callouts you save as `> [!warning]` (or `> [!tip] Title`) now keep their color in **Share HTML** and static vault export. The editor and ranking notes are unchanged. Rollback is the previous portable exe (1.2.0).
+
 ## 1.2.0 (official Markdown engine)
 
 1.2.0 replaces the community Markdown bridge with official Tiptap Markdown. Your notes stay ordinary `.md` files. The portable exe is still self-contained — **you do not install Node.js** on the PC that runs Jotdex.

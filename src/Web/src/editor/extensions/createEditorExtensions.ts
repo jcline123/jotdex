@@ -46,6 +46,7 @@ const ConsistentLineBreaks = Extension.create({
             name === 'tableCell' ||
             name === 'tableHeader' ||
             name === 'blockquote' ||
+            name === 'callout' ||
             name === 'codeBlock'
           ) {
             return false

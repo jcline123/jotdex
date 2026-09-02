@@ -320,7 +320,7 @@ public sealed partial class StaticExportService : IStaticExportService
         nav.crumb a { color: var(--accent); }
         img { max-width: 100%; height: auto; }
         footer { color: var(--muted); font-size: 0.85rem; padding-bottom: 2rem; }
-        """;
+        """ + ExportCalloutCss.Rules;
 
     private static string SearchJs() => """
         async function boot() {

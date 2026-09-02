@@ -1,6 +1,6 @@
 # Jotdex STATUS
 
-**Active milestone:** None. Portable **1.2.0** (`v1.2.0` @ `66240be`).  
+**Active milestone:** None. Portable **1.2.1** (`v1.2.1`).  
 **Last updated:** 2026-09-01
 
 ## In progress
@@ -9,6 +9,7 @@
 
 ## Just shipped
 
+- Portable **1.2.1** (`v1.2.1`) — Share HTML / static export style Obsidian callouts; titled alert lines export correctly. Live vault was not rewritten.
 - Portable **1.2.0** (`v1.2.0` @ `66240be`) — official Markdown engine, Jotdex dialect, `markdown:migrate` (dev-only), collapsed Todos ticker restored. Audit of the vault *copy*: 649 notes, 610 ok, 39 source-only. No live apply.
 
 ## Run (Development + SampleVault)
@@ -43,7 +44,6 @@ npm run markdown:migrate -- audit --vault C:\JotdexMigration\backup
 
 ## Known small polish (not blocking)
 
-- Search box can show `undefined` as the value
 - Leftover `tools/SampleVault/Conflict *.md` from earlier conflict tests (safe to delete)
 - NuGet NU1903 warning on SQLitePCLRaw (dependency bump later)
 - Cloud backup Dropbox/Google live matrices pending (`docs/cloud-backup-matrices.md`)
