@@ -27,6 +27,7 @@ import { HtmlCommentParse } from './HtmlCommentParse'
 import { RawHtmlCommentBlock, RawHtmlCommentInline } from './RawHtmlComment'
 import { UnresolvedWikiLink } from './UnresolvedWikiLink'
 import { PendingAssetPlaceholder } from './PendingAssetPlaceholder'
+import { BlockGapNavigation } from './blockGapNavigation'
 import { PendingAssetView } from './PendingAssetView'
 import { AttachmentResolver, type AttachmentInfo } from '../assets/AttachmentResolver'
 import { CANONICAL_LIST_INDENT } from '../markdown/canonical'
@@ -142,6 +143,7 @@ export function createEditorExtensions(opts: EditorExtensionOptions = {}): Exten
     RawHtmlCommentBlock,
     UnresolvedWikiLink,
     HtmlCommentParse,
+    BlockGapNavigation,
     ConsistentLineBreaks,
     Markdown.configure({
       indentation: { style: 'space', size: CANONICAL_LIST_INDENT },

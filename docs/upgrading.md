@@ -34,6 +34,10 @@ Upload **`artifacts\jotdex-win-x64.zip`** to a GitHub Release (tag like `v1.1.0`
 3. Download the Release zip, extract over the install folder, **keep `data\`**.
 4. Start `start-portable.cmd`.
 
+## 1.2.2 (caret between stacked blocks)
+
+1.2.2 is a small editor follow-up. Two code boxes (or a picture against a code box) with no line between them now take a blinking accent caret in the seam — Arrow Down from the end of the first box, or a click in that gap, then Enter or type. The boxes themselves look the same. Rollback is the previous portable exe (1.2.1).
+
 ## 1.2.1 (Share/export callouts)
 
 1.2.1 is a small follow-up to 1.2.0. Callouts you save as `> [!warning]` (or `> [!tip] Title`) now keep their color in **Share HTML** and static vault export. The editor and ranking notes are unchanged. Rollback is the previous portable exe (1.2.0).

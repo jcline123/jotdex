@@ -7,6 +7,15 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 
 ---
 
+## 2026-09-02 — Click/caret between stacked code boxes and images
+
+- Two fenced code boxes (or a picture then a code box) with no paragraph between them had no place to put the caret: code-block ArrowDown jumped into the next box, and ProseMirror would not treat a code block as a gap-cursor edge. Arrow keys now stop on a thin accent line between those blocks; Enter or typing inserts a normal paragraph. Layout of the boxes themselves is unchanged.
+
+**Portable release 1.2.2**
+- Tag `v1.2.2` — Caret between stacked code boxes and images. Rollback is the previous exe (1.2.1).
+
+---
+
 ## 2026-09-01 — Share/export callouts after official Markdown
 
 - Visual notes now save Obsidian `> [!warning]` callouts. Markdig already turns those into `div.markdown-alert`, but Share HTML and static export still used generic blockquote CSS, so exported callouts looked like plain text. Export styles now cover GitHub-alert divs and older `data-callout` blockquotes, and a titled first line (`> [!warning] Title`) is split so Markdig still recognizes the alert.
