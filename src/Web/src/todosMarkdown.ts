@@ -11,6 +11,8 @@ export type TodoItem = {
   priority: TodoPriority
   due: string | null
   remind: TodoRemind
+  /** ISO-8601 instant when the item was added from the rail; omitted on older lines. */
+  added?: string | null
 }
 
 const TODO_RE =
@@ -35,6 +37,25 @@ function parseAttrs(raw: string): Record<string, string> {
   return out
 }
 
+const PRIORITY_RANK: Record<TodoPriority, number> = { critical: 0, high: 1, normal: 2, low: 3 }
+
+export function normalizeTodoPriority(p?: string | null): TodoPriority {
+  if (p === 'low' || p === 'normal' || p === 'high' || p === 'critical') return p
+  return 'normal'
+}
+
+function addedMs(raw?: string | null): number {
+  if (!raw) return 0
+  const t = Date.parse(raw)
+  return Number.isFinite(t) ? t : 0
+}
+
+function dueMs(raw?: string | null): number {
+  if (!raw) return Number.POSITIVE_INFINITY
+  const t = Date.parse(raw)
+  return Number.isFinite(t) ? t : Number.POSITIVE_INFINITY
+}
+
 export function parseTodosMarkdown(markdown: string): TodoItem[] {
   const items: TodoItem[] = []
   for (const line of markdown.split(/\r?\n/)) {
@@ -45,28 +66,82 @@ export function parseTodosMarkdown(markdown: string): TodoItem[] {
     const title = (m[2] ?? '').trim()
     if (!title) continue
     const attrs = parseAttrs(m[3] ?? '')
-    const priority = (attrs.priority as TodoPriority) || 'normal'
+    const priority = normalizeTodoPriority(attrs.priority)
     items.push({
       id: attrs.id || newTodoId(),
       title,
-      priority: ['low', 'normal', 'high', 'critical'].includes(priority) ? priority : 'normal',
+      priority,
       due: attrs.due || null,
       remind: attrs.remind || 'off',
+      added: attrs.added || null,
     })
   }
   return items
 }
 
 export function sortTodos(items: TodoItem[]): TodoItem[] {
-  const rank: Record<TodoPriority, number> = { critical: 0, high: 1, normal: 2, low: 3 }
-  return [...items].sort((a, b) => {
-    const pr = rank[a.priority] - rank[b.priority]
-    if (pr !== 0) return pr
-    const ad = a.due ? Date.parse(a.due) : Number.POSITIVE_INFINITY
-    const bd = b.due ? Date.parse(b.due) : Number.POSITIVE_INFINITY
-    if (ad !== bd) return ad - bd
-    return a.title.localeCompare(b.title)
-  })
+  return [...items].sort((a, b) => compareTodoOrder(a, b))
+}
+
+function compareTodoOrder(
+  a: { priority: TodoPriority; due?: string | null; added?: string | null; title: string },
+  b: { priority: TodoPriority; due?: string | null; added?: string | null; title: string },
+): number {
+  const pr = PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority]
+  if (pr !== 0) return pr
+  const added = addedMs(b.added) - addedMs(a.added)
+  if (added !== 0) return added
+  const due = dueMs(a.due) - dueMs(b.due)
+  if (due !== 0) return due
+  return a.title.localeCompare(b.title)
+}
+
+/** Note-backed open tasks as the rail receives them from /api/tasks. */
+export type VaultTaskLike = {
+  id: string
+  text: string
+  due?: string | null
+  priority?: string | null
+  remind?: string | null
+  added?: string | null
+  noteId: string
+  noteTitle: string
+}
+
+export type RailTodo =
+  | { kind: 'local'; item: TodoItem }
+  | { kind: 'vault'; task: VaultTaskLike }
+
+function railPriority(row: RailTodo): TodoPriority {
+  return row.kind === 'local' ? row.item.priority : normalizeTodoPriority(row.task.priority)
+}
+
+function railDue(row: RailTodo): string | null {
+  return row.kind === 'local' ? row.item.due : row.task.due ?? null
+}
+
+function railAdded(row: RailTodo): string | null {
+  return row.kind === 'local' ? row.item.added ?? null : row.task.added ?? null
+}
+
+function railTitle(row: RailTodo): string {
+  return row.kind === 'local' ? row.item.title : row.task.text
+}
+
+export function sortRailTodos(rows: RailTodo[]): RailTodo[] {
+  return [...rows].sort((a, b) =>
+    compareTodoOrder(
+      { priority: railPriority(a), due: railDue(a), added: railAdded(a), title: railTitle(a) },
+      { priority: railPriority(b), due: railDue(b), added: railAdded(b), title: railTitle(b) },
+    ),
+  )
+}
+
+export function mergeRailTodos(items: TodoItem[], vault: VaultTaskLike[]): RailTodo[] {
+  return sortRailTodos([
+    ...items.map((item) => ({ kind: 'local' as const, item })),
+    ...vault.map((task) => ({ kind: 'vault' as const, task })),
+  ])
 }
 
 function escapeTitle(title: string): string {
@@ -79,7 +154,8 @@ export function serializeTodosMarkdown(frontMatterNote: string, items: TodoItem[
   const lines = sortTodos(items).map((t) => {
     const due = t.due ? ` due="${t.due}"` : ''
     const remind = t.remind && t.remind !== 'off' ? ` remind="${t.remind}"` : ' remind="off"'
-    return `- [ ] ${escapeTitle(t.title)} <!-- jotdex-todo id="${t.id}" priority="${t.priority}"${due}${remind} -->`
+    const added = t.added ? ` added="${t.added}"` : ''
+    return `- [ ] ${escapeTitle(t.title)} <!-- jotdex-todo id="${t.id}" priority="${t.priority}"${due}${remind}${added} -->`
   })
   const body = lines.length ? lines.join('\n') + '\n' : ''
   if (split.fm) return `${split.fm}\n\n${body}`

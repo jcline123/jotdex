@@ -14,6 +14,7 @@ public sealed class VaultTaskDto
     public string? Due { get; init; }
     public string Priority { get; init; } = "normal";
     public string? Remind { get; init; }
+    public string? Added { get; init; }
     public int LineIndex { get; init; }
     public bool StandaloneTodosMd { get; init; }
 }
@@ -61,7 +62,7 @@ public sealed class VaultTaskService : IVaultTaskService
     public IReadOnlyList<VaultTaskDto> ListOpenTasks()
     {
         var list = new List<VaultTaskDto>();
-        // Include Todos.md so path-based tooling stays consistent; UI filters standalone out of "From notes".
+        // Include Todos.md so path-based tooling stays consistent; the rail filters standalone out of the mixed list.
         foreach (var summary in _vault.ListNotes("", includeStandaloneTodosMd: true))
         {
             var note = _vault.GetNote(summary.Id);
@@ -93,6 +94,7 @@ public sealed class VaultTaskService : IVaultTaskService
                     Due = attrs.GetValueOrDefault("due"),
                     Priority = attrs.GetValueOrDefault("priority") ?? "normal",
                     Remind = attrs.GetValueOrDefault("remind"),
+                    Added = attrs.GetValueOrDefault("added"),
                     LineIndex = i,
                     StandaloneTodosMd = standalone
                 });
@@ -284,6 +286,7 @@ public sealed class VaultTaskService : IVaultTaskService
         Append("priority");
         Append("due");
         Append("remind");
+        Append("added");
         sb.Append(" -->");
         return sb.ToString();
     }

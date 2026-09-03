@@ -7,6 +7,16 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 
 ---
 
+## 2026-09-03 — One Todos list; Share HTML without product fingerprints
+
+- The Todos rail listed note checkboxes in a second “From notes” block under rail-created items. They now share one list, sorted by priority then when the item was added (newer first). The note chip is still how you tell a note-backed row. New rail items store an `added` timestamp in the `Todos.md` comment; older lines without it sort as older in the same priority band. On-disk note checkboxes were not rewritten.
+- Share HTML (and static note pages that reuse the same CSS) had `jotdex-*` class names, `data-jotdex-*` attributes, and `<!-- jotdex-… -->` comments in the file even though the visible page had no app name. Those tokens are stripped at export only so a recipient or a model cannot read the product name from the HTML source. Vault Markdown is unchanged.
+
+**Portable release 1.3.2**
+- Tag `v1.3.2` — one Todos list; Share HTML without product fingerprints. Rollback is the previous exe (1.3.1).
+
+---
+
 ## 2026-09-02 — Todos rail: note chip and quieter add
 
 - Checkboxes from a note already listed the note name, but it was not a control. The expanded rail now has a small note chip that opens that note for context; the task title still opens Edit.

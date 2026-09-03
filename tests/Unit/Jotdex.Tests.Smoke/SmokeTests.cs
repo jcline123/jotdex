@@ -664,6 +664,52 @@ public class SmokeTests : IClassFixture<WebApplicationFactory<Program>>
     }
 
     [Fact]
+    public async Task Export_html_has_no_product_identifiers()
+    {
+        var body = """
+            # Shared note
+
+            > [!warning]
+            > Careful with the firewall
+
+            <!-- jotdex-details -->
+            Summary
+
+            Hidden
+            <!-- /jotdex-details -->
+
+            - [ ] Review the contract <!-- jotdex-task id="t1" priority="high" -->
+            """;
+
+        var create = await _client.PostAsJsonAsync("/api/notes", new
+        {
+            title = "ExportAnon " + Guid.NewGuid().ToString("N")[..6],
+            folder = "",
+            markdown = body
+        });
+        Assert.Equal(HttpStatusCode.OK, create.StatusCode);
+        var note = await create.Content.ReadFromJsonAsync<NoteDetailDto>();
+        Assert.NotNull(note);
+
+        try
+        {
+            var export = await _client.GetAsync($"/api/notes/{note!.Id}/export-html");
+            Assert.Equal(HttpStatusCode.OK, export.StatusCode);
+            var exported = await export.Content.ReadAsStringAsync();
+            Assert.DoesNotContain("jotdex", exported, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("markdown-alert-warning", exported, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("class=\"details\"", exported, StringComparison.Ordinal);
+            Assert.Contains("Review the contract", exported, StringComparison.Ordinal);
+            Assert.Contains("Summary", exported, StringComparison.Ordinal);
+            Assert.Contains("Careful with the firewall", exported, StringComparison.Ordinal);
+        }
+        finally
+        {
+            await _client.DeleteAsync($"/api/notes/{note!.Id}");
+        }
+    }
+
+    [Fact]
     public async Task Duplicate_titles_never_overwrite()
     {
         var title = "DupTitle " + Guid.NewGuid().ToString("N")[..6];

@@ -34,6 +34,10 @@ Upload **`artifacts\jotdex-win-x64.zip`** to a GitHub Release (tag like `v1.1.0`
 3. Download the Release zip, extract over the install folder, **keep `data\`**.
 4. Start `start-portable.cmd`.
 
+## 1.3.2 (one Todos list; unbranded Share HTML)
+
+1.3.2 is a small follow-up to 1.3.1. The Todos rail is one list (priority, then when you added the item); note-backed rows still have the ↗ chip. Share HTML looks the same but the downloaded file no longer contains `jotdex-*` classes, data attributes, or comments. Vault Markdown is unchanged. Rollback is the previous portable exe (1.3.1).
+
 ## 1.3.1 (todos rail)
 
 1.3.1 is a small follow-up to 1.3.0. Checkboxes from a note show a chip that opens that note. Adding a to-do from the rail puts it on the list without opening Edit — click the item when you want due/priority/reminders. Rollback is the previous portable exe (1.3.0).

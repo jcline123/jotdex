@@ -2834,14 +2834,6 @@ button {
   font-size: 0.78rem;
 }
 
-.todos-section-label {
-  margin: 0.75rem 0.75rem 0.35rem;
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--muted);
-}
-
 .todos-note-link {
   display: block;
   text-align: left;

@@ -1155,7 +1155,7 @@ export function NoteEditor({
           type="button"
           className={editor.isActive('taskList') ? 'on' : ''}
           onClick={() => runCmd('block.taskList')}
-          title="Turn selection into a checklist todo (appears under Todos → From notes)"
+          title="Turn selection into a checklist todo (appears in the Todos rail)"
         >
           Todo
         </button>

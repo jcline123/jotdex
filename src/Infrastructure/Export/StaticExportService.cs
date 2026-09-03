@@ -84,6 +84,7 @@ public sealed partial class StaticExportService : IStaticExportService
                 }
 
                 var bodyHtml = SanitizeExportHtml(_markdown.ToHtml(StripFrontMatter(detail.Markdown)));
+                bodyHtml = ShareHtmlAnonymizer.StripProductIdentifiers(bodyHtml);
                 bodyHtml = RewriteAttachmentLinks(bodyHtml, summary.RelativePath, htmlRel);
 
                 var depth = htmlRel.Count(c => c == '/');

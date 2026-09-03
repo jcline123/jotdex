@@ -63,10 +63,10 @@ SQLite FTS5 with a word index **and** a trigram index. Find a hostname, an error
 **Clip page** fetches a URL on the server and drops in title, description, and an excerpt. A bookmarklet saves the page you are looking at. Home shows recently viewed, created, and updated notes — the same on every device.
 
 ### Todos where you wrote them
-Checkboxes in notes show up in a **Todos** rail with priority, due date, reminders, and a chip that opens the source note. Finish the task in the note it belongs to. A standalone inbox lives in `Todos.md` if you want a scratch list.
+Checkboxes in notes and items you add in the rail share one **Todos** list, ordered by priority then when you added them. A chip still opens the source note. Finish the task in the note it belongs to. A standalone inbox lives in `Todos.md` if you want a scratch list.
 
 ### Safety net, not a leap of faith
-Every edit **autosaves**. Per-note **history** lives outside the vault so you can compare and roll back a bad change. Trash (restore or delete). Optional password, idle lock, and TOTP. **Share HTML** downloads one note as a clean single file you can email — no Jotdex branding, recipient does not need the app.
+Every edit **autosaves**. Per-note **history** lives outside the vault so you can compare and roll back a bad change. Trash (restore or delete). Optional password, idle lock, and TOTP. **Share HTML** downloads one note as a clean single file you can email — no Jotdex name in the page or the HTML source; the recipient does not need the app.
 
 ### Your network, your backup, your next PC
 LAN access from Settings (firewall helper included). Away from home: a VPN, or a **Cloudflare Tunnel** so you do not open inbound ports. Optional Windows Service so it comes back after reboot. Optional **vault mirror** to another local path, UNC share, or sync folder. Optional **multi-provider cloud backup** (encrypted Move Kits to Dropbox / Google Drive / OneDrive APIs). **Move kit** ZIP to pick up the whole install on a new machine. In-app **Updates** pull the latest portable release.
@@ -243,7 +243,7 @@ In Development it may start with a sample vault. Use **Settings** to point at `C
    - Select a folder, then **Move**, leave the box blank → moves that folder to the root.
 3. Click **New note**, type something, wait for the green **saved** chip.
 4. Press **Ctrl+K** and search.
-5. Open a note → **Share HTML** to download a file you can email (no app name on the page).
+5. Open a note → **Share HTML** to download a file you can email (no app name in the page or HTML source).
 6. **Settings → Start with Windows** so Jotdex comes back after a reboot (or install the Windows Service — see [SETUP.md](SETUP.md)).
 7. **Settings → Logs → View recent log** if something goes wrong (files also live under app data `\logs\`).
 

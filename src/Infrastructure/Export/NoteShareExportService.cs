@@ -84,6 +84,7 @@ public sealed partial class NoteShareExportService : INoteShareExportService
                 }
             }
 
+            body = ShareHtmlAnonymizer.StripProductIdentifiers(body);
             var html = WrapPage(note.Title, body, note.Tags);
             var safeName = SanitizeFileName(note.Title);
             if (string.IsNullOrWhiteSpace(safeName))

@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   formatDueLabel,
+  mergeRailTodos,
   newTodoId,
+  normalizeTodoPriority,
   parseTodosMarkdown,
   serializeTodosMarkdown,
   sortTodos,
@@ -31,7 +33,7 @@ type Props = {
   collapsed?: boolean
   onToggleCollapsed?: () => void
   onOpenNote?: (noteId: string) => void
-  /** Bump when notes are trashed/restored/saved so From notes stays in sync. */
+  /** Bump when notes are trashed/restored/saved so note-backed tasks stay in sync. */
   refreshKey?: number
   /** After a note-backed task is rewritten on disk, reload that note if open. */
   onNoteTasksChanged?: (noteId: string) => void
@@ -46,6 +48,7 @@ type VaultTask = {
   due?: string | null
   priority?: string
   remind?: string | null
+  added?: string | null
   standaloneTodosMd?: boolean
 }
 
@@ -82,11 +85,6 @@ async function findOrCreateTodosNote(): Promise<NoteDetail> {
     r.json(),
   )) as NoteDetail
   return note
-}
-
-function normalizePriority(p?: string | null): TodoPriority {
-  if (p === 'low' || p === 'normal' || p === 'high' || p === 'critical') return p
-  return 'normal'
 }
 
 export function TodosRail({
@@ -260,6 +258,7 @@ export function TodosRail({
       priority: 'normal',
       due: null,
       remind: 'off',
+      added: new Date().toISOString(),
     }
     setDraft('')
     setSelection(null)
@@ -373,11 +372,12 @@ export function TodosRail({
     })
   }
 
+  const railRows = mergeRailTodos(items, vaultTasks)
+
   if (collapsed && !fill) {
-    const titles = [
-      ...items.map((t) => t.title.trim()),
-      ...vaultTasks.map((t) => t.text.trim()),
-    ].filter(Boolean)
+    const titles = railRows
+      .map((row) => (row.kind === 'local' ? row.item.title : row.task.text).trim())
+      .filter(Boolean)
     const durationSec = Math.max(14, titles.length * 5)
     return (
       <aside
@@ -457,99 +457,96 @@ export function TodosRail({
           <p className="muted todos-empty">Nothing open — add something above, or check a box in a note.</p>
         )}
 
-        {items.length > 0 && (
+        {railRows.length > 0 && (
           <ul className="todos-list">
-            {items.map((t) => (
-              <li key={t.id}>
-                <div
-                  className={`todos-row priority-${t.priority}${
-                    selection?.kind === 'local' && selection.id === t.id ? ' on' : ''
-                  }`}
-                >
-                  <input
-                    type="checkbox"
-                    checked={false}
-                    aria-label={`Complete ${t.title}`}
-                    onChange={() => completeTodo(t.id)}
-                  />
-                  <button
-                    type="button"
-                    className="todos-row-main"
-                    onClick={() => setSelection({ kind: 'local', id: t.id })}
-                  >
-                    <span className="todos-title">{t.title}</span>
-                    <span className="todos-meta">
-                      <span className={`todos-pri pri-${t.priority}`}>{t.priority}</span>
-                      {formatDueLabel(t.due) && <span className="todos-due">{formatDueLabel(t.due)}</span>}
-                      {t.remind !== 'off' && <span className="todos-remind">remind</span>}
-                    </span>
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-
-        {vaultTasks.length > 0 && (
-          <>
-            <h3 className="todos-section-label">From notes</h3>
-            <ul className="todos-list">
-              {vaultTasks.map((t) => {
-                const pri = normalizePriority(t.priority)
+            {railRows.map((row) => {
+              if (row.kind === 'local') {
+                const t = row.item
                 return (
-                  <li key={t.id}>
+                  <li key={`local:${t.id}`}>
                     <div
-                      className={`todos-row priority-${pri}${
-                        selection?.kind === 'vault' && selection.id === t.id ? ' on' : ''
+                      className={`todos-row priority-${t.priority}${
+                        selection?.kind === 'local' && selection.id === t.id ? ' on' : ''
                       }`}
                     >
                       <input
                         type="checkbox"
                         checked={false}
-                        aria-label={`Complete ${t.text}`}
-                        onChange={() => void completeVaultTask(t.id)}
+                        aria-label={`Complete ${t.title}`}
+                        onChange={() => completeTodo(t.id)}
                       />
-                      <div className="todos-row-body">
-                        <button
-                          type="button"
-                          className="todos-row-main"
-                          onClick={() => setSelection({ kind: 'vault', id: t.id })}
-                        >
-                          <span className="todos-title">{t.text}</span>
-                          <span className="todos-meta">
-                            <span className={`todos-pri pri-${pri}`}>{pri}</span>
-                            {formatDueLabel(t.due ?? null) && (
-                              <span className="todos-due">{formatDueLabel(t.due ?? null)}</span>
-                            )}
-                            {t.remind && t.remind !== 'off' && <span className="todos-remind">remind</span>}
-                          </span>
-                        </button>
-                        {onOpenNote ? (
-                          <button
-                            type="button"
-                            className="todos-note-open"
-                            title={`Open note: ${t.noteTitle || 'Untitled'}`}
-                            onClick={(e) => {
-                              e.preventDefault()
-                              e.stopPropagation()
-                              onOpenNote(t.noteId)
-                            }}
-                          >
-                            <span className="todos-note-open-mark" aria-hidden>
-                              ↗
-                            </span>
-                            <span className="todos-note-open-title">{t.noteTitle || 'Open note'}</span>
-                          </button>
-                        ) : (
-                          t.noteTitle && <span className="todos-note-link muted">{t.noteTitle}</span>
-                        )}
-                      </div>
+                      <button
+                        type="button"
+                        className="todos-row-main"
+                        onClick={() => setSelection({ kind: 'local', id: t.id })}
+                      >
+                        <span className="todos-title">{t.title}</span>
+                        <span className="todos-meta">
+                          <span className={`todos-pri pri-${t.priority}`}>{t.priority}</span>
+                          {formatDueLabel(t.due) && <span className="todos-due">{formatDueLabel(t.due)}</span>}
+                          {t.remind !== 'off' && <span className="todos-remind">remind</span>}
+                        </span>
+                      </button>
                     </div>
                   </li>
                 )
-              })}
-            </ul>
-          </>
+              }
+
+              const t = row.task
+              const pri = normalizeTodoPriority(t.priority)
+              return (
+                <li key={`vault:${t.id}`}>
+                  <div
+                    className={`todos-row priority-${pri}${
+                      selection?.kind === 'vault' && selection.id === t.id ? ' on' : ''
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={false}
+                      aria-label={`Complete ${t.text}`}
+                      onChange={() => void completeVaultTask(t.id)}
+                    />
+                    <div className="todos-row-body">
+                      <button
+                        type="button"
+                        className="todos-row-main"
+                        onClick={() => setSelection({ kind: 'vault', id: t.id })}
+                      >
+                        <span className="todos-title">{t.text}</span>
+                        <span className="todos-meta">
+                          <span className={`todos-pri pri-${pri}`}>{pri}</span>
+                          {formatDueLabel(t.due ?? null) && (
+                            <span className="todos-due">{formatDueLabel(t.due ?? null)}</span>
+                          )}
+                          {t.remind && t.remind !== 'off' && <span className="todos-remind">remind</span>}
+                        </span>
+                      </button>
+                      {onOpenNote ? (
+                        <button
+                          type="button"
+                          className="todos-note-open"
+                          title={`Open note: ${t.noteTitle || 'Untitled'}`}
+                          onClick={(e) => {
+                            e.preventDefault()
+                            e.stopPropagation()
+                            onOpenNote(t.noteId)
+                          }}
+                        >
+                          <span className="todos-note-open-mark" aria-hidden>
+                            ↗
+                          </span>
+                          <span className="todos-note-open-title">{t.noteTitle || 'Open note'}</span>
+                        </button>
+                      ) : (
+                        t.noteTitle && <span className="todos-note-link muted">{t.noteTitle}</span>
+                      )}
+                    </div>
+                  </div>
+                </li>
+              )
+            })}
+          </ul>
         )}
       </div>
 
@@ -656,7 +653,7 @@ export function TodosRail({
           <label className="field">
             Priority
             <select
-              value={normalizePriority(selectedVault.priority)}
+              value={normalizeTodoPriority(selectedVault.priority)}
               onChange={(e) => {
                 const priority = e.target.value as TodoPriority
                 if (priority === 'critical') updateSelectedVault({ priority, remind: 'every:30m' })
@@ -742,7 +739,7 @@ function vaultRemindSelectValue(t: VaultTask): string {
   const remind = t.remind || 'off'
   if (remind === 'off') return 'off'
   if (remind.startsWith('once:')) return 'once-due'
-  if (remind === 'every:30m' && normalizePriority(t.priority) === 'critical') return 'critical'
+  if (remind === 'every:30m' && normalizeTodoPriority(t.priority) === 'critical') return 'critical'
   if (remind === 'every:30m') return 'every:30m'
   if (remind === 'every:60m') return 'every:60m'
   return 'off'
