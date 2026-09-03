@@ -13,7 +13,7 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 - Share HTML (and static note pages that reuse the same CSS) had `jotdex-*` class names, `data-jotdex-*` attributes, and `<!-- jotdex-… -->` comments in the file even though the visible page had no app name. Those tokens are stripped at export only so a recipient or a model cannot read the product name from the HTML source. Vault Markdown is unchanged.
 
 **Portable release 1.3.2**
-- Tag `v1.3.2` — one Todos list; Share HTML without product fingerprints. Rollback is the previous exe (1.3.1).
+- Tag `v1.3.2` (`9af6399`) — one Todos list; Share HTML without product fingerprints. Rollback is the previous exe (1.3.1).
 
 ---
 
