@@ -17,7 +17,7 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 - Image size could only be typed. Selected images now have corner and edge handles; the drag is a view-only preview until release, then one width transaction as a percent of the note column (20–100). Code boxes can be dragged from the ⋮⋮ grip on the top bar the same way pictures already move; the ↑/↓ buttons still work.
 
 **Portable release 1.3.3**
-- Tag `v1.3.3` — heading folds in the vault helper; image corner/edge resize; code-box drag. Rollback is the previous exe (1.3.2).
+- Tag `v1.3.3` (`9eb5d7a`) — heading folds in the vault helper; image corner/edge resize; code-box drag. Rollback is the previous exe (1.3.2).
 
 ## 2026-09-03 — One Todos list; Share HTML without product fingerprints
 
