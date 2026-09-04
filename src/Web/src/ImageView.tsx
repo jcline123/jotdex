@@ -1,13 +1,20 @@
 import { NodeViewWrapper } from '@tiptap/react'
 import type { NodeViewProps } from '@tiptap/react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { displayUrlForSrc, getAttachmentResolverState } from './editor/assets/AttachmentResolver'
+import {
+  currentImageWidthPercent,
+  nudgeImageWidthPercent,
+  storedWidthFromPercent,
+} from './editor/images/imageWidth'
 
 function isResolvedDisplaySrc(src: string): boolean {
   return /^(?:\/api\/attachments\/|blob:|data:|https?:)/i.test(src)
 }
 
-/** TipTap image with select chrome, inspector, and one-click Remove. */
+type ResizeEdge = 'e' | 'w'
+
+/** TipTap image with select chrome, inspector, drag-resize, and one-click Remove. */
 export function ImageView({ node, selected, deleteNode, editor, updateAttributes }: NodeViewProps) {
   const canonical = String(node.attrs.src ?? '')
   const src = displayUrlForSrc(getAttachmentResolverState(editor), canonical)
@@ -19,6 +26,16 @@ export function ImageView({ node, selected, deleteNode, editor, updateAttributes
   const lightbox = Boolean(node.attrs.lightbox)
   const [broken, setBroken] = useState(false)
   const [lightOn, setLightOn] = useState(false)
+  const [previewPct, setPreviewPct] = useState<number | null>(null)
+  const dragRef = useRef<{
+    edge: ResizeEdge
+    startX: number
+    startPct: number
+    originPct: number
+    lastPct: number
+  } | null>(null)
+  const frameRef = useRef<HTMLDivElement>(null)
+  const resizeAbortRef = useRef<((commit: boolean) => void) | null>(null)
   const label = alt || title || fileNameFromSrc(canonical) || 'Image'
   const runtime = /^(blob:|data:)/i.test(canonical)
 
@@ -26,12 +43,103 @@ export function ImageView({ node, selected, deleteNode, editor, updateAttributes
     setBroken(false)
   }, [src])
 
+  useEffect(() => {
+    if (!selected) {
+      resizeAbortRef.current?.(false)
+      setPreviewPct(null)
+    }
+  }, [selected])
+
+  useEffect(() => {
+    return () => {
+      resizeAbortRef.current?.(false)
+      document.body.classList.remove('jotdex-image-resizing')
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!selected || !editor.isEditable) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && resizeAbortRef.current) {
+        e.preventDefault()
+        resizeAbortRef.current(false)
+        return
+      }
+      if (resizeAbortRef.current) return
+      const t = e.target as HTMLElement | null
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA')) return
+      if (!e.altKey || (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight')) return
+      e.preventDefault()
+      const container = editor.view.dom.clientWidth
+      const displayed = frameRef.current?.getBoundingClientRect().width ?? container
+      const current = currentImageWidthPercent(width || null, displayed, container)
+      const next = nudgeImageWidthPercent(current, e.key === 'ArrowRight' ? 1 : -1)
+      updateAttributes({ width: storedWidthFromPercent(next) })
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [selected, editor, width, updateAttributes])
+
+  function commitPercent(pct: number) {
+    updateAttributes({ width: storedWidthFromPercent(pct) })
+  }
+
+  function startResize(edge: ResizeEdge, clientX: number) {
+    if (!editor.isEditable) return
+    resizeAbortRef.current?.(false)
+    const container = editor.view.dom.clientWidth
+    const displayed = frameRef.current?.getBoundingClientRect().width ?? container
+    const startPct = currentImageWidthPercent(width || null, displayed, container)
+    dragRef.current = { edge, startX: clientX, startPct, originPct: startPct, lastPct: startPct }
+    setPreviewPct(startPct)
+    document.body.classList.add('jotdex-image-resizing')
+
+    const onMove = (ev: PointerEvent) => {
+      const drag = dragRef.current
+      if (!drag) return
+      const delta = drag.edge === 'e' ? ev.clientX - drag.startX : drag.startX - ev.clientX
+      const containerW = editor.view.dom.clientWidth || 1
+      const next = currentImageWidthPercent(null, (drag.startPct / 100) * containerW + delta, containerW)
+      drag.lastPct = next
+      setPreviewPct(next)
+    }
+    const finish = (commit: boolean) => {
+      if (resizeAbortRef.current === finish) resizeAbortRef.current = null
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointercancel', onCancel)
+      document.body.classList.remove('jotdex-image-resizing')
+      const drag = dragRef.current
+      dragRef.current = null
+      setPreviewPct(null)
+      if (commit && drag && drag.lastPct !== drag.originPct) commitPercent(drag.lastPct)
+    }
+    const onUp = () => finish(true)
+    const onCancel = () => finish(false)
+    resizeAbortRef.current = finish
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+    window.addEventListener('pointercancel', onCancel)
+  }
+
+  const wrapperWidth =
+    previewPct != null
+      ? `${previewPct}%`
+      : width.endsWith('%')
+        ? width
+        : width && /^\d+(\.\d+)?$/.test(width)
+          ? `${width}px`
+          : width || undefined
+
+  const hasWidth = wrapperWidth != null
+
   return (
     <NodeViewWrapper
-      className={`note-image${selected ? ' is-selected' : ''}${broken ? ' is-broken' : ''}${align ? ` align-${align}` : ''}`}
-      data-drag-handle
+      className={`note-image${selected ? ' is-selected' : ''}${broken ? ' is-broken' : ''}${align ? ` align-${align}` : ''}${previewPct != null ? ' is-resizing' : ''}${hasWidth ? ' has-width' : ''}`}
+      data-drag-handle={previewPct != null ? undefined : ''}
+      style={wrapperWidth ? { width: wrapperWidth, maxWidth: '100%' } : undefined}
     >
-      <div className="note-image-frame" contentEditable={false}>
+      <div className="note-image-frame" ref={frameRef} contentEditable={false}>
         {!broken ? (
           <img
             key={src}
@@ -39,10 +147,8 @@ export function ImageView({ node, selected, deleteNode, editor, updateAttributes
             alt={alt}
             title={title || alt}
             draggable={false}
-            style={width ? { width: /^\d+$/.test(width) ? `${width}px` : width, maxWidth: '100%' } : undefined}
             onLoad={() => setBroken(false)}
             onError={() => {
-              // Vault-relative src 404s until attachment inventory is applied.
               if (!isResolvedDisplaySrc(src)) return
               setBroken(true)
             }}
@@ -75,6 +181,23 @@ export function ImageView({ node, selected, deleteNode, editor, updateAttributes
             </button>
           </div>
         )}
+        {selected && editor.isEditable && !broken && (
+          <>
+            {(['nw', 'ne', 'sw', 'se', 'w', 'e'] as const).map((name) => (
+              <span
+                key={name}
+                className={`note-image-resize note-image-resize-${name}`}
+                data-resize={name}
+                onPointerDown={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  startResize(name === 'w' || name === 'nw' || name === 'sw' ? 'w' : 'e', e.clientX)
+                }}
+                onDragStart={(e) => e.preventDefault()}
+              />
+            ))}
+          </>
+        )}
       </div>
       {caption && <figcaption className="jotdex-figcaption">{caption}</figcaption>}
       {selected && editor.isEditable && (
@@ -97,8 +220,9 @@ export function ImageView({ node, selected, deleteNode, editor, updateAttributes
           <label>
             Width
             <input
-              value={width}
-              placeholder="px"
+              value={previewPct != null ? `${previewPct}%` : width}
+              placeholder="65% or px"
+              disabled={previewPct != null}
               onChange={(e) => updateAttributes({ width: e.target.value || null })}
             />
           </label>
@@ -131,6 +255,7 @@ export function ImageView({ node, selected, deleteNode, editor, updateAttributes
           >
             Replace
           </button>
+          <p className="muted jotdex-image-resize-hint">Drag a corner or edge to resize. Alt+←/→ nudges 5%. Escape cancels a drag.</p>
         </div>
       )}
       {lightOn && (

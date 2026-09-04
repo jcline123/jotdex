@@ -397,6 +397,17 @@ app.MapGet("/api/notes/{id:guid}", (Guid id, IVaultService vault, IVaultPathGuar
     return note is null ? Results.NotFound() : Results.Json(note);
 });
 
+app.MapPut("/api/notes/{id:guid}/heading-folds", async (Guid id, HttpRequest request, INoteCommandService commands, IVaultPathGuard paths) =>
+{
+    if (!paths.IsConfigured) return Results.NotFound(new { error = "Vault not configured" });
+    var body = await request.ReadFromJsonAsync<HeadingFoldsBody>();
+    var collapsed = body?.Collapsed ?? [];
+    var result = commands.SaveHeadingFolds(id, collapsed);
+    if (!result.Success)
+        return result.Error == "Note not found" ? Results.NotFound(result) : Results.BadRequest(result);
+    return Results.Json(result);
+});
+
 app.MapGet("/api/notes/{id:guid}/backlinks", (Guid id, INoteLinkService links, IVaultService vault, IVaultPathGuard paths) =>
 {
     if (!paths.IsConfigured) return Results.NotFound(new { error = "Vault not configured" });
@@ -895,6 +906,11 @@ internal sealed class SaveNoteBody
     public string? Markdown { get; set; }
     public string? ETag { get; set; }
     public bool Force { get; set; }
+}
+
+internal sealed class HeadingFoldsBody
+{
+    public List<string>? Collapsed { get; set; }
 }
 
 internal sealed class CreateNoteBody

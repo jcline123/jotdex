@@ -80,4 +80,15 @@ describe('dialect v2 marks and blocks', () => {
     expect(md).not.toMatch(/blob:/)
     editor.destroy()
   })
+
+  it('figure width percent round-trips', () => {
+    const editor = createTestEditor('![alt](Note.assets/x.png)')
+    editor.commands.updateAttributes('image', { width: '65%' })
+    const md = editorMarkdown(editor)
+    expect(md).toContain('width="65%"')
+    editor.destroy()
+    const again = createTestEditor(md)
+    expect(editorMarkdown(again)).toContain('width="65%"')
+    again.destroy()
+  })
 })

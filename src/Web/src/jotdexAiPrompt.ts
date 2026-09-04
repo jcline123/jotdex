@@ -118,7 +118,7 @@ Inline \`\\(a+b\\)\` and block \`\\[x=1\\]\`. Never use \`$\` / \`$$\` — those
 Unicode characters only (no \`:shortcode:\` rewrite).
 
 ## Figures
-A plain image stays \`![alt](Note.assets/file.png)\`. Use \`<figure>\` only when caption, width, or alignment is set.
+A plain image stays \`![alt](Note.assets/file.png)\`. Use \`<figure>\` only when caption, width, or alignment is set. Width on the \`<img>\` is a percent of the note column (\`width="65%"\`) or a pixel number (\`width="320"\`).
 
 ## Tables
 GitHub-style pipes:

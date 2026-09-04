@@ -51,6 +51,8 @@ public sealed class NoteDetail
         = new Dictionary<string, string?>();
     public IReadOnlyList<AttachmentInfo> Attachments { get; init; } = [];
     public IReadOnlyList<HtmlSidecar> HtmlSidecars { get; init; } = [];
+    /// <summary>Collapsed visual headings from sibling <c>Title.folds.json</c>. Not part of the Markdown body.</summary>
+    public IReadOnlyList<string> HeadingFolds { get; init; } = [];
 }
 
 public sealed class AttachmentInfo

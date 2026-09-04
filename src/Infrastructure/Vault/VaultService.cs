@@ -267,7 +267,8 @@ public sealed class VaultService : IVaultService
             Created = note.Summary.Created,
             FrontMatter = note.Fm.Fields,
             Attachments = note.Attachments,
-            HtmlSidecars = note.Sidecars
+            HtmlSidecars = note.Sidecars,
+            HeadingFolds = NoteFoldSidecar.ReadCollapsed(note.AbsolutePath)
         };
     }
 

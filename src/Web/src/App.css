@@ -2317,6 +2317,25 @@ button {
   display: block;
 }
 
+.note-image.has-width .note-image-frame {
+  display: block;
+  width: 100%;
+}
+
+.note-image.has-width img {
+  width: 100%;
+  height: auto;
+}
+
+.note-image.align-center.has-width {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.note-image.align-right.has-width {
+  margin-left: auto;
+}
+
 .note-image-frame {
   position: relative;
   display: inline-block;
@@ -2368,6 +2387,58 @@ button {
 .note-image-remove:hover {
   background: #b42318;
   border-color: #b42318;
+}
+
+.note-image-resize {
+  position: absolute;
+  z-index: 4;
+  box-sizing: border-box;
+  background: var(--accent, #3b82f6);
+  border: 1px solid #fff;
+  touch-action: none;
+  pointer-events: auto;
+}
+
+.note-image-resize-nw,
+.note-image-resize-ne,
+.note-image-resize-sw,
+.note-image-resize-se {
+  width: 10px;
+  height: 10px;
+  border-radius: 1px;
+}
+
+.note-image-resize-nw { top: -5px; left: -5px; cursor: nwse-resize; }
+.note-image-resize-ne { top: -5px; right: -5px; cursor: nesw-resize; }
+.note-image-resize-sw { bottom: -5px; left: -5px; cursor: nesw-resize; }
+.note-image-resize-se { bottom: -5px; right: -5px; cursor: nwse-resize; }
+
+.note-image-resize-w,
+.note-image-resize-e {
+  width: 8px;
+  height: 28%;
+  top: 36%;
+  border-radius: 4px;
+  cursor: ew-resize;
+}
+
+.note-image-resize-w { left: -4px; }
+.note-image-resize-e { right: -4px; }
+
+body.jotdex-image-resizing {
+  cursor: ew-resize;
+  user-select: none;
+}
+
+body.jotdex-image-resizing .jotdex-gutter-plus {
+  visibility: hidden !important;
+  pointer-events: none;
+}
+
+.jotdex-image-resize-hint {
+  flex: 1 1 100%;
+  margin: 0;
+  font-size: 0.75rem;
 }
 
 .note-image-broken {
@@ -2571,6 +2642,35 @@ button {
   user-select: none;
   flex-wrap: wrap;
   min-width: 0;
+}
+
+.code-block-chrome-start {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.code-block-drag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.15rem 0.35rem;
+  letter-spacing: -0.12em;
+  color: var(--muted, #9ca3af);
+  cursor: grab;
+  border-radius: 6px;
+  line-height: 1;
+  font-size: 0.85rem;
+}
+
+.code-block-drag:hover {
+  color: var(--text, #e5e7eb);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.code-block-drag:active {
+  cursor: grabbing;
 }
 
 .code-block-actions {

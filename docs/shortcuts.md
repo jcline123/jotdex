@@ -1,4 +1,4 @@
-# Keyboard shortcuts (Jotdex 1.3.0)
+# Keyboard shortcuts (Jotdex 1.3.3)
 
 App-wide:
 
@@ -19,6 +19,8 @@ Editor (visual mode):
 | **Insert** (toolbar) or gutter **+** | Same command list as slash |
 | Long-press the note (touch) | Opens the insert menu |
 | `Alt+ArrowUp` / `Alt+ArrowDown` | Move the current block |
+| Selected image + `Alt+ArrowLeft` / `Alt+ArrowRight` | Nudge width by 5% |
+| Click ▾ / ▸ on a heading | Collapse or expand that section |
 | Selection + bubble **More** | Highlight, underline, sub, sup, clear |
 | `[[` | Link to another note |
 

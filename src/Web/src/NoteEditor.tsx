@@ -43,6 +43,7 @@ import { isSafeHref, looksLikeBareUrl } from './editor/links/linkSchemes'
 import { EmojiPicker } from './editor/emoji/EmojiPicker'
 import { TableChrome } from './editor/tables/TableChrome'
 import { extractLiveOutline, moveSection, type LiveOutlineItem } from './editor/outline/liveOutline'
+import { persistHeadingFolds, restoreHeadingFolds, unfoldHeadingsContaining, foldsForNote, putHeadingFolds, clearLegacyBrowserFoldKeys } from './headingFold'
 
 
 const TEXT_COLORS = [
@@ -83,6 +84,7 @@ type Props = {
   /** Bumps when parent applies an external markdown reload (open note / conflict / preserve-page). */
   contentEpoch?: number
   jumpHeading?: { text: string; nonce: number; pos?: number } | null
+  headingFolds?: string[]
   onChange: (markdown: string, revision?: number) => void
   attachments?: AttachmentInfo[]
   editable?: boolean
@@ -178,6 +180,7 @@ export function NoteEditor({
   markdown,
   contentEpoch = 0,
   jumpHeading = null,
+  headingFolds = [],
   onChange,
   attachments = [],
   editable = true,
@@ -234,9 +237,22 @@ export function NoteEditor({
   const pasteModeRef = useRef<PasteMode>('smart')
   const attachmentsRef = useRef(attachments)
   const noteIdRef = useRef(noteId)
+  const headingFoldsRef = useRef(headingFolds)
+  const lastWrittenFoldsRef = useRef<string | null>(null)
+  const persistFoldsRef = useRef<(keys: string[]) => void>(() => {})
   const noteSessionRef = useRef(crypto.randomUUID())
   attachmentsRef.current = attachments
   noteIdRef.current = noteId
+  headingFoldsRef.current = headingFolds
+  persistFoldsRef.current = (keys) => {
+    const id = noteIdRef.current
+    const serialized = JSON.stringify(keys)
+    if (lastWrittenFoldsRef.current === serialized) return
+    lastWrittenFoldsRef.current = serialized
+    void putHeadingFolds(id, keys).then((ok) => {
+      if (ok) clearLegacyBrowserFoldKeys(id)
+    })
+  }
   pasteModeRef.current = pasteMode
   void noteStem
 
@@ -516,6 +532,7 @@ export function NoteEditor({
   const editor = useEditor({
     extensions: createEditorExtensions({
       withReactNodeViews: true,
+      persistFolds: (keys) => persistFoldsRef.current(keys),
       wikiOnChange: (s) => wikiOnChangeRef.current(s),
       slashOnChange: (s) => {
         setSlashState(s)
@@ -746,6 +763,10 @@ export function NoteEditor({
     },
     onCreate: ({ editor: ed }) => {
       setMarkdownDocument(ed, markdown, { emitUpdate: false })
+      const resolved = foldsForNote(noteIdRef.current, headingFoldsRef.current)
+      restoreHeadingFolds(ed, resolved.keys)
+      lastWrittenFoldsRef.current = JSON.stringify(resolved.keys)
+      if (resolved.migrateFromBrowser) persistFoldsRef.current(resolved.keys)
       coordinatorRef.current?.attach(ed)
       dispatchAttachmentInventory(ed, attachmentsRef.current)
       ;(ed.storage as { pendingAsset?: { retry?: (id: string) => void }; jotdexReplaceImage?: () => void }).pendingAsset = {
@@ -823,14 +844,18 @@ export function NoteEditor({
       })
     }
     if (from < 0) return
-    editor.chain().focus().setTextSelection({ from, to }).run()
-    try {
-      const dom = editor.view.domAtPos(from)
-      const el = (dom.node as HTMLElement).parentElement ?? (dom.node as HTMLElement)
-      el?.scrollIntoView?.({ block: 'center', behavior: 'smooth' })
-    } catch {
-      /* ignore */
+    unfoldHeadingsContaining(editor, from)
+    const reveal = () => {
+      editor.chain().focus().setTextSelection({ from, to }).run()
+      try {
+        const dom = editor.view.domAtPos(from)
+        const el = (dom.node as HTMLElement).parentElement ?? (dom.node as HTMLElement)
+        el?.scrollIntoView?.({ block: 'center', behavior: 'smooth' })
+      } catch {
+        /* ignore */
+      }
     }
+    requestAnimationFrame(reveal)
   }, [jumpHeading, editor])
 
   // Reload only on explicit document replacement (epoch), not attachment inventory.
@@ -848,25 +873,38 @@ export function NoteEditor({
       lastAttKeyRef.current = attKey
       dispatchAttachmentInventory(editor, attachments)
     }
-    if (!plan.replaceDocument) {
-      if (markdown !== lastEmittedRef.current) lastEmittedRef.current = markdown
-      return
+    if (plan.replaceDocument) {
+      appliedEpochRef.current = contentEpoch
+      readyRef.current = false
+      assertSetContentReason('external-version')
+      recordSetContent('external-version')
+      logEditorDiag({ setContentReason: 'external-version', noteId })
+      setMarkdownDocument(editor, markdown, { emitUpdate: false })
+      dispatchAttachmentInventory(editor, attachments)
+      lastEmittedRef.current = markdown
+      noteSessionRef.current = crypto.randomUUID()
+      coordinatorRef.current?.resetSession()
+      coordinatorRef.current?.attach(editor)
+      const resolved = foldsForNote(noteId, headingFoldsRef.current)
+      restoreHeadingFolds(editor, resolved.keys)
+      lastWrittenFoldsRef.current = JSON.stringify(resolved.keys)
+      if (resolved.migrateFromBrowser) persistFoldsRef.current(resolved.keys)
+      window.setTimeout(() => {
+        readyRef.current = true
+      }, 0)
+    } else if (markdown !== lastEmittedRef.current) {
+      lastEmittedRef.current = markdown
     }
 
-    appliedEpochRef.current = contentEpoch
-    readyRef.current = false
-    assertSetContentReason('external-version')
-    recordSetContent('external-version')
-    logEditorDiag({ setContentReason: 'external-version', noteId })
-    setMarkdownDocument(editor, markdown, { emitUpdate: false })
-    dispatchAttachmentInventory(editor, attachments)
-    lastEmittedRef.current = markdown
-    noteSessionRef.current = crypto.randomUUID()
-    coordinatorRef.current?.resetSession()
-    coordinatorRef.current?.attach(editor)
-    window.setTimeout(() => {
-      readyRef.current = true
-    }, 0)
+    return () => {
+      const keys = persistHeadingFolds(editor)
+      const serialized = JSON.stringify(keys)
+      if (lastWrittenFoldsRef.current === serialized) return
+      lastWrittenFoldsRef.current = serialized
+      void putHeadingFolds(noteId, keys).then((ok) => {
+        if (ok) clearLegacyBrowserFoldKeys(noteId)
+      })
+    }
   }, [markdown, attachments, contentEpoch, editor, noteId])
 
   useEffect(() => {

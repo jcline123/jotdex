@@ -84,6 +84,8 @@ export type EditorExtensionOptions = {
   dragOnChange?: (s: { top: number; left: number; pos: number } | null) => void
   attachments?: AttachmentInfo[]
   enableTypography?: boolean
+  /** Called when the user toggles a heading fold (not outline jump). */
+  persistFolds?: (keys: string[]) => void
 }
 
 function codeBlockPastePlugin(getEditor: () => Editor | null) {
@@ -137,6 +139,7 @@ export function createEditorExtensions(opts: EditorExtensionOptions = {}): Exten
   const CodeBlockExt = (
     withViews
       ? CodeBlockLowlight.extend({
+          draggable: true,
           addNodeView() {
             return ReactNodeViewRenderer(CodeBlockView)
           },
@@ -206,7 +209,7 @@ export function createEditorExtensions(opts: EditorExtensionOptions = {}): Exten
     JotdexSuperscript,
     JotdexAlignMarker,
     JotdexAlignment,
-    HeadingFold,
+    HeadingFold.configure({ persistFolds: opts.persistFolds }),
     WikiLinkSuggest.configure({ onChange: opts.wikiOnChange }),
     SlashMenuPlugin.configure({ onChange: opts.slashOnChange }),
     GutterPlusPlugin.configure({ onChange: opts.plusOnChange }),

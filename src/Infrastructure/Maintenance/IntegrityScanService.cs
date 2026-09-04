@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using Jotdex.Core.Vault;
+using Jotdex.Infrastructure.Vault;
 using Microsoft.Extensions.Logging;
 
 namespace Jotdex.Infrastructure.Maintenance;
@@ -150,6 +151,27 @@ public sealed partial class IntegrityScanService : IIntegrityScanService
                     Severity = "warning",
                     Code = "orphan-assets",
                     Message = $"Assets folder without sibling note: {rel}",
+                    Detail = rel
+                });
+            }
+        }
+
+        foreach (var foldsFile in Directory.EnumerateFiles(_paths.VaultRoot, "*" + NoteFoldSidecar.FileSuffix, SearchOption.AllDirectories))
+        {
+            try { _paths.EnsureInsideVault(foldsFile); }
+            catch { continue; }
+
+            var siblingMd = Path.ChangeExtension(foldsFile, null);
+            if (siblingMd.EndsWith(".folds", StringComparison.OrdinalIgnoreCase))
+                siblingMd = siblingMd[..^".folds".Length] + ".md";
+            if (!File.Exists(siblingMd))
+            {
+                var rel = _paths.ToRelativePath(foldsFile).Replace('\\', '/');
+                issues.Add(new IntegrityIssue
+                {
+                    Severity = "warning",
+                    Code = "orphan-folds",
+                    Message = $"Heading-fold helper without sibling note: {rel}",
                     Detail = rel
                 });
             }

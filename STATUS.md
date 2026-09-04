@@ -1,14 +1,15 @@
 # Jotdex STATUS
 
-**Active milestone:** EUX complete — portable **1.3.2**. Baseline was **1.3.1** (`v1.3.1` @ `acfead2`).  
-**Last updated:** 2026-09-03
+**Active milestone:** EUX complete — portable **1.3.3**. Baseline was **1.3.2** (`v1.3.2` @ `9af6399`).  
+**Last updated:** 2026-09-04
 
 ## In progress
 
-- None.
+- (none)
 
 ## Just shipped
 
+- Portable **1.3.3** (`v1.3.3`) — heading collapse stored beside the note (`Title.folds.json`); selected images drag-resize from corners/edges; code boxes drag from the top-bar grip. Live vault Markdown was **not** rewritten. Rollback is the previous exe (1.3.2); keep `artifacts/jotdex-win-x64-1.3.2.zip` and `C:\JotdexBackupHold\jotdex-win-x64-1.3.2.zip`.
 - Portable **1.3.2** (`v1.3.2` @ `9af6399`) — one Todos rail list (priority, then when added); Share HTML source has no `jotdex-*` classes, data attributes, or comments. Live vault was **not** rewritten. Rollback is the previous exe (1.3.1); keep `artifacts/jotdex-win-x64-1.3.1.zip` and `C:\JotdexBackupHold\jotdex-win-x64-1.3.1.zip`.
 - Portable **1.3.1** (`v1.3.1` @ `acfead2`) — Todos rail note chip (open source note) and Add no longer opens Edit. Live vault was **not** rewritten. Rollback is the previous exe (1.3.0); keep `artifacts/jotdex-win-x64-1.3.0.zip` and `C:\JotdexBackupHold\jotdex-win-x64-1.3.0.zip`.
 - Portable **1.3.0** (`v1.3.0` @ `3a5b561`) — slash `/`, gutter `+`, bubble formatting, block move, table chrome, image inspector, link popover/bookmarks, Details, highlight/u/sub/sup, alignment comments, titled/collapsible callouts, live outline, Unicode emoji, bundled KaTeX; Snipping Tool paste no longer sticks on “Missing or broken”; long notes with HTML in fences open Visual. Live vault was **not** rewritten. Rollback is the previous exe (1.2.2); keep `artifacts/jotdex-win-x64-1.2.2.zip` and `C:\JotdexBackupHold\jotdex-win-x64-1.2.2.zip`.

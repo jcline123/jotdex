@@ -34,6 +34,10 @@ Upload **`artifacts\jotdex-win-x64.zip`** to a GitHub Release (tag like `v1.1.0`
 3. Download the Release zip, extract over the install folder, **keep `data\`**.
 4. Start `start-portable.cmd`.
 
+## 1.3.3 (heading folds in the vault; image resize; code-box drag)
+
+1.3.3 is a small editor follow-up to 1.3.2. Collapsed headings are stored next to the note as `Title.folds.json` (not in the `.md` file, so they follow the vault across PCs). Selected images resize from a corner or edge (percent of the note column). Code boxes drag from the ⋮⋮ grip on the top bar. Rollback is the previous portable exe (1.3.2).
+
 ## 1.3.2 (one Todos list; unbranded Share HTML)
 
 1.3.2 is a small follow-up to 1.3.1. The Todos rail is one list (priority, then when you added the item); note-backed rows still have the ↗ chip. Share HTML looks the same but the downloaded file no longer contains `jotdex-*` classes, data attributes, or comments. Vault Markdown is unchanged. Rollback is the previous portable exe (1.3.1).

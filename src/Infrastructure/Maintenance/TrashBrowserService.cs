@@ -1,5 +1,6 @@
 using Jotdex.Core.Configuration;
 using Jotdex.Core.Vault;
+using Jotdex.Infrastructure.Vault;
 using Microsoft.Extensions.Logging;
 
 namespace Jotdex.Infrastructure.Maintenance;
@@ -138,6 +139,8 @@ public sealed class TrashBrowserService : ITrashBrowserService
                 Directory.Move(srcAssets, destAssets);
             }
 
+            NoteFoldSidecar.MoveBeside(srcMd, destAbs);
+
             PruneEmptyTrashParents(Path.GetDirectoryName(srcMd)!);
             _vault.Rescan();
             return new TrashActionResult { Success = true, RestoredRelativePath = destRel.Replace('\\', '/') };
@@ -158,6 +161,7 @@ public sealed class TrashBrowserService : ITrashBrowserService
             File.Delete(srcMd);
             if (Directory.Exists(srcAssets))
                 Directory.Delete(srcAssets, recursive: true);
+            NoteFoldSidecar.DeleteBeside(srcMd);
             PruneEmptyTrashParents(Path.GetDirectoryName(srcMd)!);
             return new TrashActionResult { Success = true };
         }

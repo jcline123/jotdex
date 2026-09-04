@@ -33,6 +33,7 @@ Suggested live path on this host: `C:\JotdexVault` or `D:\JotdexVault` (**local 
 | Section | Folder |
 | Page | `Title.md` |
 | Images / attachments | Sibling `Title.assets\` |
+| Heading collapse (editor) | Sibling `Title.folds.json` |
 | Subpage | Front matter `parent_id`, `subpage_order` |
 
 ## Note file
@@ -65,6 +66,19 @@ Rules:
 - Display title order: front-matter `title` → first H1 → filename.
 - Preserve `created` when present; app may update `modified`.
 - No BOM unless an imported file requires preservation.
+
+### Heading collapse helper `Title.folds.json`
+
+Visual H1–H3 collapse is **not** stored in the Markdown body (so Share/export and history stay clean). Next to `Title.md`:
+
+```json
+{
+  "v": 1,
+  "collapsed": ["1:1:Setup", "2:1:Later"]
+}
+```
+
+Keys are `level:occurrence:heading text`. The file is created when something is collapsed and deleted when everything is expanded. Rename, move, duplicate, trash, and restore keep it beside the note. It is not search-indexed.
 
 ### Vault root `Todos.md`
 

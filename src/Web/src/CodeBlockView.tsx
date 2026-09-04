@@ -101,12 +101,24 @@ export function CodeBlockView({ node, updateAttributes, editor, getPos }: NodeVi
   return (
     <NodeViewWrapper className="code-block-box" data-language={language}>
       <div className="code-block-chrome" contentEditable={false}>
-        <label className="code-lang">
+        <div className="code-block-chrome-start">
+          {editor.isEditable && (
+            <span
+              className="code-block-drag"
+              data-drag-handle=""
+              title="Drag to move this code box"
+              aria-label="Drag to move this code box"
+            >
+              ⋮⋮
+            </span>
+          )}
+          <label className="code-lang">
           <span className="sr-only">Language</span>
           <select
             value={CODE_LANGUAGES.some((l) => l.id === language) ? language : 'plaintext'}
             disabled={!editor.isEditable || editing}
             onChange={(e) => updateAttributes({ language: e.target.value })}
+            onPointerDown={(e) => e.stopPropagation()}
             aria-label="Code language"
           >
             {CODE_LANGUAGES.map((l) => (
@@ -119,7 +131,8 @@ export function CodeBlockView({ node, updateAttributes, editor, getPos }: NodeVi
             )}
           </select>
         </label>
-        <div className="code-block-actions">
+        </div>
+        <div className="code-block-actions" onPointerDown={(e) => e.stopPropagation()}>
           {editor.isEditable && (
             <>
               <div className="code-block-snippet-group" role="group" aria-label="Snippets">

@@ -39,6 +39,14 @@ public interface INoteCommandService
     NoteMoveResult Move(Guid id, string targetFolderRelativePath, string? newTitle = null);
     NoteDetail? Duplicate(Guid id);
     AttachmentUploadResult AddAttachment(Guid id, Stream content, string originalFileName, string? contentType);
+    HeadingFoldsResult SaveHeadingFolds(Guid id, IReadOnlyList<string> collapsed);
+}
+
+public sealed class HeadingFoldsResult
+{
+    public required bool Success { get; init; }
+    public string? Error { get; init; }
+    public IReadOnlyList<string> Collapsed { get; init; } = [];
 }
 
 public sealed class AttachmentUploadResult
@@ -210,6 +218,8 @@ public sealed class NoteCommandService : INoteCommandService
                 Directory.Move(assets, assetsDest);
             }
 
+            NoteFoldSidecar.MoveBeside(absolute, dest);
+
             _history.SnapshotIfChanged(id, note.Markdown);
             _vault.Rescan();
             return true;
@@ -291,6 +301,7 @@ public sealed class NoteCommandService : INoteCommandService
                         return new NoteMoveResult { Success = false, Error = "Assets folder already exists at destination" };
                     Directory.Move(oldAssets, newAssets);
                 }
+                NoteFoldSidecar.MoveBeside(oldAbs, destMd);
             }
 
             _vault.Rescan();
@@ -336,6 +347,8 @@ public sealed class NoteCommandService : INoteCommandService
                 var newAssets = Path.Combine(dir, newStem + ".assets");
                 CopyDirectory(oldAssets, newAssets);
             }
+
+            NoteFoldSidecar.CopyBeside(oldAbs, destMd);
 
             _vault.Rescan();
             return _vault.GetNote(newId);
@@ -421,6 +434,36 @@ public sealed class NoteCommandService : INoteCommandService
         {
             _logger.LogWarning(ex, "Attachment upload failed");
             return new AttachmentUploadResult { Success = false, Error = ex.Message };
+        }
+    }
+
+    public HeadingFoldsResult SaveHeadingFolds(Guid id, IReadOnlyList<string> collapsed)
+    {
+        if (!_paths.IsConfigured)
+            return new HeadingFoldsResult { Success = false, Error = "Vault not configured" };
+
+        var note = _vault.GetNote(id);
+        if (note is null)
+            return new HeadingFoldsResult { Success = false, Error = "Note not found" };
+
+        try
+        {
+            var mdAbs = _paths.EnsureInsideVault(note.RelativePath.Replace('/', Path.DirectorySeparatorChar));
+            var path = _paths.EnsureInsideVault(NoteFoldSidecar.PathBesideMarkdown(mdAbs));
+            var keys = NoteFoldSidecar.Sanitize(collapsed);
+            if (keys.Count == 0)
+            {
+                NoteFoldSidecar.DeleteBeside(mdAbs);
+                return new HeadingFoldsResult { Success = true, Collapsed = [] };
+            }
+
+            AtomicWrite(path, NoteFoldSidecar.Serialize(keys));
+            return new HeadingFoldsResult { Success = true, Collapsed = keys };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Heading fold save failed");
+            return new HeadingFoldsResult { Success = false, Error = ex.Message };
         }
     }
 

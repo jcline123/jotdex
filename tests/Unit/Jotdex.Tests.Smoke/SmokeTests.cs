@@ -210,6 +210,52 @@ public class SmokeTests : IClassFixture<WebApplicationFactory<Program>>
     }
 
     [Fact]
+    public async Task Heading_folds_sidecar_round_trips_and_renames_with_note()
+    {
+        var title = "Folds " + Guid.NewGuid().ToString("N")[..6];
+        var create = await _client.PostAsJsonAsync("/api/notes", new
+        {
+            title,
+            folder = "",
+            markdown = $"# {title}\n\n## Later\n\nbody\n"
+        });
+        Assert.Equal(HttpStatusCode.OK, create.StatusCode);
+        var note = await create.Content.ReadFromJsonAsync<NoteDetailDto>();
+        Assert.NotNull(note);
+
+        var put = await _client.PutAsJsonAsync($"/api/notes/{note!.Id}/heading-folds", new
+        {
+            collapsed = new[] { "1:1:" + title, "2:1:Later" }
+        });
+        Assert.Equal(HttpStatusCode.OK, put.StatusCode);
+
+        var loaded = await _client.GetFromJsonAsync<NoteDetailDto>($"/api/notes/{note.Id}");
+        Assert.NotNull(loaded);
+        Assert.Contains("1:1:" + title, loaded!.HeadingFolds);
+        Assert.Contains("2:1:Later", loaded.HeadingFolds);
+
+        var settings = await _client.GetFromJsonAsync<VaultSettingsDto>("/api/settings/vault");
+        Assert.NotNull(settings?.VaultPath);
+        Assert.True(File.Exists(Path.Combine(settings!.VaultPath!, title + ".folds.json")));
+
+        var newTitle = title + " Renamed";
+        var move = await _client.PostAsJsonAsync($"/api/notes/{note.Id}/move", new { folder = "", title = newTitle });
+        Assert.Equal(HttpStatusCode.OK, move.StatusCode);
+        Assert.False(File.Exists(Path.Combine(settings.VaultPath!, title + ".folds.json")));
+        Assert.True(File.Exists(Path.Combine(settings.VaultPath!, newTitle + ".folds.json")));
+
+        var afterMove = await _client.GetFromJsonAsync<NoteDetailDto>($"/api/notes/{note.Id}");
+        Assert.Contains("2:1:Later", afterMove!.HeadingFolds);
+
+        var clear = await _client.PutAsJsonAsync($"/api/notes/{note.Id}/heading-folds", new { collapsed = Array.Empty<string>() });
+        Assert.Equal(HttpStatusCode.OK, clear.StatusCode);
+        Assert.False(File.Exists(Path.Combine(settings.VaultPath!, newTitle + ".folds.json")));
+
+        var trash = await _client.DeleteAsync($"/api/notes/{note.Id}");
+        Assert.Equal(HttpStatusCode.NoContent, trash.StatusCode);
+    }
+
+    [Fact]
     public async Task Save_conflict_returns_409_and_force_overwrites()
     {
         var create = await _client.PostAsJsonAsync("/api/notes", new
@@ -916,6 +962,7 @@ public class SmokeTests : IClassFixture<WebApplicationFactory<Program>>
         public string Markdown { get; set; } = "";
         public string Html { get; set; } = "";
         public string ETag { get; set; } = "";
+        public List<string> HeadingFolds { get; set; } = [];
     }
 
     private sealed class SaveResultDto

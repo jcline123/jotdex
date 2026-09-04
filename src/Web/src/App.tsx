@@ -104,6 +104,7 @@ type NoteDetail = {
   modified?: string
   attachments: { id: string; fileName: string; contentType: string }[]
   htmlSidecars: { fileName: string; attachmentId: string }[]
+  headingFolds?: string[]
 }
 
 type VaultInfo = {
@@ -2126,6 +2127,7 @@ function App() {
                 markdown={draft}
                 contentEpoch={editorEpoch}
                 jumpHeading={jumpHeading}
+                headingFolds={note.headingFolds}
                 onOutline={setLiveOutline}
                 attachments={note.attachments}
                 onChange={(md, rev) => {
@@ -4239,6 +4241,7 @@ function App() {
                   markdown={draft}
                   contentEpoch={editorEpoch}
                   jumpHeading={jumpHeading}
+                  headingFolds={note.headingFolds}
                   onOutline={setLiveOutline}
                   attachments={note.attachments}
                   onChange={(md, rev) => {

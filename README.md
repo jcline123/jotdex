@@ -54,7 +54,7 @@ Three rules the app will not break:
 ## Features
 
 ### Write like a notebook, store like a developer
-Visual editor for headings, lists, tables, callouts, tasks, code boxes, images, and colors — saved as Markdown you can open anywhere. Type `/` or use **Insert** / gutter **+** for commands; drag **↑/↓** (or Alt+Arrow) to move blocks. Drag in screenshots. Paste rich HTML, plain text, or as a code box. Wikilinks (`[[`) to other notes. See [docs/shortcuts.md](docs/shortcuts.md).
+Visual editor for headings, lists, tables, callouts, tasks, code boxes, images, and colors — saved as Markdown you can open anywhere. Collapse a heading and it stays collapsed on the next device (`Title.folds.json` beside the note). Drag a picture’s corner to resize; drag a code box from the ⋮⋮ grip (or use **↑/↓** / Alt+Arrow). Type `/` or use **Insert** / gutter **+** for commands. Drag in screenshots. Paste rich HTML, plain text, or as a code box. Wikilinks (`[[`) to other notes. See [docs/shortcuts.md](docs/shortcuts.md).
 
 ### Search that is fast on a real vault
 SQLite FTS5 with a word index **and** a trigram index. Find a hostname, an error code, or half a PowerShell command across hundreds of notes. Attachment text (logs, CSV, HTML sidecars) is indexed too. The index rebuilds from the vault if it ever gets lost.
