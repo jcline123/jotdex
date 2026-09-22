@@ -12,7 +12,7 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 - One open to-do made the rail marquee flash at the loop: `%` height seams and a short cycle let the same title sit on screen twice. The ticker now measures an exact pixel cycle, pads short lists to the rail height, and fades in only when ready so the loop stays continuous.
 
 **Portable release 1.3.5**
-- Tag `v1.3.5` — code-box ☰ for snippets; seamless Todos ticker. Rollback is the previous exe (1.3.4).
+- Tag `v1.3.5` (`5e11b39`) — code-box ☰ for snippets; seamless Todos ticker. Rollback is the previous exe (1.3.4).
 
 ---
 
