@@ -12,7 +12,7 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 - Narrow viewports forced the block-move ↑/↓ (and gap +) to `position: static`, so they landed under the note card. Those floating controls are desktop-only now; phones use toolbar **Insert** and long-press instead.
 
 **Portable release 1.3.6**
-- Tag `v1.3.6` — hide floating ↑/↓ on phones. Rollback is the previous exe (1.3.5).
+- Tag `v1.3.6` (`81d45fc`) — hide floating ↑/↓ on phones. Rollback is the previous exe (1.3.5).
 
 ---
 
