@@ -1,7 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useId, useRef, useState } from 'react'
-import { EditorView, highlightSpecialChars } from '@codemirror/view'
+import { EditorView, highlightWhitespace } from '@codemirror/view'
 import { EditorState } from '@codemirror/state'
-import { CodeBlockMoreMenu } from './CodeBlockMoreMenu'
 import { languageLabel, loadCodeMirrorLanguage, normalizeLanguageId } from './codeLanguages'
 import { asyncDiagnosticsForLanguage, toCodeMirrorDiagnostics, type CodeDiagnostic } from './codeDiagnostics'
 import { buildCodeMirrorExtensions, createCodeMirrorCompartments } from './codeMirrorSetup'
@@ -175,7 +174,7 @@ export function CodeEditorDialog({ language, initialText, onSync, onClose }: Cod
     const view = viewRef.current
     if (!view) return
     view.dispatch({
-      effects: compartmentsRef.current.whitespace.reconfigure(showWhitespace ? highlightSpecialChars() : []),
+      effects: compartmentsRef.current.whitespace.reconfigure(showWhitespace ? highlightWhitespace() : []),
     })
   }, [showWhitespace])
 
@@ -191,10 +190,28 @@ export function CodeEditorDialog({ language, initialText, onSync, onClose }: Cod
         aria-labelledby={titleId}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="modal-head">
+        <div className="modal-head code-editor-head">
           <h2 id={titleId}>Edit code — {languageLabel(language)}</h2>
+          <button type="button" className="ghost code-editor-done" onClick={handleClose}>
+            Done
+          </button>
           <div className="code-editor-toolbar">
-            <CodeBlockMoreMenu onInsertSnippet={() => setInsertOpen(true)} onSaveSnippet={() => setSaveOpen(true)} />
+            <button
+              type="button"
+              className="code-chrome-btn"
+              onClick={() => setInsertOpen(true)}
+              title="Insert a saved snippet at the cursor"
+            >
+              Insert snippet
+            </button>
+            <button
+              type="button"
+              className="code-chrome-btn"
+              onClick={() => setSaveOpen(true)}
+              title="Save this code as a reusable snippet note"
+            >
+              Save as snippet
+            </button>
             <label className="code-editor-wrap-toggle">
               <input type="checkbox" checked={wordWrap} onChange={(e) => setWordWrap(e.target.checked)} />
               Word wrap
@@ -203,9 +220,6 @@ export function CodeEditorDialog({ language, initialText, onSync, onClose }: Cod
               <input type="checkbox" checked={showWhitespace} onChange={(e) => setShowWhitespace(e.target.checked)} />
               Show whitespace
             </label>
-            <button type="button" className="ghost" onClick={handleClose}>
-              Done
-            </button>
           </div>
         </div>
 
@@ -239,8 +253,8 @@ export function CodeEditorDialog({ language, initialText, onSync, onClose }: Cod
         </div>
 
         <p className="muted code-editor-hint">
-          Ctrl+F find · Tab indent · Shift+Tab outdent · Ctrl+Space snippet completions · ☰ menu for Insert/Save
-          snippets · Fold gutter (click ▸) · Escape or Done to close. Edits autosave into the note.
+          Ctrl+F find · Tab indent · Shift+Tab outdent · Ctrl+Space snippet completions · Fold gutter (click ▸) ·
+          Escape or Done to close. Edits autosave into the note.
         </p>
       </div>
 

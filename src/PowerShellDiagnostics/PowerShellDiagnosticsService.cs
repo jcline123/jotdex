@@ -23,9 +23,18 @@ public sealed class PowerShellDiagnosticsService : IPowerShellDiagnosticsService
         combined.AddRange(syntax);
         combined.AddRange(analyzer);
 
-        var status = analyzerAvailable
-            ? "PSScriptAnalyzer (static checks; does not run code)"
-            : "PSScriptAnalyzer unavailable — syntax check only";
+        string status;
+        if (analyzerAvailable)
+        {
+            status = "PSScriptAnalyzer (static checks; does not run code)";
+        }
+        else
+        {
+            var why = PowerShellScriptAnalyzer.LastFailureReason;
+            status = string.IsNullOrWhiteSpace(why)
+                ? "PSScriptAnalyzer unavailable — syntax check only"
+                : $"PSScriptAnalyzer unavailable ({why}) — syntax check only";
+        }
 
         return new PowerShellDiagnosticsResult(combined, analyzerAvailable, status);
     }

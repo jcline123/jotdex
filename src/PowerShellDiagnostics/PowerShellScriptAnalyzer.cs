@@ -7,19 +7,30 @@ namespace Jotdex.PowerShellDiagnostics;
 /// <summary>
 /// Static analysis via bundled PSScriptAnalyzer (Invoke-ScriptAnalyzer -ScriptDefinition).
 /// Never executes the user's script. If the module is missing, returns empty results.
+/// Import and Invoke always run on the same <see cref="PowerShell"/> instance — module state
+/// does not carry across separate <c>PowerShell.Create()</c> calls.
 /// </summary>
 public sealed class PowerShellScriptAnalyzer : IPowerShellScriptAnalyzer
 {
-    private static readonly object InitGate = new();
-    private static bool _initAttempted;
-    private static bool _available;
+    private static readonly object Gate = new();
+    private static string? _manifestPath;
+    private static string? _lastFailure;
+    private static DateTimeOffset _nextResolveUtc = DateTimeOffset.MinValue;
 
     public bool IsAvailable
     {
         get
         {
-            EnsureModule();
-            return _available;
+            EnsureManifestResolved();
+            lock (Gate) return _manifestPath is not null;
+        }
+    }
+
+    public static string? LastFailureReason
+    {
+        get
+        {
+            lock (Gate) return _lastFailure;
         }
     }
 
@@ -32,13 +43,34 @@ public sealed class PowerShellScriptAnalyzer : IPowerShellScriptAnalyzer
         if (source.Length > IPowerShellSyntaxParser.MaxInputLength)
             throw new ArgumentException($"Input exceeds maximum length of {IPowerShellSyntaxParser.MaxInputLength} characters.");
 
-        EnsureModule();
-        if (!_available)
+        EnsureManifestResolved();
+        string? manifest;
+        lock (Gate) manifest = _manifestPath;
+        if (manifest is null)
             return Array.Empty<CodeDiagnostic>();
 
         try
         {
             using var ps = PowerShell.Create();
+            ps.AddCommand("Import-Module")
+                .AddParameter("Name", manifest)
+                .AddParameter("Force");
+            ps.Invoke();
+            if (ps.HadErrors)
+            {
+                lock (Gate)
+                {
+                    _lastFailure = ps.Streams.Error.FirstOrDefault()?.ToString() ?? "Import-Module failed";
+                    _manifestPath = null;
+                    _nextResolveUtc = DateTimeOffset.UtcNow.AddSeconds(30);
+                }
+                return Array.Empty<CodeDiagnostic>();
+            }
+
+            // Separate invoke — do not AddStatement after Import (Import pipeline output
+            // would mix with analyzer results and look like “no findings”).
+            ps.Commands.Clear();
+            ps.Streams.ClearStreams();
             ps.AddCommand("Invoke-ScriptAnalyzer")
                 .AddParameter("ScriptDefinition", source)
                 .AddParameter("Severity", new[] { "Warning", "Error" });
@@ -46,56 +78,92 @@ public sealed class PowerShellScriptAnalyzer : IPowerShellScriptAnalyzer
             var results = ps.Invoke();
             cancellationToken.ThrowIfCancellationRequested();
 
-            if (ps.HadErrors)
-                return Array.Empty<CodeDiagnostic>();
-
-            var list = new List<CodeDiagnostic>();
-            foreach (var obj in results)
+            if (results.Count == 0 && ps.HadErrors)
             {
-                if (obj is not PSObject pso) continue;
-                var severityRaw = pso.Properties["Severity"]?.Value?.ToString() ?? "Warning";
-                var severity = severityRaw.Equals("Error", StringComparison.OrdinalIgnoreCase)
-                    ? CodeDiagnosticSeverity.Error
-                    : CodeDiagnosticSeverity.Warning;
-                var message = pso.Properties["Message"]?.Value?.ToString() ?? "PSScriptAnalyzer finding";
-                var rule = pso.Properties["RuleName"]?.Value?.ToString();
-                var line = Convert.ToInt32(pso.Properties["Line"]?.Value ?? 1);
-                var col = Convert.ToInt32(pso.Properties["Column"]?.Value ?? 1);
-                var endLine = line;
-                var endCol = col + 1;
-
-                list.Add(new CodeDiagnostic(
-                    Source: "psscriptanalyzer",
-                    Severity: severity,
-                    Message: message,
-                    StartLine: Math.Max(1, line),
-                    StartColumn: Math.Max(1, col),
-                    EndLine: Math.Max(1, endLine),
-                    EndColumn: Math.Max(1, endCol),
-                    Code: rule));
+                lock (Gate)
+                {
+                    _lastFailure = ps.Streams.Error.FirstOrDefault()?.ToString() ?? "Invoke-ScriptAnalyzer failed";
+                    _manifestPath = null;
+                    _nextResolveUtc = DateTimeOffset.UtcNow.AddSeconds(30);
+                }
+                return Array.Empty<CodeDiagnostic>();
             }
 
+            var list = new List<CodeDiagnostic>(results.Count);
+            // DiagnosticRecord.Line/Column are ScriptProperties that need DefaultRunspace.
+            var previous = Runspace.DefaultRunspace;
+            try
+            {
+                Runspace.DefaultRunspace = ps.Runspace;
+                foreach (var obj in results)
+                {
+                    var pso = obj as PSObject ?? PSObject.AsPSObject(obj);
+                    var severityRaw = pso.Properties["Severity"]?.Value?.ToString() ?? "Warning";
+                    var severity = severityRaw.Equals("Error", StringComparison.OrdinalIgnoreCase)
+                        ? CodeDiagnosticSeverity.Error
+                        : CodeDiagnosticSeverity.Warning;
+                    var message = pso.Properties["Message"]?.Value?.ToString() ?? "PSScriptAnalyzer finding";
+                    var rule = pso.Properties["RuleName"]?.Value?.ToString();
+                    var line = ToPositiveInt(pso.Properties["Line"]?.Value, 1);
+                    var col = ToPositiveInt(pso.Properties["Column"]?.Value, 1);
+
+                    list.Add(new CodeDiagnostic(
+                        Source: "psscriptanalyzer",
+                        Severity: severity,
+                        Message: message,
+                        StartLine: line,
+                        StartColumn: col,
+                        EndLine: line,
+                        EndColumn: col + 1,
+                        Code: rule));
+                }
+            }
+            finally
+            {
+                Runspace.DefaultRunspace = previous;
+            }
+
+            lock (Gate) _lastFailure = null;
             return list;
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            lock (Gate) _lastFailure = ex.Message;
             return Array.Empty<CodeDiagnostic>();
         }
     }
 
-    private static void EnsureModule()
+    private static int ToPositiveInt(object? value, int fallback)
     {
-        if (_initAttempted) return;
-        lock (InitGate)
+        try
         {
-            if (_initAttempted) return;
-            _initAttempted = true;
+            if (value is null) return fallback;
+            var n = Convert.ToInt32(value);
+            return n < 1 ? fallback : n;
+        }
+        catch
+        {
+            return fallback;
+        }
+    }
+
+    private static void EnsureManifestResolved()
+    {
+        lock (Gate)
+        {
+            if (_manifestPath is not null)
+                return;
+
+            if (DateTimeOffset.UtcNow < _nextResolveUtc)
+                return;
+
             try
             {
                 var manifest = ResolveModuleManifest();
                 if (manifest is null)
                 {
-                    _available = false;
+                    _lastFailure = "module not found under modules/PSScriptAnalyzer";
+                    _nextResolveUtc = DateTimeOffset.UtcNow.AddSeconds(30);
                     return;
                 }
 
@@ -104,19 +172,25 @@ public sealed class PowerShellScriptAnalyzer : IPowerShellScriptAnalyzer
                     .AddParameter("Name", manifest)
                     .AddParameter("Force");
                 ps.Invoke();
-                _available = !ps.HadErrors;
+                if (ps.HadErrors)
+                {
+                    _lastFailure = ps.Streams.Error.FirstOrDefault()?.ToString() ?? "Import-Module failed";
+                    _nextResolveUtc = DateTimeOffset.UtcNow.AddSeconds(30);
+                    return;
+                }
+
+                _manifestPath = manifest;
+                _lastFailure = null;
+                _nextResolveUtc = DateTimeOffset.MinValue;
             }
-            catch
+            catch (Exception ex)
             {
-                _available = false;
+                _lastFailure = ex.Message;
+                _nextResolveUtc = DateTimeOffset.UtcNow.AddSeconds(30);
             }
         }
     }
 
-    /// <summary>
-    /// Save-Module installs as modules/PSScriptAnalyzer/&lt;version&gt;/PSScriptAnalyzer.psd1.
-    /// Import the .psd1 path so versioned layouts work under the hosted PowerShell SDK.
-    /// </summary>
     private static string? ResolveModuleManifest()
     {
         var roots = new[]
@@ -132,7 +206,7 @@ public sealed class PowerShellScriptAnalyzer : IPowerShellScriptAnalyzer
             if (manifests.Length > 0)
             {
                 Array.Sort(manifests, StringComparer.OrdinalIgnoreCase);
-                return manifests[^1]; // highest version path when sorted
+                return manifests[^1];
             }
         }
 

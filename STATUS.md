@@ -1,6 +1,6 @@
 # Jotdex STATUS
 
-**Active milestone:** EUX complete — portable **1.3.6**. Baseline was **1.3.5** (`v1.3.5` @ `5e11b39`).  
+**Active milestone:** EUX complete — portable **1.3.7**. Baseline was **1.3.6** (`v1.3.6` @ `81d45fc`).  
 **Last updated:** 2026-09-22
 
 ## In progress
@@ -9,6 +9,7 @@
 
 ## Just shipped
 
+- Portable **1.3.7** (`v1.3.7`) — code-box Edit dialog portals correctly (no solid black); PSScriptAnalyzer runs again; Edit dialog Done top-right, Insert/Save on the bar, Word wrap / Show whitespace fixed. Live vault Markdown was **not** rewritten. Rollback is the previous exe (1.3.6); keep `artifacts/jotdex-win-x64-1.3.6.zip` and `C:\JotdexBackupHold\jotdex-win-x64-1.3.6.zip`.
 - Portable **1.3.6** (`v1.3.6` @ `81d45fc`) — hide floating ↑/↓ (and gap +) on phones so they no longer sit under the note; desktop unchanged. Live vault Markdown was **not** rewritten. Rollback is the previous exe (1.3.5); keep `artifacts/jotdex-win-x64-1.3.5.zip` and `C:\JotdexBackupHold\jotdex-win-x64-1.3.5.zip`.
 - Portable **1.3.5** (`v1.3.5` @ `5e11b39`) — code-box snippet actions under ☰ (Edit/Copy stay visible); seamless collapsed Todos ticker. Live vault Markdown was **not** rewritten. Rollback is the previous exe (1.3.4); keep `artifacts/jotdex-win-x64-1.3.4.zip` and `C:\JotdexBackupHold\jotdex-win-x64-1.3.4.zip`.
 - Portable **1.3.4** (`v1.3.4` @ `f901453`) — color/size spans reopen as color (not raw HTML); Todos rail strips tags from note checkbox titles. Live vault Markdown was **not** rewritten. Rollback is the previous exe (1.3.3); keep `artifacts/jotdex-win-x64-1.3.3.zip` and `C:\JotdexBackupHold\jotdex-win-x64-1.3.3.zip`.

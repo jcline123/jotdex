@@ -34,6 +34,10 @@ Upload **`artifacts\jotdex-win-x64.zip`** to a GitHub Release (tag like `v1.1.0`
 3. Download the Release zip, extract over the install folder, **keep `data\`**.
 4. Start `start-portable.cmd`.
 
+## 1.3.7 (code Edit dialog + PSScriptAnalyzer)
+
+1.3.7 is a reliability/polish release on top of 1.3.6. **Edit** on a code box opens the CodeMirror dialog again (no solid black overlay). PowerShell best-practice hints from PSScriptAnalyzer work when the module is bundled. In the Edit dialog: **Done** is top-right; Insert snippet / Save as snippet are on the bar; Word wrap and Show whitespace work. Vault Markdown is unchanged. Rollback is the previous portable exe (1.3.6).
+
 ## 1.3.6 (hide floating ↑/↓ on phones)
 
 1.3.6 is a small mobile fix on top of 1.3.5. On narrow screens, the floating block-move ↑/↓ (and gap +) no longer appear under the note — use toolbar **Insert** or a long-press instead. Desktop is unchanged. Vault Markdown is unchanged. Rollback is the previous portable exe (1.3.5).

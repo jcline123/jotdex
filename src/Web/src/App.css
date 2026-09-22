@@ -2888,11 +2888,56 @@ body.jotdex-image-resizing .jotdex-gutter-plus {
   gap: 0.65rem;
 }
 
+.code-editor-loading {
+  max-width: 28rem;
+}
+
+.code-editor-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.55rem 0.75rem;
+}
+
+.code-editor-head h2 {
+  margin: 0;
+  flex: 1 1 auto;
+  min-width: 8rem;
+}
+
+.code-editor-done {
+  flex: 0 0 auto;
+  margin-left: auto;
+  padding: 0.35rem 0.65rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+}
+
+.code-editor-done:hover {
+  background: var(--accent-soft);
+}
+
 .code-editor-toolbar {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 0.75rem;
+  gap: 0.5rem 0.75rem;
+  flex: 1 1 100%;
+}
+
+.code-editor-toolbar .code-chrome-btn {
+  height: 1.85rem;
+  padding: 0 0.55rem;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+  font-size: 0.8rem;
+}
+
+.code-editor-toolbar .code-chrome-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .snippet-note-badge {
@@ -2920,17 +2965,37 @@ body.jotdex-image-resizing .jotdex-gutter-plus {
 .code-editor-host {
   min-height: 280px;
   max-height: 50vh;
-  overflow: auto;
+  width: 100%;
+  overflow: hidden;
   border: 1px solid var(--border);
   border-radius: 8px;
 }
 
 .code-editor-host .cm-editor {
   min-height: 280px;
+  max-height: 50vh;
+  width: 100%;
+  height: 100%;
 }
 
 .code-editor-host .cm-scroller {
   min-height: 280px;
+  max-height: 50vh;
+  overflow: auto !important;
+}
+
+/* Visible spaces/tabs when “Show whitespace” is on (highlightWhitespace). */
+.code-editor-host .cm-highlightSpace {
+  background-image: radial-gradient(circle at 50% 55%, rgba(180, 200, 220, 0.55) 0.9px, transparent 1.1px);
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+.code-editor-host .cm-highlightTab {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16'%3E%3Cpath d='M2 8h10M9 5l3 3-3 3' stroke='%238b9bb0' stroke-width='1.4' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-position: left center;
+  background-repeat: no-repeat;
+  background-size: 0.85em 0.85em;
 }
 
 .code-editor-diagnostics {

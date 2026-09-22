@@ -1,6 +1,7 @@
 import { NodeViewContent, NodeViewWrapper } from '@tiptap/react'
 import type { NodeViewProps } from '@tiptap/react'
-import { lazy, Suspense, useCallback, useRef, useState } from 'react'
+import { Component, lazy, Suspense, useCallback, useEffect, useRef, useState, type ErrorInfo, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { CodeBlockMoreMenu } from './CodeBlockMoreMenu'
 import { codeBlockInsertOffset, insertCodeBlockText, syncCodeBlockText } from './syncCodeBlock'
 import type { SnippetSummary } from './snippetApi'
@@ -30,6 +31,80 @@ export const CODE_LANGUAGES = [
   { id: 'xml', label: 'XML / HTML' },
 ] as const
 
+/** Catches lazy-load / render failures so Edit never blanks the whole app. */
+class CodeEditorErrorBoundary extends Component<
+  { onClose: () => void; children: ReactNode },
+  { error: string | null }
+> {
+  state: { error: string | null } = { error: null }
+
+  static getDerivedStateFromError(err: Error) {
+    return { error: err.message || 'Code editor failed to open' }
+  }
+
+  componentDidCatch(err: Error, info: ErrorInfo) {
+    console.error('Code editor failed', err, info.componentStack)
+  }
+
+  render() {
+    if (this.state.error) {
+      return createPortal(
+        <div className="modal-backdrop code-editor-backdrop" role="presentation" onClick={this.props.onClose}>
+          <div
+            className="modal code-editor-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Code editor error"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="modal-head">
+              <h2>Could not open code editor</h2>
+              <button type="button" className="ghost" onClick={this.props.onClose}>
+                Close
+              </button>
+            </div>
+            <p className="banner error">{this.state.error}</p>
+            <p className="muted">Try refreshing the page. If it keeps happening, hard-reload to pick up the latest assets.</p>
+          </div>
+        </div>,
+        document.body,
+      )
+    }
+    return this.props.children
+  }
+}
+
+function CodeEditorLoadingFallback({ onCancel }: { onCancel: () => void }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onCancel()
+    }
+    document.addEventListener('keydown', onKey)
+    return () => document.removeEventListener('keydown', onKey)
+  }, [onCancel])
+
+  return (
+    <div className="modal-backdrop code-editor-backdrop" role="presentation" onClick={onCancel}>
+      <div
+        className="modal code-editor-modal code-editor-loading"
+        role="dialog"
+        aria-modal="true"
+        aria-busy="true"
+        aria-label="Loading code editor"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="modal-head">
+          <h2>Loading code editor…</h2>
+          <button type="button" className="ghost" onClick={onCancel}>
+            Cancel
+          </button>
+        </div>
+        <p className="muted">CodeMirror is loading. Escape or Cancel to go back.</p>
+      </div>
+    </div>
+  )
+}
+
 export function CodeBlockView({ node, updateAttributes, editor, getPos }: NodeViewProps) {
   const [copied, setCopied] = useState(false)
   const [editing, setEditing] = useState(false)
@@ -58,16 +133,16 @@ export function CodeBlockView({ node, updateAttributes, editor, getPos }: NodeVi
     }
   }
 
+  // Backdrop blocks the note; avoid setEditable(false) so TipTap does not remount this node view
+  // (which would wipe editing state and leave a stuck dark overlay).
   const openEditor = () => {
     if (!editor.isEditable) return
-    editor.setEditable(false)
     setEditing(true)
   }
 
   const closeEditor = useCallback(() => {
-    editor.setEditable(true)
     setEditing(false)
-  }, [editor])
+  }, [])
 
   const handleSync = useCallback(
     (text: string) => {
@@ -98,6 +173,22 @@ export function CodeBlockView({ node, updateAttributes, editor, getPos }: NodeVi
     },
     [editor, getPos, updateAttributes],
   )
+
+  const editorPortal =
+    editing &&
+    createPortal(
+      <CodeEditorErrorBoundary onClose={closeEditor}>
+        <Suspense fallback={<CodeEditorLoadingFallback onCancel={closeEditor} />}>
+          <CodeEditorDialog
+            language={language}
+            initialText={node.textContent}
+            onSync={handleSync}
+            onClose={closeEditor}
+          />
+        </Suspense>
+      </CodeEditorErrorBoundary>,
+      document.body,
+    )
 
   return (
     <NodeViewWrapper className="code-block-box" data-language={language}>
@@ -151,32 +242,27 @@ export function CodeBlockView({ node, updateAttributes, editor, getPos }: NodeVi
         <NodeViewContent as={'code' as 'div'} className={`hljs language-${language}`} />
       </pre>
 
-      {editing && (
-        <Suspense fallback={<div className="modal-backdrop code-editor-backdrop" role="presentation" />}>
-          <CodeEditorDialog
-            language={language}
-            initialText={node.textContent}
-            onSync={handleSync}
-            onClose={closeEditor}
-          />
-        </Suspense>
-      )}
+      {editorPortal}
 
-      {saveOpen && (
-        <Suspense fallback={null}>
-          <SaveAsSnippetModal
-            language={language}
-            code={node.textContent}
-            onClose={() => setSaveOpen(false)}
-          />
-        </Suspense>
-      )}
+      {saveOpen &&
+        createPortal(
+          <Suspense fallback={null}>
+            <SaveAsSnippetModal
+              language={language}
+              code={node.textContent}
+              onClose={() => setSaveOpen(false)}
+            />
+          </Suspense>,
+          document.body,
+        )}
 
-      {insertOpen && (
-        <Suspense fallback={null}>
-          <InsertSnippetModal language={language} onClose={() => setInsertOpen(false)} onPick={applySnippet} />
-        </Suspense>
-      )}
+      {insertOpen &&
+        createPortal(
+          <Suspense fallback={null}>
+            <InsertSnippetModal language={language} onClose={() => setInsertOpen(false)} onPick={applySnippet} />
+          </Suspense>,
+          document.body,
+        )}
     </NodeViewWrapper>
   )
 }

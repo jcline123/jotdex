@@ -1,4 +1,4 @@
-import { EditorView, keymap, lineNumbers, highlightActiveLine, highlightActiveLineGutter, drawSelection, highlightSpecialChars } from '@codemirror/view'
+import { EditorView, keymap, lineNumbers, highlightActiveLine, highlightActiveLineGutter, drawSelection, highlightWhitespace } from '@codemirror/view'
 import { EditorState, Compartment, type Extension } from '@codemirror/state'
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands'
 import {
@@ -54,7 +54,7 @@ export function buildCodeMirrorExtensions(
     jotdexCodeTheme,
     EditorState.tabSize.of(CODE_BLOCK_TAB_SIZE),
     compartments.wrap.of(opts.wordWrap ? EditorView.lineWrapping : []),
-    compartments.whitespace.of(opts.showWhitespace ? highlightSpecialChars() : []),
+    compartments.whitespace.of(opts.showWhitespace ? highlightWhitespace() : []),
     opts.languageExt,
     keymap.of([
       ...closeBracketsKeymap,

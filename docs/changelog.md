@@ -1,9 +1,16 @@
-# Jotdex changelog (why things changed)
+## 2026-09-22 — Code Edit dialog: Done top-right, snippets on bar, wrap/whitespace work
 
-Short, durable notes for non-obvious fixes and product decisions.
-Agents: **read this when debugging related areas**, and **append an entry** when landing a non-trivial fix or behavior change (1–3 sentences of *why*, plus commit hash when known).
+- Edit dialog hid Insert/Save under ☰ (fine on the small code-box chrome, cramped in the big dialog). Done is top-right; Insert snippet / Save as snippet sit on the dialog bar. Word wrap did nothing because the host let the editor grow past the viewport; Show whitespace used `highlightSpecialChars` (control chars only) instead of `highlightWhitespace` (spaces/tabs).
 
-Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
+**Portable release 1.3.7**
+- Tag `v1.3.7` — Edit dialog portal + PSScriptAnalyzer + dialog chrome. Rollback is the previous exe (1.3.6).
+
+---
+
+## 2026-09-22 — Code-box Edit black screen; PSScriptAnalyzer actually runs
+
+- **Edit** rendered the CodeMirror dialog inside the TipTap code-box node (`.code-block-box { overflow: hidden }`), so the fixed dark backdrop filled the pane while the modal was clipped — felt like a solid black page. The dialog (and snippet modals) now portal to `document.body`, with a cancelable loading state and an error boundary; we no longer flip TipTap `editable` off (that remount risk could drop the dialog).
+- PSScriptAnalyzer looked “unavailable” / silent because (1) Import lived in a throwaway `PowerShell` instance while `Invoke-ScriptAnalyzer` ran in another, (2) reading `Line`/`Column` needs `Runspace.DefaultRunspace` or it throws and was swallowed, and (3) a failed init stuck for the process. Import+invoke now share one instance, DefaultRunspace is set while reading findings, and resolve retries after a short backoff.
 
 ---
 
