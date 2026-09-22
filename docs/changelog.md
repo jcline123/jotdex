@@ -7,6 +7,15 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 
 ---
 
+## 2026-09-22 — Hide floating ↑/↓ on phones
+
+- Narrow viewports forced the block-move ↑/↓ (and gap +) to `position: static`, so they landed under the note card. Those floating controls are desktop-only now; phones use toolbar **Insert** and long-press instead.
+
+**Portable release 1.3.6**
+- Tag `v1.3.6` — hide floating ↑/↓ on phones. Rollback is the previous exe (1.3.5).
+
+---
+
 ## 2026-09-22 — Seamless collapsed Todos ticker
 
 - One open to-do made the rail marquee flash at the loop: `%` height seams and a short cycle let the same title sit on screen twice. The ticker now measures an exact pixel cycle, pads short lists to the rail height, and fades in only when ready so the loop stays continuous.

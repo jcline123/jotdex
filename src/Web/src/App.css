@@ -3609,8 +3609,8 @@ body.jotdex-image-resizing .jotdex-gutter-plus {
   }
 
   .editor-toolbar .jotdex-toolbar-insert,
-  .jotdex-gutter-plus,
-  .jotdex-drag-handle button {
+  .jotdex-table-chrome button,
+  .jotdex-bubble button {
     min-width: 44px;
     min-height: 44px;
   }
@@ -4129,17 +4129,11 @@ blockquote.callout[data-callout-title]::before {
 .note-image.align-center { text-align: center; }
 .note-image.align-right { text-align: right; }
 @media (max-width: 720px) {
+  /* Floating ↑/↓ and gap + fight the phone layout (were forced static and dropped
+     below the note). Toolbar Insert + long-press cover insert; block move stays
+     on desktop where the handle can sit beside the caret. */
   .jotdex-gutter-plus,
   .jotdex-drag-handle {
-    position: static;
-    margin: 0.25rem;
-  }
-  .editor-toolbar .jotdex-toolbar-insert,
-  .jotdex-gutter-plus,
-  .jotdex-drag-handle button,
-  .jotdex-table-chrome button,
-  .jotdex-bubble button {
-    min-width: 44px;
-    min-height: 44px;
+    display: none !important;
   }
 }

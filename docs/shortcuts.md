@@ -1,4 +1,4 @@
-# Keyboard shortcuts (Jotdex 1.3.5)
+# Keyboard shortcuts (Jotdex 1.3.6)
 
 App-wide:
 
@@ -24,4 +24,4 @@ Editor (visual mode):
 | Selection + bubble **More** | Highlight, underline, sub, sup, clear |
 | `[[` | Link to another note |
 
-On a phone or narrow window, **Insert** and **↑/↓** stay visible (they do not depend on hover). Gap-cursor **+** still appears between stacked hard blocks on desktop.
+On a phone or narrow window, use **Insert** (toolbar) or a long-press on the note for commands. Floating ↑/↓ and gap **+** are desktop-only so they do not sit under the note on small screens.
