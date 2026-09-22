@@ -7,6 +7,15 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 
 ---
 
+## 2026-09-22 — Color spans reopen as color (not raw HTML); todos strip tags
+
+- Color/size was saved as `<span style="color: #…">` but Marked splits those tags on `#` / `>`, so reopening showed the markup as plain text. Spans are brace-protected before parse (same idea as underline/highlight) and restored as `textStyle` marks. Note-backed Todos rail titles strip HTML tags so a colored checkbox line does not show `span style=…` in the list.
+
+**Portable release 1.3.4**
+- Tag `v1.3.4` — color spans reopen correctly; Todos rail strips HTML from checkbox titles. Rollback is the previous exe (1.3.3).
+
+---
+
 ## 2026-09-04 — Heading collapse lives next to the note
 
 - Browser `localStorage` only remembered folds on that machine. Collapse is now a sibling vault helper `Title.folds.json` so a copied or mirrored vault opens with the same sections closed. The `.md` file is unchanged (no history/autosave from folding). Outline jumps still expand a folded ancestor without writing that expand. Leftover browser folds are copied into the helper the first time you reopen a note.

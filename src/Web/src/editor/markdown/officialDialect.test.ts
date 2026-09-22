@@ -84,18 +84,41 @@ describe('official Jotdex dialect', () => {
     expect(changed).toBe(false)
   })
 
-  it('styled span round-trips color', () => {
+  it('styled span round-trips color as a textStyle mark', () => {
     const src = 'Hello <span style="color: #b42318">red</span> text'
-    const codec = createOfficialMarkdownCodec()
-    const parsed = codec.parse(src)
-    expect(parsed.ok).toBe(true)
     const editor = createTestEditor(src)
+    const colored: { text: string; color?: string }[] = []
+    editor.state.doc.descendants((n) => {
+      if (!n.isText || !n.text) return
+      const style = n.marks.find((m) => m.type.name === 'textStyle')
+      if (style) colored.push({ text: n.text, color: style.attrs.color as string | undefined })
+    })
+    expect(colored).toEqual([{ text: 'red', color: '#b42318' }])
     const md = editorMarkdown(editor)
     expect(md).toContain('red')
     expect(md.toLowerCase()).toContain('color:')
     expect(md.toLowerCase()).toContain('#b42318')
+    expect(md).not.toContain('&lt;span')
     editor.destroy()
-    codec.destroy?.()
+  })
+
+  it('Parker-style multi color spans reopen colored (not raw HTML)', () => {
+    const src =
+      '<span style="color: #b54708">map to a silent status</span> or <span style="color: #027a48">map to status as is</span> or <span style="color: #175cd3">suppress notifications</span>'
+    const editor = createTestEditor(src)
+    const texts: string[] = []
+    editor.state.doc.descendants((n) => {
+      if (n.isText && n.text) texts.push(n.text)
+    })
+    expect(texts.join('')).toBe(
+      'map to a silent status or map to status as is or suppress notifications',
+    )
+    expect(texts.some((t) => t.includes('<span'))).toBe(false)
+    const md = editorMarkdown(editor)
+    expect(md).toContain('color: #b54708')
+    expect(md).toContain('color: #027a48')
+    expect(md).toContain('color: #175cd3')
+    editor.destroy()
   })
 
   it('generic HTML comments are not dropped', () => {

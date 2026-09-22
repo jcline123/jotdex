@@ -74,9 +74,7 @@ public sealed class VaultTaskService : IVaultTaskService
                 var m = TaskLine.Match(lines[i]);
                 if (!m.Success) continue;
                 if (m.Groups[2].Value is "x" or "X") continue;
-                var titlePart = m.Groups[3].Value.Trim();
-                var commentIdx = titlePart.IndexOf("<!--", StringComparison.Ordinal);
-                if (commentIdx >= 0) titlePart = titlePart[..commentIdx].TrimEnd();
+                var titlePart = PlainTaskTitle(m.Groups[3].Value);
                 if (string.IsNullOrWhiteSpace(titlePart)) continue;
 
                 var attrs = ParseAttrs(m.Groups[4].Success ? m.Groups[4].Value : "");
@@ -231,6 +229,19 @@ public sealed class VaultTaskService : IVaultTaskService
         var titlePart = raw.Trim();
         var commentIdx = titlePart.IndexOf("<!--", StringComparison.Ordinal);
         if (commentIdx >= 0) titlePart = titlePart[..commentIdx].TrimEnd();
+        return titlePart;
+    }
+
+    /// <summary>
+    /// Rail titles must be readable plain text. Color/size spans stay in the note Markdown;
+    /// the list should not show raw <c>&lt;span style=…&gt;</c>.
+    /// </summary>
+    private static string PlainTaskTitle(string raw)
+    {
+        var titlePart = StripTitleComment(raw);
+        titlePart = Regex.Replace(titlePart, @"<[^>]+>", " ");
+        titlePart = System.Net.WebUtility.HtmlDecode(titlePart);
+        titlePart = Regex.Replace(titlePart, @"\s+", " ").Trim();
         return titlePart;
     }
 

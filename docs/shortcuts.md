@@ -1,4 +1,4 @@
-# Keyboard shortcuts (Jotdex 1.3.3)
+# Keyboard shortcuts (Jotdex 1.3.4)
 
 App-wide:
 

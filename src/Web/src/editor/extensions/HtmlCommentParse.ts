@@ -2,6 +2,7 @@ import { Extension } from '@tiptap/core'
 import type { MarkdownParseHelpers, MarkdownToken } from '@tiptap/core'
 import { JOTDEX_TASK_META } from './JotdexTaskMetadata'
 import { RAW_HTML_COMMENT_INLINE } from './RawHtmlComment'
+import { allowedColor, allowedFontSize, parseStyleAttrs } from './JotdexTextStyleMarkdown'
 
 function parseAttrs(raw: string): Record<string, string> {
   const out: Record<string, string> = {}
@@ -44,6 +45,23 @@ export const HtmlCommentParse = Extension.create({
       const mark = HTML_MARK[htmlMark[1]!.toLowerCase()]
       const inner = htmlMark[2] ?? ''
       if (mark) return helpers.applyMark(mark, [helpers.createTextNode(inner)])
+    }
+    const styleSpan = /^<span\s+style\s*=\s*(["'])([\s\S]*?)\1\s*>([\s\S]*?)<\/span>$/i.exec(raw)
+    if (styleSpan) {
+      const { color, fontSize } = parseStyleAttrs(styleSpan[2])
+      const inner = styleSpan[3] ?? ''
+      const c = allowedColor(color)
+      const s = allowedFontSize(fontSize)
+      if (c || s) {
+        return helpers.applyMark(
+          'textStyle',
+          [helpers.createTextNode(inner)],
+          {
+            ...(c ? { color: c } : {}),
+            ...(s ? { fontSize: s } : {}),
+          },
+        )
+      }
     }
     if (/^<!--[\s\S]*-->$/.test(raw) && !raw.includes('\n')) {
       return { type: RAW_HTML_COMMENT_INLINE, attrs: { raw } }

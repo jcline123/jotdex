@@ -256,6 +256,36 @@ public class SmokeTests : IClassFixture<WebApplicationFactory<Program>>
     }
 
     [Fact]
+    public async Task Tasks_api_strips_html_tags_from_checkbox_titles()
+    {
+        var title = "ColorTodo " + Guid.NewGuid().ToString("N")[..6];
+        var create = await _client.PostAsJsonAsync("/api/notes", new
+        {
+            title,
+            folder = "",
+            markdown = "# " + title + "\n\n- [ ] <span style=\"color: #b54708\">map to a silent status</span> or plain\n"
+        });
+        Assert.Equal(HttpStatusCode.OK, create.StatusCode);
+        var note = await create.Content.ReadFromJsonAsync<NoteDetailDto>();
+        Assert.NotNull(note);
+        try
+        {
+            var tasks = await _client.GetFromJsonAsync<TasksListDto>("/api/tasks");
+            Assert.NotNull(tasks);
+            var hit = tasks!.Items.FirstOrDefault(t => t.NoteId == note!.Id);
+            Assert.NotNull(hit);
+            Assert.DoesNotContain("<span", hit!.Text, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("style=", hit.Text, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("map to a silent status", hit.Text, StringComparison.Ordinal);
+            Assert.Contains("or plain", hit.Text, StringComparison.Ordinal);
+        }
+        finally
+        {
+            await _client.DeleteAsync($"/api/notes/{note!.Id}");
+        }
+    }
+
+    [Fact]
     public async Task Save_conflict_returns_409_and_force_overwrites()
     {
         var create = await _client.PostAsJsonAsync("/api/notes", new
@@ -963,6 +993,18 @@ public class SmokeTests : IClassFixture<WebApplicationFactory<Program>>
         public string Html { get; set; } = "";
         public string ETag { get; set; } = "";
         public List<string> HeadingFolds { get; set; } = [];
+    }
+
+    private sealed class TasksListDto
+    {
+        public List<TaskItemDto> Items { get; set; } = [];
+    }
+
+    private sealed class TaskItemDto
+    {
+        public string Id { get; set; } = "";
+        public Guid NoteId { get; set; }
+        public string Text { get; set; } = "";
     }
 
     private sealed class SaveResultDto
