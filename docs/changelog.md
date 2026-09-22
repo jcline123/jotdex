@@ -3,7 +3,7 @@
 - Edit dialog hid Insert/Save under ☰ (fine on the small code-box chrome, cramped in the big dialog). Done is top-right; Insert snippet / Save as snippet sit on the dialog bar. Word wrap did nothing because the host let the editor grow past the viewport; Show whitespace used `highlightSpecialChars` (control chars only) instead of `highlightWhitespace` (spaces/tabs).
 
 **Portable release 1.3.7**
-- Tag `v1.3.7` — Edit dialog portal + PSScriptAnalyzer + dialog chrome. Rollback is the previous exe (1.3.6).
+- Tag `v1.3.7` (`9d71d6c`) — Edit dialog portal + PSScriptAnalyzer + dialog chrome. Rollback is the previous exe (1.3.6).
 
 ---
 
