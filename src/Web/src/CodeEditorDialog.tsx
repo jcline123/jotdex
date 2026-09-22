@@ -1,6 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useId, useRef, useState } from 'react'
 import { EditorView, highlightSpecialChars } from '@codemirror/view'
 import { EditorState } from '@codemirror/state'
+import { CodeBlockMoreMenu } from './CodeBlockMoreMenu'
 import { languageLabel, loadCodeMirrorLanguage, normalizeLanguageId } from './codeLanguages'
 import { asyncDiagnosticsForLanguage, toCodeMirrorDiagnostics, type CodeDiagnostic } from './codeDiagnostics'
 import { buildCodeMirrorExtensions, createCodeMirrorCompartments } from './codeMirrorSetup'
@@ -193,16 +194,7 @@ export function CodeEditorDialog({ language, initialText, onSync, onClose }: Cod
         <div className="modal-head">
           <h2 id={titleId}>Edit code — {languageLabel(language)}</h2>
           <div className="code-editor-toolbar">
-            <div className="code-block-snippet-group code-editor-snippet-group" role="group" aria-label="Snippets">
-              <span className="code-snippet-label">Snippets</span>
-              <button type="button" className="code-edit-btn" onClick={() => setInsertOpen(true)} title="Insert snippet at cursor">
-                Insert
-              </button>
-              <button type="button" className="code-edit-btn" onClick={() => setSaveOpen(true)} title="Save this code as a snippet">
-                <span className="code-btn-label-full">Save as snippet</span>
-                <span className="code-btn-label-short">Save</span>
-              </button>
-            </div>
+            <CodeBlockMoreMenu onInsertSnippet={() => setInsertOpen(true)} onSaveSnippet={() => setSaveOpen(true)} />
             <label className="code-editor-wrap-toggle">
               <input type="checkbox" checked={wordWrap} onChange={(e) => setWordWrap(e.target.checked)} />
               Word wrap
@@ -247,8 +239,8 @@ export function CodeEditorDialog({ language, initialText, onSync, onClose }: Cod
         </div>
 
         <p className="muted code-editor-hint">
-          Ctrl+F find · Tab indent · Shift+Tab outdent · Ctrl+Space snippet completions · Insert/Save snippets above ·
-          Fold gutter (click ▸) · Escape or Done to close. Edits autosave into the note.
+          Ctrl+F find · Tab indent · Shift+Tab outdent · Ctrl+Space snippet completions · ☰ menu for Insert/Save
+          snippets · Fold gutter (click ▸) · Escape or Done to close. Edits autosave into the note.
         </p>
       </div>
 

@@ -1,6 +1,7 @@
 import { NodeViewContent, NodeViewWrapper } from '@tiptap/react'
 import type { NodeViewProps } from '@tiptap/react'
 import { lazy, Suspense, useCallback, useRef, useState } from 'react'
+import { CodeBlockMoreMenu } from './CodeBlockMoreMenu'
 import { codeBlockInsertOffset, insertCodeBlockText, syncCodeBlockText } from './syncCodeBlock'
 import type { SnippetSummary } from './snippetApi'
 
@@ -113,56 +114,37 @@ export function CodeBlockView({ node, updateAttributes, editor, getPos }: NodeVi
             </span>
           )}
           <label className="code-lang">
-          <span className="sr-only">Language</span>
-          <select
-            value={CODE_LANGUAGES.some((l) => l.id === language) ? language : 'plaintext'}
-            disabled={!editor.isEditable || editing}
-            onChange={(e) => updateAttributes({ language: e.target.value })}
-            onPointerDown={(e) => e.stopPropagation()}
-            aria-label="Code language"
-          >
-            {CODE_LANGUAGES.map((l) => (
-              <option key={l.id} value={l.id}>
-                {l.label}
-              </option>
-            ))}
-            {!CODE_LANGUAGES.some((l) => l.id === language) && language !== 'plaintext' && (
-              <option value={language}>{language}</option>
-            )}
-          </select>
-        </label>
+            <span className="sr-only">Language</span>
+            <select
+              value={CODE_LANGUAGES.some((l) => l.id === language) ? language : 'plaintext'}
+              disabled={!editor.isEditable || editing}
+              onChange={(e) => updateAttributes({ language: e.target.value })}
+              onPointerDown={(e) => e.stopPropagation()}
+              aria-label="Code language"
+            >
+              {CODE_LANGUAGES.map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.label}
+                </option>
+              ))}
+              {!CODE_LANGUAGES.some((l) => l.id === language) && language !== 'plaintext' && (
+                <option value={language}>{language}</option>
+              )}
+            </select>
+          </label>
         </div>
         <div className="code-block-actions" onPointerDown={(e) => e.stopPropagation()}>
           {editor.isEditable && (
-            <>
-              <div className="code-block-snippet-group" role="group" aria-label="Snippets">
-                <span className="code-snippet-label">Snippets</span>
-                <button
-                  type="button"
-                  className="code-edit-btn"
-                  onClick={openInsert}
-                  title="Insert a saved snippet into this code box"
-                >
-                  Insert
-                </button>
-                <button
-                  type="button"
-                  className="code-edit-btn"
-                  onClick={() => setSaveOpen(true)}
-                  title="Save this code as a reusable snippet note in your vault"
-                >
-                  <span className="code-btn-label-full">Save as snippet</span>
-                  <span className="code-btn-label-short">Save</span>
-                </button>
-              </div>
-              <button type="button" className="code-edit-btn" onClick={openEditor} title="Advanced edit">
-                Edit
-              </button>
-            </>
+            <button type="button" className="code-chrome-btn" onClick={openEditor} title="Advanced edit">
+              Edit
+            </button>
           )}
-          <button type="button" className="code-copy-btn" onClick={() => void copy()} title="Copy code">
+          <button type="button" className="code-chrome-btn code-copy-btn" onClick={() => void copy()} title="Copy code">
             {copied ? 'Copied' : 'Copy'}
           </button>
+          {editor.isEditable && (
+            <CodeBlockMoreMenu onInsertSnippet={openInsert} onSaveSnippet={() => setSaveOpen(true)} />
+          )}
         </div>
       </div>
       <pre className="code-block-pre" spellCheck={false}>

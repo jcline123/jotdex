@@ -16,6 +16,7 @@ import {
   isSessionGone,
   throwIfUnauthorized,
 } from './IdleLockGate'
+import { TodosTicker } from './TodosTicker'
 
 const UNDO_MS = 30_000
 
@@ -378,7 +379,6 @@ export function TodosRail({
     const titles = railRows
       .map((row) => (row.kind === 'local' ? row.item.title : row.task.text).trim())
       .filter(Boolean)
-    const durationSec = Math.max(14, titles.length * 5)
     return (
       <aside
         className="pane todos pane-rail-collapsed todos-ticker-rail"
@@ -393,21 +393,7 @@ export function TodosRail({
           }
         }}
       >
-        {titles.length > 0 && (
-          <div className="todos-ticker" aria-hidden>
-            <div className="todos-ticker-track" style={{ animationDuration: `${durationSec}s` }}>
-              {[0, 1].map((copy) => (
-                <div key={copy} className="todos-ticker-group">
-                  {titles.map((title, i) => (
-                    <span key={`${copy}-${i}`} className="todos-ticker-item">
-                      {title}
-                    </span>
-                  ))}
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+        <TodosTicker titles={titles} />
         <div className="todos-ticker-label">
           Todos
           {titles.length > 0 ? ` · ${titles.length}` : ''}

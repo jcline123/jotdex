@@ -34,6 +34,10 @@ Upload **`artifacts\jotdex-win-x64.zip`** to a GitHub Release (tag like `v1.1.0`
 3. Download the Release zip, extract over the install folder, **keep `data\`**.
 4. Start `start-portable.cmd`.
 
+## 1.3.5 (code-box menu; seamless Todos ticker)
+
+1.3.5 is a small polish on top of 1.3.4. On code boxes, **Edit** and **Copy** stay on the bar; Insert/Save snippet live under a ☰ menu on the right (same in the Edit dialog). The collapsed Todos rail ticker loops without flashing, including when you only have one open item, and adapts when the rail height changes. Vault Markdown is unchanged. Rollback is the previous portable exe (1.3.4).
+
 ## 1.3.4 (color spans reopen; clean todo titles)
 
 1.3.4 is a small fix on top of 1.3.3. Colored (and sized) text saved as `<span style=…>` now reopens colored instead of showing the HTML. Note checkboxes that include that markup show plain text in the Todos rail. Vault Markdown is unchanged. Rollback is the previous portable exe (1.3.3).

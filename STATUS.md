@@ -1,6 +1,6 @@
 # Jotdex STATUS
 
-**Active milestone:** EUX complete — portable **1.3.4**. Baseline was **1.3.3** (`v1.3.3` @ `9eb5d7a`).  
+**Active milestone:** EUX complete — portable **1.3.5**. Baseline was **1.3.4** (`v1.3.4` @ `f901453`).  
 **Last updated:** 2026-09-22
 
 ## In progress
@@ -9,6 +9,7 @@
 
 ## Just shipped
 
+- Portable **1.3.5** (`v1.3.5`) — code-box snippet actions under ☰ (Edit/Copy stay visible); seamless collapsed Todos ticker. Live vault Markdown was **not** rewritten. Rollback is the previous exe (1.3.4); keep `artifacts/jotdex-win-x64-1.3.4.zip` and `C:\JotdexBackupHold\jotdex-win-x64-1.3.4.zip`.
 - Portable **1.3.4** (`v1.3.4` @ `f901453`) — color/size spans reopen as color (not raw HTML); Todos rail strips tags from note checkbox titles. Live vault Markdown was **not** rewritten. Rollback is the previous exe (1.3.3); keep `artifacts/jotdex-win-x64-1.3.3.zip` and `C:\JotdexBackupHold\jotdex-win-x64-1.3.3.zip`.
 - Portable **1.3.3** (`v1.3.3` @ `9eb5d7a`) — heading collapse stored beside the note (`Title.folds.json`); selected images drag-resize from corners/edges; code boxes drag from the top-bar grip. Live vault Markdown was **not** rewritten. Rollback is the previous exe (1.3.2); keep `artifacts/jotdex-win-x64-1.3.2.zip` and `C:\JotdexBackupHold\jotdex-win-x64-1.3.2.zip`.
 - Portable **1.3.2** (`v1.3.2` @ `9af6399`) — one Todos rail list (priority, then when added); Share HTML source has no `jotdex-*` classes, data attributes, or comments. Live vault was **not** rewritten. Rollback is the previous exe (1.3.1); keep `artifacts/jotdex-win-x64-1.3.1.zip` and `C:\JotdexBackupHold\jotdex-win-x64-1.3.1.zip`.

@@ -7,6 +7,21 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 
 ---
 
+## 2026-09-22 — Seamless collapsed Todos ticker
+
+- One open to-do made the rail marquee flash at the loop: `%` height seams and a short cycle let the same title sit on screen twice. The ticker now measures an exact pixel cycle, pads short lists to the rail height, and fades in only when ready so the loop stays continuous.
+
+**Portable release 1.3.5**
+- Tag `v1.3.5` — code-box ☰ for snippets; seamless Todos ticker. Rollback is the previous exe (1.3.4).
+
+---
+
+## 2026-09-22 — Code-box snippet actions under a compact menu
+
+- Insert / Save as snippet took too much chrome on phones. Those actions sit under a small ☰ overflow on the right of the code box (after Edit and Copy; same in the Edit dialog). The menu is portaled so short code boxes do not clip it.
+
+---
+
 ## 2026-09-22 — Color spans reopen as color (not raw HTML); todos strip tags
 
 - Color/size was saved as `<span style="color: #…">` but Marked splits those tags on `#` / `>`, so reopening showed the markup as plain text. Spans are brace-protected before parse (same idea as underline/highlight) and restored as `textStyle` marks. Note-backed Todos rail titles strip HTML tags so a colored checkbox line does not show `span style=…` in the list.
