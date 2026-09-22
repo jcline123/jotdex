@@ -12,7 +12,7 @@ Bigger architectural choices still belong in [`docs/decisions/`](decisions/).
 - Color/size was saved as `<span style="color: #…">` but Marked splits those tags on `#` / `>`, so reopening showed the markup as plain text. Spans are brace-protected before parse (same idea as underline/highlight) and restored as `textStyle` marks. Note-backed Todos rail titles strip HTML tags so a colored checkbox line does not show `span style=…` in the list.
 
 **Portable release 1.3.4**
-- Tag `v1.3.4` — color spans reopen correctly; Todos rail strips HTML from checkbox titles. Rollback is the previous exe (1.3.3).
+- Tag `v1.3.4` (`f901453`) — color spans reopen correctly; Todos rail strips HTML from checkbox titles. Rollback is the previous exe (1.3.3).
 
 ---
 
