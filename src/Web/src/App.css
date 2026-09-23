@@ -653,17 +653,15 @@ button {
   flex-direction: column;
   align-items: stretch;
   width: 100%;
-  will-change: transform;
-  /* Exact pixel cycle — avoids % seam flash when content is shorter than the rail. */
-  animation: todos-ticker-scroll linear infinite;
-  animation-play-state: paused;
+  /* rAF-driven translate — no CSS keyframe reset (that seam flashes on Windows Chrome / fractional DPR). */
+  transform: translate3d(0, 0, 0);
   opacity: 0;
+  will-change: transform;
 }
 
 .todos-ticker-track.is-ready {
-  animation-play-state: running;
   opacity: 1;
-  transition: opacity 0.35s ease;
+  transition: opacity 0.3s ease;
 }
 
 .todos-ticker-group {
@@ -688,15 +686,6 @@ button {
   text-overflow: ellipsis;
   white-space: nowrap;
   padding: 0 0.15rem;
-}
-
-@keyframes todos-ticker-scroll {
-  from {
-    transform: translate3d(0, 0, 0);
-  }
-  to {
-    transform: translate3d(0, calc(-1 * var(--ticker-cycle, 0px)), 0);
-  }
 }
 
 .todos-ticker-rail,

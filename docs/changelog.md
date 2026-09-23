@@ -1,4 +1,11 @@
-## 2026-09-22 — Code Edit dialog: Done top-right, snippets on bar, wrap/whitespace work
+## 2026-09-23 — Collapsed Todos ticker: no loop flash on high-DPI Windows
+
+- CSS `@keyframes` always jump `to` → `from` in one frame. On Windows Chrome with fractional display scaling that reads as a gap/flash every cycle even when the pixel distance looked correct. The ticker now scrolls with `requestAnimationFrame` and modulo against the first group's real `offsetHeight` (three copies, viewport-tall padding), so the motion never hard-resets.
+
+**Portable release 1.3.8**
+- Tag `v1.3.8` — seamless collapsed Todos ticker on high-DPI Windows. Rollback is the previous exe (1.3.7).
+
+---
 
 - Edit dialog hid Insert/Save under ☰ (fine on the small code-box chrome, cramped in the big dialog). Done is top-right; Insert snippet / Save as snippet sit on the dialog bar. Word wrap did nothing because the host let the editor grow past the viewport; Show whitespace used `highlightSpecialChars` (control chars only) instead of `highlightWhitespace` (spaces/tabs).
 

@@ -34,6 +34,10 @@ Upload **`artifacts\jotdex-win-x64.zip`** to a GitHub Release (tag like `v1.1.0`
 3. Download the Release zip, extract over the install folder, **keep `data\`**.
 4. Start `start-portable.cmd`.
 
+## 1.3.8 (Todos ticker seamless on high-DPI)
+
+1.3.8 is a small polish on top of 1.3.7. The collapsed Todos title ticker no longer flashes a gap at the loop on Windows Chrome with fractional display scaling — scrolling is driven by `requestAnimationFrame` instead of a CSS keyframe reset. Vault Markdown is unchanged. Rollback is the previous portable exe (1.3.7).
+
 ## 1.3.7 (code Edit dialog + PSScriptAnalyzer)
 
 1.3.7 is a reliability/polish release on top of 1.3.6. **Edit** on a code box opens the CodeMirror dialog again (no solid black overlay). PowerShell best-practice hints from PSScriptAnalyzer work when the module is bundled. In the Edit dialog: **Done** is top-right; Insert snippet / Save as snippet are on the bar; Word wrap and Show whitespace work. Vault Markdown is unchanged. Rollback is the previous portable exe (1.3.6).
