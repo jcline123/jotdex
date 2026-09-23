@@ -3,7 +3,7 @@
 - CSS `@keyframes` always jump `to` → `from` in one frame. On Windows Chrome with fractional display scaling that reads as a gap/flash every cycle even when the pixel distance looked correct. The ticker now scrolls with `requestAnimationFrame` and modulo against the first group's real `offsetHeight` (three copies, viewport-tall padding), so the motion never hard-resets.
 
 **Portable release 1.3.8**
-- Tag `v1.3.8` — seamless collapsed Todos ticker on high-DPI Windows. Rollback is the previous exe (1.3.7).
+- Tag `v1.3.8` (`4198e66`) — seamless collapsed Todos ticker on high-DPI Windows. Rollback is the previous exe (1.3.7).
 
 ---
 
