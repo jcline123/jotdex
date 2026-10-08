@@ -7,7 +7,7 @@
 - Callout marker parse used `\s`, so a body line right after `> [!note]` became `data-callout-title` and showed both raw (CSS `attr()`) and rendered. Title is first-line only; prefer `> [!info] Title:` on the marker line. Collapsed `> [!info]-` is intentional Obsidian syntax, not a bug.
 
 **Portable release 1.3.9**
-- Tag `v1.3.9` (pending) — same-note fragment nav, digit-safe export heading ids, explicit anchors, callout title parse. Live vault Markdown was **not** rewritten by the release. Rollback is the previous exe (1.3.8).
+- Tag `v1.3.9` (`d9aa2fd`) — same-note fragment nav, digit-safe export heading ids, explicit anchors, callout title parse. Live vault Markdown was **not** rewritten by the release. Rollback is the previous exe (1.3.8).
 
 ---
 
