@@ -5,7 +5,7 @@
 **What:** Scheme-isolated `/api/integrations/v1` bearer API (folder ACL, If-Match, idempotency, rate limits); admin token UI + CSRF; optional never-expire tokens; provenance front-matter + DocumentSameness ignore list; subtle metadata line + `/api/notes/{id}/meta` poll. Create-token reauth failures return 403 so IdleLock does not treat them as session expiry. Move-kit restore disables Integrations and drops token verifiers. Docs: `docs/integrations-api.md`, ADR 0011. Live vault / Cloudflare untouched by the release.
 
 **Portable release 1.4.0**
-- Tag `v1.4.0` (pending) — Integrations API + note timestamps/attribution. Live vault Markdown was **not** rewritten by the release. Rollback is the previous exe (1.3.9).
+- Tag `v1.4.0` (`e3449fe`) — Integrations API + note timestamps/attribution. Live vault Markdown was **not** rewritten by the release. Rollback is the previous exe (1.3.9).
 
 ## 2026-10-08 — Same-note fragments, digit heading ids, callout title parse
 
