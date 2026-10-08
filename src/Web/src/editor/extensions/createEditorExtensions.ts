@@ -42,6 +42,9 @@ import { GutterPlusPlugin, type GutterPlusState } from '../gaps/gutterPlusPlugin
 import { DragHandlePlugin } from '../blocks/dragHandlePlugin'
 import { isSafeHref } from '../links/linkSchemes'
 import { parseSpreadsheet, pasteSpreadsheetIntoTable, stripTableMerges } from '../tables/spreadsheetPaste'
+import { ExplicitAnchor } from './ExplicitAnchor'
+import { FragmentLinkNavigation } from './fragmentLinkNavigation'
+import { HeadingIds } from './headingIds'
 
 const ConsistentLineBreaks = Extension.create({
   name: 'consistentLineBreaks',
@@ -188,6 +191,9 @@ export function createEditorExtensions(opts: EditorExtensionOptions = {}): Exten
       },
       HTMLAttributes: { rel: 'noreferrer noopener' },
     }),
+    ExplicitAnchor,
+    HeadingIds,
+    FragmentLinkNavigation,
     withViews ? JotdexBlockImage : JotdexBlockImageHeadless,
     JotdexFigureParse,
     withViews

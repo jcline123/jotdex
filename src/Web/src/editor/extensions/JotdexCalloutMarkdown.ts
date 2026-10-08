@@ -4,7 +4,10 @@ import { Callout, type CalloutType } from '../../callout'
 const TYPES = new Set(['note', 'tip', 'warning', 'info', 'danger'])
 
 function parseMarker(raw: string): { type: CalloutType; collapse: 'collapsed' | 'expanded' | null; title: string } | null {
-  const m = /\[!(\w+)\]([+-])?(?:\s+(.*))?/i.exec(raw)
+  // Title is only on the marker line. Do not let `\s` eat a newline and pull the next
+  // body line into `data-callout-title` (that double-renders: CSS attr + body).
+  const firstLine = raw.split(/\r?\n/, 1)[0] ?? raw
+  const m = /\[!(\w+)\]([+-])?(?:[^\S\n]+(.*))?$/i.exec(firstLine.trimEnd())
   const t = m?.[1]?.toLowerCase()
   if (!t || !TYPES.has(t)) {
     const html = /data-callout="(\w+)"/i.exec(raw)

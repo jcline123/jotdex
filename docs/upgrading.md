@@ -34,6 +34,10 @@ Upload **`artifacts\jotdex-win-x64.zip`** to a GitHub Release (tag like `v1.1.0`
 3. Download the Release zip, extract over the install folder, **keep `data\`**.
 4. Start `start-portable.cmd`.
 
+## 1.3.9 (same-note fragments; digit heading ids; callouts)
+
+1.3.9 is an authoring fix on top of 1.3.8. Same-note `#fragment` links scroll in the editor; HTML export keeps leading digits in heading ids (`### 3C…` → `#3c-…`); empty `<a id="…"></a>` targets round-trip through Visual; callout titles stay on the marker line so body Markdown is not shown twice. Vault Markdown is unchanged (except notes you already corrupted with broken anchors — open/save after upgrade to re-serialize, or restore anchors manually). Rollback is the previous portable exe (1.3.8).
+
 ## 1.3.8 (Todos ticker seamless on high-DPI)
 
 1.3.8 is a small polish on top of 1.3.7. The collapsed Todos title ticker no longer flashes a gap at the loop on Windows Chrome with fractional display scaling — scrolling is driven by `requestAnimationFrame` instead of a CSS keyframe reset. Vault Markdown is unchanged. Rollback is the previous portable exe (1.3.7).

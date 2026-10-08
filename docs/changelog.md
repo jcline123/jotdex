@@ -1,3 +1,16 @@
+## 2026-10-08 — Same-note fragments, digit heading ids, callout title parse
+
+- In-editor `#fragment` links did nothing because TipTap Link uses `openOnClick: false` with no scroll handler. Clicks now scroll to heading ids (outline slugify, leading digits kept) or explicit `<a id>` targets (DOM `click` + pointer cursor).
+- HTML export heading ids used Markdig Default AutoIdentifiers, which strips leading digits (`### 3C…` → `id="c-service…"`). Export now aligns ids with the editor outline (`3c-service…`). ChatGPT’s `querySelector` / `CSS.escape` theory was not the export bug.
+- Bare `<a id="…"></a>` targets were split by Marked on `>` (same class of bug as color spans), so Visual open/save could drop them — often noticed after rename+re-export. They are brace-protected on parse and round-trip as HTML again. Pure `#frag` hrefs were never rewritten on rename.
+- **Phone Integration 2** on disk already had 15 anchors corrupted to `&lt;a id="…"\` plus junk `> [!note] >` callouts — TOC links had nowhere to land. Restored real `<a id="…"></a>` (backup beside the note).
+- Callout marker parse used `\s`, so a body line right after `> [!note]` became `data-callout-title` and showed both raw (CSS `attr()`) and rendered. Title is first-line only; prefer `> [!info] Title:` on the marker line. Collapsed `> [!info]-` is intentional Obsidian syntax, not a bug.
+
+**Portable release 1.3.9**
+- Tag `v1.3.9` (pending) — same-note fragment nav, digit-safe export heading ids, explicit anchors, callout title parse. Live vault Markdown was **not** rewritten by the release. Rollback is the previous exe (1.3.8).
+
+---
+
 ## 2026-09-23 — Collapsed Todos ticker: no loop flash on high-DPI Windows
 
 - CSS `@keyframes` always jump `to` → `from` in one frame. On Windows Chrome with fractional display scaling that reads as a gap/flash every cycle even when the pixel distance looked correct. The ticker now scrolls with `requestAnimationFrame` and modulo against the first group's real `offsetHeight` (three copies, viewport-tall padding), so the motion never hard-resets.

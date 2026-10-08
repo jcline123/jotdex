@@ -83,10 +83,14 @@ Canonical on disk is Obsidian syntax. Types: note, tip, info, warning, danger.
 
 Older HTML \`<blockquote data-callout="tip">…</blockquote>\` still opens in the editor when a note already has it; prefer \`> [!type]\` for new notes.
 
-Optional title on the marker line. \`-\` = collapsed by default, \`+\` = expanded by default. Opening/closing in the UI does **not** change the file.
+**Prefer the title on the marker line** (not a bold first body line). \`-\` = collapsed by default, \`+\` = expanded by default. Opening/closing in the UI does **not** change the file.
 
 > [!warning] Prod change
 > Read this first.
+
+> [!info] Timeout Greeting:
+>
+> We apologize for the delay…
 
 > [!tip]- Extra help
 > Hidden until opened.
@@ -135,6 +139,24 @@ GitHub-style pipes:
 ## Wikilinks / cross-notes
 Prefer markdown links to other notes: \`[VPN runbook](Network/VPN runbook.md)\`
 (Typing \`[[\` in Jotdex also autocomplete-links notes.)
+
+## Same-note section links
+Headings get stable fragment ids (leading digits kept): \`### 3C Service Call Queue\` → \`#3c-service-call-queue\`.
+
+\`\`\`markdown
+[Jump](#3c-service-call-queue)
+\`\`\`
+
+Optional explicit target (survives Visual edit/save):
+
+\`\`\`markdown
+<a id="cq-3c-service"></a>
+### 3C Service Call Queue
+
+[3C Service Call Queue](#cq-3c-service)
+\`\`\`
+
+Fragment-only \`href="#…"\` links stay valid after renaming the note.
 
 ## Quotes & separators
 - Block quotes: \`> quoted line\`

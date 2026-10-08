@@ -1,21 +1,30 @@
 using Jotdex.Core.Vault;
 using Jotdex.Infrastructure.Markdown;
 using Markdig;
+using Markdig.Renderers;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 namespace Jotdex.Infrastructure.Vault;
 
-public sealed class MarkdigMarkdownRenderer : IMarkdownRenderer
+public sealed class MarkdigMarkdownRenderer : Jotdex.Core.Vault.IMarkdownRenderer
 {
     private readonly MarkdownPipeline _pipeline = new MarkdownPipelineBuilder()
         .UseAdvancedExtensions()
         .Build();
 
-    public string ToHtml(string markdown) =>
-        Markdig.Markdown.ToHtml(
-            DialectV2HtmlNormalizer.Normalize(ObsidianCalloutNormalizer.NormalizeTitledMarkers(markdown ?? "")),
-            _pipeline);
+    public string ToHtml(string markdown)
+    {
+        var normalized = DialectV2HtmlNormalizer.Normalize(
+            ObsidianCalloutNormalizer.NormalizeTitledMarkers(markdown ?? ""));
+        var doc = Markdig.Markdown.Parse(normalized, _pipeline);
+        HeadingIdAligner.Apply(doc);
+        using var writer = new StringWriter();
+        var renderer = new HtmlRenderer(writer);
+        _pipeline.Setup(renderer);
+        renderer.Render(doc);
+        return writer.ToString();
+    }
 }
 
 public sealed class VaultFileWatcher : IHostedService, IDisposable

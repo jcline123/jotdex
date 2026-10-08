@@ -1482,6 +1482,17 @@ button {
   display: none !important;
 }
 
+/* Empty fragment targets — take no layout space but remain getElementById-able */
+.tiptap-editor a.jotdex-anchor {
+  display: inline-block;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+  vertical-align: baseline;
+  pointer-events: none;
+  cursor: default;
+}
+
 .tiptap-editor blockquote.callout {
   border-left: 3px solid var(--accent, #3b82f6);
   background: rgba(59, 130, 246, 0.08);
@@ -2291,6 +2302,7 @@ button {
   color: var(--link);
   text-decoration-color: color-mix(in srgb, var(--link) 45%, transparent);
   text-underline-offset: 2px;
+  cursor: pointer;
 }
 
 .tiptap-editor a:hover {

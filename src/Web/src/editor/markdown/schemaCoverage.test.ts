@@ -92,6 +92,10 @@ describe('persistent schema coverage', () => {
           e.destroy()
         } else if (name === 'jotdexAlignMarker') {
           md = 'ok'
+        } else if (name === 'explicitAnchor') {
+          const e = createTestEditor('<a id="cq-3c-service"></a>\n\nHello')
+          md = editorMarkdown(e)
+          e.destroy()
         } else {
           md = 'skip'
         }

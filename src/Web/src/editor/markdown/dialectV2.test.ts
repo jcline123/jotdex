@@ -61,6 +61,27 @@ describe('dialect v2 marks and blocks', () => {
     editor.destroy()
   })
 
+  it('callout without title does not pull next body line into title', () => {
+    const editor = createTestEditor('> [!note]\n> **Greeting:**\n>\n> Thank you')
+    const callout = editor.state.doc.firstChild
+    expect(callout?.type.name).toBe('callout')
+    expect(String(callout?.attrs?.title ?? '')).toBe('')
+    const md = editorMarkdown(editor)
+    expect(md).toMatch(/\[!note\]\s*\n/)
+    expect(md).toContain('**Greeting:**')
+    expect(md).toContain('Thank you')
+    editor.destroy()
+  })
+
+  it('explicit HTML anchor round-trips with fragment link', () => {
+    const src = '<a id="cq-3c-service"></a>\n\n### 3C Service Call Queue\n\n[Go](#cq-3c-service)\n'
+    const { editor, markdown } = reopenMarkdown(src)
+    expect(markdown).toContain('<a id="cq-3c-service"></a>')
+    expect(markdown).toContain('#cq-3c-service')
+    expect(markdown).toContain('3C Service Call Queue')
+    editor.destroy()
+  })
+
   it('bookmark card dialect', () => {
     const src = '<!-- jotdex-link-card -->\n[Example](https://example.com)\n'
     const editor = createTestEditor(src)

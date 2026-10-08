@@ -2,6 +2,7 @@ import type { Editor, JSONContent } from '@tiptap/core'
 import { applyOfficialParseFixes } from '../markdown/parsePostprocess'
 import { rewriteCommentsToBraces } from '../markdown/commentProtect'
 import { rewriteHtmlMarksToBraces } from '../markdown/htmlMarksProtect'
+import { rewriteAnchorsToBraces } from '../markdown/anchorProtect'
 import { closeDanglingFence } from '../markdown/closeDanglingFence'
 
 export type InsertOptions = { emitUpdate?: boolean }
@@ -9,7 +10,8 @@ export type InsertOptions = { emitUpdate?: boolean }
 export function setMarkdownDocument(editor: Editor, markdown: string, options: InsertOptions = {}) {
   const comments = rewriteCommentsToBraces(markdown || '')
   const marks = rewriteHtmlMarksToBraces(comments.markdown)
-  const fences = closeDanglingFence(marks.markdown)
+  const anchors = rewriteAnchorsToBraces(marks.markdown)
+  const fences = closeDanglingFence(anchors.markdown)
   const parsed = editor.markdown?.parse(fences.markdown) ?? { type: 'doc', content: [] }
   const fixed = applyOfficialParseFixes(parsed)
   return editor.commands.setContent(fixed.doc, { emitUpdate: options.emitUpdate ?? false })
