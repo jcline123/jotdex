@@ -159,8 +159,10 @@ public sealed class MoveKitService : IMoveKitService
                 var configDir = Path.Combine(dataRoot, "config");
                 if (Directory.Exists(configDir))
                 {
-                    // Include cloud-backup.json settings (preferences). Do NOT pack secrets —
-                    // OAuth lives in data/secrets/cloud-backup.json and is never under config/.
+                    // Include cloud-backup.json + integrations.json preferences.
+                    // Do NOT pack secrets — OAuth lives in data/secrets/cloud-backup.json.
+                    // Token verifiers live under data/integrations/ (not config/) and are not packed here;
+                    // Restore-Jotdex disables Integrations and requires token re-issue.
                     // Also never pack state/cloud-backup or exports/cloud-backup-staging (not under config/).
                     AddDirectory(zip, configDir, "appdata/config", ct, skipRelative: null);
                 }

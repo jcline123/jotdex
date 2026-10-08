@@ -33,6 +33,7 @@ using Jotdex.Server.Auth;
 using Jotdex.Server.CloudBackup;
 using Jotdex.Server.CodeDiagnostics;
 using Jotdex.Server.Hosting;
+using Jotdex.Server.Integrations;
 using Jotdex.Server.Snippets;
 using Microsoft.Extensions.Options;
 
@@ -206,6 +207,7 @@ builder.Services.AddSingleton<ISearchIndex>(sp => sp.GetRequiredService<SqliteSe
 builder.Services.AddSingleton<IVaultRescanObserver>(sp => sp.GetRequiredService<SqliteSearchIndex>());
 builder.Services.AddSingleton<IVaultRescanObserver>(sp => sp.GetRequiredService<SnippetIndexService>());
 builder.Services.AddSingleton<INoteHistoryService, NoteHistoryService>();
+builder.Services.AddJotdexIntegrations();
 builder.Services.AddSingleton<INoteCommandService, NoteCommandService>();
 builder.Services.AddSingleton<IVaultTaskService, VaultTaskService>();
 builder.Services.AddSingleton<IFolderCommandService, FolderCommandService>();
@@ -329,8 +331,10 @@ uiPrefs.BindCookieOptions(timeout =>
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseJotdexAuthGate();
+app.UseRateLimiter();
 
 app.MapAuthEndpoints();
+app.MapIntegrationEndpoints();
 app.MapCloudBackupEndpoints();
 app.MapCodeDiagnosticsEndpoints();
 app.MapSnippetEndpoints();
@@ -395,6 +399,27 @@ app.MapGet("/api/notes/{id:guid}", (Guid id, IVaultService vault, IVaultPathGuar
     if (!paths.IsConfigured) return Results.NotFound(new { error = "Vault not configured" });
     var note = vault.GetNote(id);
     return note is null ? Results.NotFound() : Results.Json(note);
+});
+
+app.MapGet("/api/notes/{id:guid}/meta", (Guid id, IVaultService vault, IVaultPathGuard paths) =>
+{
+    if (!paths.IsConfigured) return Results.NotFound(new { error = "Vault not configured" });
+    var note = vault.GetNote(id);
+    if (note is null) return Results.NotFound();
+    return Results.Json(new
+    {
+        id = note.Id,
+        etag = note.ETag,
+        created = note.Created,
+        modified = note.Modified,
+        createdVia = note.CreatedVia,
+        createdBy = note.CreatedBy,
+        updatedVia = note.UpdatedVia,
+        updatedBy = note.UpdatedBy,
+        lastApiUpdateAt = note.LastApiUpdateAt,
+        lastApiUpdateBy = note.LastApiUpdateBy,
+        provenanceInferred = note.ProvenanceInferred
+    });
 });
 
 app.MapPut("/api/notes/{id:guid}/heading-folds", async (Guid id, HttpRequest request, INoteCommandService commands, IVaultPathGuard paths) =>

@@ -304,6 +304,7 @@ $dataConfig = Join-Path $dataRoot "config"
 foreach ($rel in @(
         "config",
         "secrets",
+        "integrations",
         "state\cloud-backup",
         "exports\backups",
         "exports\cloud-backup-staging"

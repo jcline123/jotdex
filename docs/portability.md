@@ -26,6 +26,8 @@ Notes travel with the vault. Search index is rebuilt.
 | Auth / sessions | AppData `auth\` | Recreate or copy carefully / included in move kit |
 | Secrets (SMTP/Telegram/TOTP) | AppData `secrets\secrets.json` (DPAPI) | Move kit unwraps to `secrets-portable.json`; rewrapped on first start |
 | Cloud backup settings | AppData `config\cloud-backup.json` | Included in move kit (preferences only) |
+| Integrations preferences | AppData `config\integrations.json` | Included if present; restore **disables** Integrations |
+| Integration API tokens | AppData `integrations\tokens.json` | Not activated on restore — re-issue tokens |
 | Cloud OAuth credentials | AppData `secrets\cloud-backup.json` (DPAPI) | **Never** in move kits — reconnect providers on the new PC |
 | Cloud backup runtime status | AppData `state\cloud-backup\` | Not portable |
 | Cloud backup staging | AppData `exports\cloud-backup-staging\` | Not portable |

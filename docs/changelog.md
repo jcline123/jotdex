@@ -1,3 +1,12 @@
+## 2026-10-08 — Secure Integrations API + note timestamps / attribution
+
+**Why:** Automation (e.g. Grok Bot) needed a Cloudflare-friendly way to read/write selected notes without sharing the admin cookie session, and the note chrome needed Created/Updated (and API attribution) without putting that text into Markdown copy/Share HTML.
+
+**What:** Scheme-isolated `/api/integrations/v1` bearer API (folder ACL, If-Match, idempotency, rate limits); admin token UI + CSRF; optional never-expire tokens; provenance front-matter + DocumentSameness ignore list; subtle metadata line + `/api/notes/{id}/meta` poll. Create-token reauth failures return 403 so IdleLock does not treat them as session expiry. Move-kit restore disables Integrations and drops token verifiers. Docs: `docs/integrations-api.md`, ADR 0011. Live vault / Cloudflare untouched by the release.
+
+**Portable release 1.4.0**
+- Tag `v1.4.0` (pending) — Integrations API + note timestamps/attribution. Live vault Markdown was **not** rewritten by the release. Rollback is the previous exe (1.3.9).
+
 ## 2026-10-08 — Same-note fragments, digit heading ids, callout title parse
 
 - In-editor `#fragment` links did nothing because TipTap Link uses `openOnClick: false` with no scroll handler. Clicks now scroll to heading ids (outline slugify, leading digits kept) or explicit `<a id>` targets (DOM `click` + pointer cursor).

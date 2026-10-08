@@ -111,6 +111,9 @@ public sealed class LocalAuthService : ILocalAuthService
         }
     }
 
+    public AuthResult VerifyAdminReauth(string password, string? totpOrRecoveryCode = null) =>
+        ValidateCredentials(ILocalAuthService.DefaultUsername, password, totpOrRecoveryCode);
+
     public AuthResult ValidateCredentials(string username, string password, string? totpOrRecoveryCode = null)
     {
         lock (_gate)

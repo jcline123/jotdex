@@ -66,6 +66,17 @@ Rules:
 - Display title order: front-matter `title` → first H1 → filename.
 - Preserve `created` when present; app may update `modified`.
 - No BOM unless an imported file requires preservation.
+- Additive **server-owned** provenance keys (optional; written only on managed creates/updates; unknown keys still preserved):
+
+  | Key | Meaning |
+  |-----|---------|
+  | `jotdex_created_via` | `ui` / `api` / `import` / `external` / `unknown` |
+  | `jotdex_created_by` | Display name (UI user or API token name) |
+  | `jotdex_updated_via` / `jotdex_updated_by` | Last managed edit channel / actor |
+  | `jotdex_last_api_update_at` / `jotdex_last_api_update_by` | Last API edit (when via=api) |
+  | `jotdex_provenance_hash` | Digest of meaningful body + user FM (excludes server-owned keys) |
+
+  Autosave equivalence ignores these keys (and `modified`) so UI saves do not loop. Hand-edits outside Jotdex may show as external until the next managed save.
 
 ### Heading collapse helper `Title.folds.json`
 

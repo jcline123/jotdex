@@ -1,0 +1,88 @@
+# Jotdex Integrations API
+
+Disabled-by-default REST surface for automation (for example Grok Bot) through Cloudflare Tunnel. Browser cookie login is unchanged. Design: [ADR 0011](decisions/0011-integrations-api.md).
+
+**Base path:** `/api/integrations/v1`  
+**Auth:** `Authorization: Bearer <jotdex-api-token>` only (scheme `JotdexIntegrationToken`). Cookies never unlock this surface.
+
+## Enable and issue a token
+
+1. Set a local administrator password (Settings → Security).
+2. Settings → **Integrations** → enable Integrations.
+3. Create a token with a preset (Read / Capture+append / Read+edit), optional attachments, folders or explicit whole-vault, expiration ≤ 365 days, or **Never expire** (still revocable anytime).
+4. Confirm with the admin password (and TOTP if enabled).
+5. Copy the secret once (`jdx_…`). Store it only in your bot’s secret store.
+
+Revoke or rotate from the same page. Removing the local password is blocked while Integrations is enabled.
+
+## Cloudflare three-header model
+
+Use a **separate Cloudflare Access application** for the API path with **Service Auth** (client credentials), not the human Access app used for the browser UI.
+
+| Header | Purpose |
+|--------|---------|
+| `CF-Access-Client-Id` | Cloudflare Access service token id |
+| `CF-Access-Client-Secret` | Cloudflare Access service token secret |
+| `Authorization` | `Bearer` + Jotdex API token |
+
+Suggested path policy:
+
+- Human Access app → SPA + `/api/*` except integrations (cookie session).
+- API Access app (Service Auth) → `/api/integrations/v1/*` only.
+
+Jotdex does not configure Cloudflare for you. **Grok native menu integration is not verified** in this release; use any HTTPS client that can send the three headers.
+
+## Endpoints (summary)
+
+Authenticated OpenAPI sketch: `GET /api/integrations/v1/openapi.json`.
+
+| Method | Path | Scope |
+|--------|------|--------|
+| GET | `/whoami` | any valid token |
+| GET | `/folders` | `notes:read` |
+| GET | `/notes` | `notes:read` |
+| GET | `/search?q=` | `notes:read` |
+| GET | `/notes/{id}` | `notes:read` |
+| GET | `/notes/{id}/attachments/{attachmentId}` | `attachments:read` |
+| POST | `/notes` | `notes:create` + `Idempotency-Key` |
+| PUT | `/notes/{id}` | `notes:update` + `If-Match` |
+| POST | `/notes/{id}/append` | `notes:append` + `Idempotency-Key` + `If-Match` |
+
+Write bodies accept `bodyMarkdown` only (merged into existing front matter). Clients cannot set ids, dates, or attribution. Updates require exact `If-Match` ETag → `428` if missing, `412` if stale. Create/append require `Idempotency-Key` (24h, same key + different body → `409`).
+
+Limits (defaults): ~120 read/min/token, ~20 write/min/token, 2 MiB body, page size ≤ 100. Over limit → `429` + `Retry-After`.
+
+Folder ACL is enforced on every path. Out-of-scope ids return `404` (no title leak). Missing scope → `403`. Responses use `Cache-Control: no-store`.
+
+## Provenance
+
+Managed writes add additive front-matter keys (`jotdex_created_via`, `jotdex_updated_via`, …). The note chrome shows Created / Updated (and “via API (Name)” when applicable). Metadata is not part of Share HTML or copied Markdown body text.
+
+## Move / restore
+
+`config/integrations.json` preferences may travel in a move kit. Token verifiers are **not** activated on restore — Integrations is left disabled; re-issue tokens on the new PC. See [portability.md](portability.md) and [backup.md](backup.md).
+
+## Sample client
+
+```powershell
+$env:JOTDEX_BASE_URL = "https://notes.example.com"
+$env:JOTDEX_API_TOKEN = "jdx_...."
+# Optional Cloudflare Service Auth:
+# $env:CF_ACCESS_CLIENT_ID = "..."
+# $env:CF_ACCESS_CLIENT_SECRET = "..."
+.\scripts\Invoke-JotdexIntegrationSmoke.ps1
+```
+
+## Troubleshooting
+
+| Symptom | Likely cause |
+|---------|----------------|
+| `401` on `/api/integrations/v1/*` | Feature off, bad/expired/revoked token, wrong vault id, or cookie used instead of Bearer |
+| `401` on `/api/notes` with Bearer | Expected — browser APIs are cookie-only |
+| `403` `forbidden_scope` | Token missing the required scope |
+| `404` on a note you know exists | Folder not in token allow-list (or sibling-prefix mismatch) |
+| `428` / `412` | Missing or stale `If-Match` |
+| `409` idempotency | Same `Idempotency-Key` with a different body |
+| `429` | Per-token rate limit |
+| `503` `disabled` | Integrations toggled off |
+| Cloudflare `302`/`403` before Jotdex | Service Auth app path or credentials wrong |

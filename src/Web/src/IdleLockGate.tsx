@@ -179,6 +179,8 @@ export function IdleLockGate({ enabled, minutes, authAvailable, onLockedChange, 
           : input instanceof URL
             ? input.href
             : input.url
+      // Step-up / reauth failures must not look like a dead cookie session.
+      if (url.includes('/api/admin/integrations')) return res
       if (
         url.includes('/api/') &&
         !url.includes('/api/auth/login') &&

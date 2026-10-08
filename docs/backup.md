@@ -28,7 +28,7 @@ Mirror still copies your **whole vault** as normal. Optionally also enable **Als
 | Entry | Purpose |
 |---|---|
 | `vault/` | Full live vault |
-| `appdata/config/` | Vault path, network, mirror settings, **cloud-backup.json** preferences (portable) |
+| `appdata/config/` | Vault path, network, mirror settings, **cloud-backup.json** / **integrations.json** preferences (portable) |
 | `appdata/auth/` | Password hash (secret) |
 | `appdata/history/` | Note rollback snapshots |
 | `appdata/secrets/secrets-portable.json` | Unwrapped notification / TOTP secrets for transfer (re-wrapped with DPAPI on first start) |

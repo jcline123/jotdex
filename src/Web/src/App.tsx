@@ -38,6 +38,8 @@ import { CloudBackupSettings } from './CloudBackupSettings'
 import { runCloudBackup } from './cloudBackupApi'
 import { isStandaloneTodosNote } from './systemNotes'
 import { diffLines } from './diffLines'
+import { IntegrationSettings } from './IntegrationSettings'
+import { NoteMetadata, type NoteMetaFields } from './NoteMetadata'
 
 function isCodeSnippetNote(frontMatter: string, folderPath?: string): boolean {
   if (/jotdex_type:\s*code-snippet/i.test(frontMatter)) return true
@@ -101,10 +103,43 @@ type NoteDetail = {
   html: string
   etag: string
   tags: string[]
+  created?: string
   modified?: string
+  createdVia?: string | null
+  createdBy?: string | null
+  updatedVia?: string | null
+  updatedBy?: string | null
+  lastApiUpdateAt?: string | null
+  lastApiUpdateBy?: string | null
+  provenanceInferred?: boolean
   attachments: { id: string; fileName: string; contentType: string }[]
   htmlSidecars: { fileName: string; attachmentId: string }[]
   headingFolds?: string[]
+}
+
+function flattenFolderPaths(node: FolderNode | null): string[] {
+  if (!node) return []
+  const out: string[] = []
+  const walk = (n: FolderNode) => {
+    if (n.relativePath) out.push(n.relativePath)
+    for (const c of n.children) walk(c)
+  }
+  walk(node)
+  return out.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }))
+}
+
+function noteMetaFromDetail(n: NoteDetail): NoteMetaFields {
+  return {
+    created: n.created,
+    modified: n.modified,
+    createdVia: n.createdVia,
+    createdBy: n.createdBy,
+    updatedVia: n.updatedVia,
+    updatedBy: n.updatedBy,
+    lastApiUpdateAt: n.lastApiUpdateAt,
+    lastApiUpdateBy: n.lastApiUpdateBy,
+    provenanceInferred: n.provenanceInferred,
+  }
 }
 
 type VaultInfo = {
@@ -388,8 +423,17 @@ function App() {
 
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [settingsTab, setSettingsTab] = useState<
-    'vault' | 'network' | 'security' | 'notifications' | 'backup' | 'updates' | 'advanced' | 'capture'
+    | 'vault'
+    | 'network'
+    | 'security'
+    | 'notifications'
+    | 'backup'
+    | 'updates'
+    | 'advanced'
+    | 'capture'
+    | 'integrations'
   >('vault')
+  const [integrationHint, setIntegrationHint] = useState<string | null>(null)
   const settingsPanelRef = useRef<HTMLDivElement>(null)
   const [clipDefaultFolder, setClipDefaultFolder] = useState(() => loadClipDefaultFolder())
   const [clipFolderOptions, setClipFolderOptions] = useState<{ path: string; label: string }[]>([
@@ -785,6 +829,88 @@ function App() {
     },
     [selectedId, refreshNotes],
   )
+
+  // Poll note meta while visible: pick up API/disk attribution; dirty → conflict, never clobber buffer.
+  useEffect(() => {
+    if (!selectedId || !note) return
+    let cancelled = false
+
+    const applyMeta = (m: NoteMetaFields & { etag?: string }) => {
+      setNote((prev) =>
+        prev
+          ? {
+              ...prev,
+              created: m.created ?? prev.created,
+              modified: m.modified ?? prev.modified,
+              createdVia: m.createdVia,
+              createdBy: m.createdBy,
+              updatedVia: m.updatedVia,
+              updatedBy: m.updatedBy,
+              lastApiUpdateAt: m.lastApiUpdateAt,
+              lastApiUpdateBy: m.lastApiUpdateBy,
+              provenanceInferred: m.provenanceInferred,
+            }
+          : prev,
+      )
+    }
+
+    const poll = async () => {
+      if (cancelled || document.visibilityState === 'hidden') return
+      if (saveStatusRef.current === 'conflict' || savingRef.current) return
+      try {
+        const r = await fetch(`/api/notes/${selectedId}/meta`, { credentials: 'same-origin' })
+        if (!r.ok || cancelled) return
+        const m = (await r.json()) as NoteMetaFields & { etag?: string }
+        if (!m.etag) return
+        if (m.etag === etagRef.current) {
+          applyMeta(m)
+          return
+        }
+        const pending = joinFrontMatter(frontMatterRef.current, draftRef.current)
+        const dirty = !sameMarkdown(pending, baselineRef.current)
+        if (dirty) {
+          const full = await fetch(`/api/notes/${selectedId}`, { credentials: 'same-origin' })
+          if (full.ok) {
+            const disk = (await full.json()) as NoteDetail
+            setConflictDisk(disk)
+          }
+          setSaveStatus('conflict')
+          setError('Updated elsewhere — reload from disk or overwrite.')
+          return
+        }
+        const full = await fetch(`/api/notes/${selectedId}`, { credentials: 'same-origin' })
+        if (!full.ok || cancelled) return
+        const n = (await full.json()) as NoteDetail
+        if (selectedIdRef.current !== selectedId) return
+        setNote(n)
+        const split = splitFrontMatter(n.markdown)
+        setFrontMatter(split.frontMatter)
+        setDraft(split.body)
+        setEtag(n.etag)
+        etagRef.current = n.etag
+        draftRef.current = split.body
+        frontMatterRef.current = split.frontMatter
+        baselineRef.current = joinFrontMatter(split.frontMatter, split.body)
+        setSaveStatus('saved')
+      } catch {
+        /* ignore poll errors */
+      }
+    }
+
+    const id = window.setInterval(() => void poll(), 30_000)
+    const onFocus = () => void poll()
+    const onVis = () => {
+      if (document.visibilityState === 'visible') void poll()
+    }
+    window.addEventListener('focus', onFocus)
+    document.addEventListener('visibilitychange', onVis)
+    return () => {
+      cancelled = true
+      window.clearInterval(id)
+      window.removeEventListener('focus', onFocus)
+      document.removeEventListener('visibilitychange', onVis)
+    }
+  }, [selectedId, note?.id])
 
   useEffect(() => {
     draftRef.current = draft
@@ -2069,6 +2195,8 @@ function App() {
               <div className="popout-bar-main">
                 <p className="brand">Jotdex</p>
                 <h1 title={note.relativePath}>{note.title}</h1>
+                <p className="note-path">{note.relativePath}</p>
+                <NoteMetadata meta={noteMetaFromDetail(note)} />
               </div>
               <div className="popout-bar-actions">
                 <span className={`save-chip ${saveStatus}`} title={saveChipLabel(saveStatus)}>
@@ -2420,6 +2548,7 @@ function App() {
                   ['vault', 'Vault'],
                   ['network', 'Network'],
                   ['security', 'Security'],
+                  ['integrations', 'Integrations'],
                   ['capture', 'Capture'],
                   ['notifications', 'Notifications'],
                   ['backup', 'Backup'],
@@ -2906,6 +3035,20 @@ function App() {
                 </label>
               </>
             )}
+              </>
+            )}
+
+            {settingsTab === 'integrations' && (
+              <>
+                <h2 className="settings-section settings-section-first">Integrations</h2>
+                {integrationHint && <p className="upload-status">{integrationHint}</p>}
+                <IntegrationSettings
+                  folders={flattenFolderPaths(tree)}
+                  onHint={(m) => setIntegrationHint(m)}
+                  onError={(m) => {
+                    if (m) setError(m)
+                  }}
+                />
               </>
             )}
 
@@ -4104,6 +4247,7 @@ function App() {
                     </h1>
                   )}
                   <p className="note-path">{note.relativePath}</p>
+                  <NoteMetadata meta={noteMetaFromDetail(note)} />
                 </div>
                 <div className="actions">
                   <span className={`save-chip ${saveStatus}`} title={saveChipLabel(saveStatus)}>

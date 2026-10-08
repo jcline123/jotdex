@@ -3,8 +3,10 @@ using System.Text;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using Jotdex.Core.Configuration;
+using Jotdex.Core.Integrations;
 using Jotdex.Core.Vault;
 using Jotdex.Infrastructure.History;
+using Jotdex.Infrastructure.Integrations;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -30,10 +32,14 @@ public sealed class NoteMoveResult
 
 public interface INoteCommandService
 {
-    NoteSaveResult Save(Guid id, string markdown, string expectedETag, bool force = false);
-    NoteDetail? Create(string folderRelativePath, string title, string? markdown = null);
+    NoteSaveResult Save(Guid id, string markdown, string expectedETag, bool force = false, NoteChangeContext? change = null);
+    NoteDetail? Create(string folderRelativePath, string title, string? markdown = null, NoteChangeContext? change = null);
     /// <summary>Write a complete note file (already includes YAML front matter). Does not wrap another front matter block.</summary>
-    NoteDetail? CreateComplete(string folderRelativePath, string title, string fullMarkdown);
+    NoteDetail? CreateComplete(string folderRelativePath, string title, string fullMarkdown, NoteChangeContext? change = null);
+    /// <summary>Replace body Markdown only; preserve front matter and merge provenance.</summary>
+    NoteSaveResult ReplaceBody(Guid id, string bodyMarkdown, string expectedETag, NoteChangeContext change);
+    /// <summary>Append Markdown to the body; preserve front matter and merge provenance.</summary>
+    NoteSaveResult AppendBody(Guid id, string appendMarkdown, string expectedETag, NoteChangeContext change);
     bool MoveToTrash(Guid id);
     NoteSaveResult RestoreHistory(Guid id, string snapshotId);
     NoteMoveResult Move(Guid id, string targetFolderRelativePath, string? newTitle = null);
@@ -68,6 +74,8 @@ public sealed class NoteCommandService : INoteCommandService
     private readonly IVaultService _vault;
     private readonly INoteHistoryService _history;
     private readonly IDataRootResolver _dataRoot;
+    private readonly IVaultWriteCoordinator _writes;
+    private readonly TimeProvider _time;
     private readonly JotdexOptions _options;
     private readonly ILogger<NoteCommandService> _logger;
 
@@ -76,6 +84,8 @@ public sealed class NoteCommandService : INoteCommandService
         IVaultService vault,
         INoteHistoryService history,
         IDataRootResolver dataRoot,
+        IVaultWriteCoordinator writes,
+        TimeProvider time,
         IOptions<JotdexOptions> options,
         ILogger<NoteCommandService> logger)
     {
@@ -83,30 +93,51 @@ public sealed class NoteCommandService : INoteCommandService
         _vault = vault;
         _history = history;
         _dataRoot = dataRoot;
+        _writes = writes;
+        _time = time;
         _options = options.Value;
         _logger = logger;
     }
 
-    public NoteSaveResult Save(Guid id, string markdown, string expectedETag, bool force = false)
+    public NoteSaveResult Save(Guid id, string markdown, string expectedETag, bool force = false, NoteChangeContext? change = null)
+    {
+        return _writes.Execute(() => SaveCore(id, markdown, expectedETag, force, change ?? new NoteChangeContext(NoteChangeVia.Ui)));
+    }
+
+    private NoteSaveResult SaveCore(Guid id, string markdown, string expectedETag, bool force, NoteChangeContext change)
     {
         if (!_paths.IsConfigured)
             return Fail("Vault not configured");
 
+        // Prefer disk for write preconditions (watcher may lag).
         var existing = _vault.GetNote(id);
         if (existing is null)
             return Fail("Note not found");
 
+        string diskMarkdown;
+        try
+        {
+            var abs = _paths.EnsureInsideVault(existing.RelativePath.Replace('/', Path.DirectorySeparatorChar));
+            diskMarkdown = File.Exists(abs) ? File.ReadAllText(abs) : existing.Markdown;
+        }
+        catch
+        {
+            diskMarkdown = existing.Markdown;
+        }
+        var diskEtag = Hash(diskMarkdown.Replace("\r\n", "\n", StringComparison.Ordinal));
+
         // Empty expected ETag = client has no baseline (first save, older client) — skip the check.
         if (!force && !string.IsNullOrEmpty(expectedETag) &&
+            !string.Equals(diskEtag, expectedETag, StringComparison.OrdinalIgnoreCase) &&
             !string.Equals(existing.ETag, expectedETag, StringComparison.OrdinalIgnoreCase))
         {
             // TipTap/editor may resubmit with a stale ETag but identical document — not a real conflict.
-            if (SameDocument(existing.Markdown, markdown))
+            if (SameDocument(diskMarkdown, markdown))
             {
                 return new NoteSaveResult
                 {
                     Success = true,
-                    ETag = existing.ETag,
+                    ETag = diskEtag,
                     Note = existing
                 };
             }
@@ -115,29 +146,29 @@ public sealed class NoteCommandService : INoteCommandService
             {
                 Success = false,
                 Conflict = true,
-                ETag = existing.ETag,
+                ETag = diskEtag,
                 Error = "Note changed on disk (or in another session). Reload or overwrite.",
                 Note = existing
             };
         }
 
         // Open→close / identical buffer: do not rewrite the file or snapshot.
-        // (modified timestamp is ignored — the server bumps it on every real write.)
-        if (SameDocument(existing.Markdown, markdown))
+        if (SameDocument(diskMarkdown, markdown))
         {
             return new NoteSaveResult
             {
                 Success = true,
-                ETag = existing.ETag,
+                ETag = diskEtag,
                 Note = existing
             };
         }
 
         var absolute = _paths.EnsureInsideVault(existing.RelativePath.Replace('/', Path.DirectorySeparatorChar));
-        _history.SnapshotIfChanged(id, existing.Markdown);
-        // Bump modified so the note floats to the top of folder lists (favorites still win).
-        var toWrite = UpsertFrontMatterModified(markdown, DateTimeOffset.UtcNow)
+        _history.SnapshotIfChanged(id, diskMarkdown);
+        var now = _time.GetUtcNow();
+        var toWrite = UpsertFrontMatterModified(markdown, now)
             .Replace("\r\n", "\n", StringComparison.Ordinal);
+        toWrite = NoteProvenance.ApplyOnUpdate(toWrite, change, now);
         AtomicWrite(absolute, toWrite);
         _vault.Rescan();
         var updated = _vault.GetNote(id);
@@ -149,25 +180,73 @@ public sealed class NoteCommandService : INoteCommandService
         };
     }
 
-    public NoteDetail? Create(string folderRelativePath, string title, string? markdown = null)
+    public NoteDetail? Create(string folderRelativePath, string title, string? markdown = null, NoteChangeContext? change = null)
     {
-        if (!_paths.IsConfigured) return null;
-        var id = Guid.NewGuid();
-        var now = DateTimeOffset.UtcNow.ToString("O");
-        var body = markdown ?? $"# {title}\n\n";
-        var content =
-            $"---\nid: {id:D}\ntitle: {EscapeYaml(title)}\ncreated: {now}\nmodified: {now}\ntags: []\n---\n\n{body.TrimStart()}";
-        return WriteNewNoteFile(folderRelativePath, title, content, id);
+        return _writes.Execute(() =>
+        {
+            if (!_paths.IsConfigured) return null;
+            var id = Guid.NewGuid();
+            var now = _time.GetUtcNow();
+            var nowS = now.ToString("O");
+            var body = markdown ?? $"# {title}\n\n";
+            var content =
+                $"---\nid: {id:D}\ntitle: {EscapeYaml(title)}\ncreated: {nowS}\nmodified: {nowS}\ntags: []\n---\n\n{body.TrimStart()}";
+            content = NoteProvenance.ApplyOnCreate(content, change ?? new NoteChangeContext(NoteChangeVia.Ui), now);
+            return WriteNewNoteFile(folderRelativePath, title, content, id);
+        });
     }
 
-    public NoteDetail? CreateComplete(string folderRelativePath, string title, string fullMarkdown)
+    public NoteDetail? CreateComplete(string folderRelativePath, string title, string fullMarkdown, NoteChangeContext? change = null)
     {
-        if (!_paths.IsConfigured) return null;
-        if (string.IsNullOrWhiteSpace(fullMarkdown)) return null;
-        var content = fullMarkdown.Replace("\r\n", "\n", StringComparison.Ordinal);
-        var fm = FrontMatterParser.Parse(content);
-        var id = FrontMatterParser.DeriveId(fm.Fields, title);
-        return WriteNewNoteFile(folderRelativePath, title, content, id);
+        return _writes.Execute(() =>
+        {
+            if (!_paths.IsConfigured) return null;
+            if (string.IsNullOrWhiteSpace(fullMarkdown)) return null;
+            var content = fullMarkdown.Replace("\r\n", "\n", StringComparison.Ordinal);
+            var fm = FrontMatterParser.Parse(content);
+            var id = FrontMatterParser.DeriveId(fm.Fields, title);
+            content = NoteProvenance.ApplyOnCreate(content, change ?? new NoteChangeContext(NoteChangeVia.Ui), _time.GetUtcNow());
+            return WriteNewNoteFile(folderRelativePath, title, content, id);
+        });
+    }
+
+    public NoteSaveResult ReplaceBody(Guid id, string bodyMarkdown, string expectedETag, NoteChangeContext change)
+    {
+        return _writes.Execute(() =>
+        {
+            var existing = _vault.GetNote(id);
+            if (existing is null) return Fail("Note not found");
+            var parsed = FrontMatterParser.Parse(existing.Markdown);
+            var next = JoinFrontMatter(parsed.Fields, bodyMarkdown ?? "");
+            return SaveCore(id, next, expectedETag, force: false, change);
+        });
+    }
+
+    public NoteSaveResult AppendBody(Guid id, string appendMarkdown, string expectedETag, NoteChangeContext change)
+    {
+        return _writes.Execute(() =>
+        {
+            var existing = _vault.GetNote(id);
+            if (existing is null) return Fail("Note not found");
+            var parsed = FrontMatterParser.Parse(existing.Markdown);
+            var body = parsed.Body.TrimEnd() + "\n\n" + (appendMarkdown ?? "").TrimStart() + "\n";
+            var next = JoinFrontMatter(parsed.Fields, body);
+            return SaveCore(id, next, expectedETag, force: false, change);
+        });
+    }
+
+    private static string JoinFrontMatter(IReadOnlyDictionary<string, string?> fields, string body)
+    {
+        if (fields.Count == 0) return body;
+        var sb = new StringBuilder("---\n");
+        foreach (var kv in fields)
+        {
+            if (kv.Value is null) continue;
+            // Preserve list tags roughly as inline
+            sb.Append(kv.Key).Append(": ").Append(kv.Value).Append('\n');
+        }
+        sb.Append("---\n\n").Append(body.TrimStart());
+        return sb.ToString();
     }
 
     private NoteDetail? WriteNewNoteFile(string folderRelativePath, string title, string content, Guid expectedId)

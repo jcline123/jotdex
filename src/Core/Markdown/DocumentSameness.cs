@@ -1,10 +1,12 @@
 using System.Text.RegularExpressions;
+using Jotdex.Core.Integrations;
 
 namespace Jotdex.Core.Markdown;
 
 /// <summary>
 /// Exact save equivalence — shared with the TypeScript editor (documentSameness.ts).
-/// LF line endings, trim end, ignore YAML <c>modified:</c>. Interior blanks are significant.
+/// LF line endings, trim end, ignore YAML <c>modified:</c> and server-owned provenance keys.
+/// Interior blanks are significant.
 /// </summary>
 public static class DocumentSameness
 {
@@ -23,11 +25,14 @@ public static class DocumentSameness
             if (end > 0)
             {
                 var header = n[3..end];
-                header = Regex.Replace(
-                    header,
-                    @"^modified:\s*.*$",
-                    "modified:",
-                    RegexOptions.Multiline | RegexOptions.IgnoreCase);
+                foreach (var key in ProvenanceKeys.ServerOwned)
+                {
+                    header = Regex.Replace(
+                        header,
+                        $@"^{Regex.Escape(key)}:\s*.*$",
+                        $"{key}:",
+                        RegexOptions.Multiline | RegexOptions.IgnoreCase);
+                }
                 n = "---" + header + n[end..];
             }
         }

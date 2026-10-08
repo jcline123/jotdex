@@ -53,6 +53,16 @@ public sealed class NoteDetail
     public IReadOnlyList<HtmlSidecar> HtmlSidecars { get; init; } = [];
     /// <summary>Collapsed visual headings from sibling <c>Title.folds.json</c>. Not part of the Markdown body.</summary>
     public IReadOnlyList<string> HeadingFolds { get; init; } = [];
+    /// <summary>Creation origin: ui, api, import, external, unknown.</summary>
+    public string? CreatedVia { get; init; }
+    public string? CreatedBy { get; init; }
+    /// <summary>Latest edit origin.</summary>
+    public string? UpdatedVia { get; init; }
+    public string? UpdatedBy { get; init; }
+    public DateTimeOffset? LastApiUpdateAt { get; init; }
+    public string? LastApiUpdateBy { get; init; }
+    /// <summary>True when provenance was inferred (digest mismatch or missing hash).</summary>
+    public bool ProvenanceInferred { get; init; }
 }
 
 public sealed class AttachmentInfo

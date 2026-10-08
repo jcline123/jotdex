@@ -1,12 +1,15 @@
 using System.Security.Claims;
 using Jotdex.Core.Auth;
 using Jotdex.Core.Configuration;
+using Jotdex.Core.Integrations;
 using Jotdex.Core.Notifications;
 using Jotdex.Infrastructure.Config;
 using Jotdex.Infrastructure.Maintenance;
 using Jotdex.Infrastructure.Net;
+using Jotdex.Server.Integrations;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Options;
 
 namespace Jotdex.Server.Auth;
@@ -51,9 +54,32 @@ public static class AuthEndpointExtensions
                     ctx.Response.StatusCode = StatusCodes.Status403Forbidden;
                     return Task.CompletedTask;
                 };
-            });
+            })
+            .AddScheme<AuthenticationSchemeOptions, IntegrationTokenAuthHandler>(
+                IntegrationAuth.Scheme,
+                _ => { });
 
-        services.AddAuthorization();
+        services.AddAuthorization(options =>
+        {
+            options.AddPolicy(IntegrationAuth.Policy, policy =>
+            {
+                policy.AddAuthenticationSchemes(IntegrationAuth.Scheme);
+                policy.RequireAuthenticatedUser();
+            });
+            options.AddPolicy(IntegrationAuth.AdminPolicy, policy =>
+            {
+                policy.AddAuthenticationSchemes(CookieScheme);
+                policy.RequireAuthenticatedUser();
+                policy.RequireRole("admin");
+            });
+        });
+        services.AddAntiforgery(o =>
+        {
+            o.HeaderName = "X-CSRF-TOKEN";
+            o.Cookie.Name = "jotdex_csrf";
+            o.Cookie.SameSite = SameSiteMode.Lax;
+            o.Cookie.SecurePolicy = CookieSecurePolicy.SameAsRequest;
+        });
         return services;
     }
 
@@ -220,6 +246,10 @@ public static class AuthEndpointExtensions
             var body = await request.ReadFromJsonAsync<RemovePasswordBody>();
             if (body is null)
                 return Results.BadRequest(new { error = "Invalid body" });
+
+            var integrations = ctx.RequestServices.GetRequiredService<IIntegrationConfigService>();
+            if (integrations.IsFeatureEnabled())
+                return Results.BadRequest(new { error = "Disable Integrations before removing the local password." });
 
             var result = auth.RemovePassword(body.CurrentPassword ?? "");
             if (!result.Success)
@@ -499,22 +529,56 @@ public static class AuthEndpointExtensions
                 return;
             }
 
-            var auth = ctx.RequestServices.GetRequiredService<ILocalAuthService>();
-            // No password configured → open access (optional protection).
-            if (!auth.IsSetupComplete)
+            // External integration API: bearer scheme only; never open-access / cookie.
+            if (path.StartsWith("/api/integrations/", StringComparison.OrdinalIgnoreCase))
+            {
+                var result = await ctx.AuthenticateAsync(IntegrationAuth.Scheme);
+                if (!result.Succeeded || result.Principal?.Identity?.IsAuthenticated != true)
+                {
+                    ctx.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                    ctx.Response.Headers.CacheControl = "no-store";
+                    await ctx.Response.WriteAsJsonAsync(new { error = "Integration authentication required", code = "auth_required" });
+                    return;
+                }
+                ctx.User = result.Principal;
+                await next();
+                return;
+            }
+
+            // Browser / admin APIs: cookie scheme only (bearer must not unlock these).
+            var cookie = await ctx.AuthenticateAsync(CookieScheme);
+            var localAuth = ctx.RequestServices.GetRequiredService<ILocalAuthService>();
+
+            // Admin integrations management always requires a local password + cookie.
+            if (path.StartsWith("/api/admin/integrations", StringComparison.OrdinalIgnoreCase))
+            {
+                if (!localAuth.IsSetupComplete || cookie.Succeeded != true ||
+                    cookie.Principal?.Identity?.IsAuthenticated != true)
+                {
+                    ctx.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                    await ctx.Response.WriteAsJsonAsync(new { error = "Administrator authentication required", code = "admin_auth_required" });
+                    return;
+                }
+                ctx.User = cookie.Principal!;
+                await next();
+                return;
+            }
+
+            // No password configured → open access for ordinary browser APIs only.
+            if (!localAuth.IsSetupComplete)
             {
                 await next();
                 return;
             }
 
-            // Password is set → require a signed-in session (including Development).
-            if (ctx.User.Identity?.IsAuthenticated != true)
+            if (cookie.Succeeded != true || cookie.Principal?.Identity?.IsAuthenticated != true)
             {
                 ctx.Response.StatusCode = StatusCodes.Status401Unauthorized;
                 await ctx.Response.WriteAsJsonAsync(new { error = "Authentication required" });
                 return;
             }
 
+            ctx.User = cookie.Principal!;
             await next();
         });
     }

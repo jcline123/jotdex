@@ -47,6 +47,8 @@ public interface ILocalAuthService
     AuthResult CreateAdmin(string username, string password, string? displayName = null);
     /// <param name="totpOrRecoveryCode">Required when TOTP is enabled.</param>
     AuthResult ValidateCredentials(string username, string password, string? totpOrRecoveryCode = null);
+    /// <summary>Password (+ TOTP if enabled) check without creating a session — for sensitive admin actions.</summary>
+    AuthResult VerifyAdminReauth(string password, string? totpOrRecoveryCode = null);
     AuthResult ChangePassword(string username, string currentPassword, string newPassword);
     /// <summary>Clears the password so the app opens without sign-in. Requires the current password.</summary>
     AuthResult RemovePassword(string currentPassword);

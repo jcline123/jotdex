@@ -3,6 +3,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Jotdex.Core.Vault;
+using Jotdex.Infrastructure.Integrations;
 using Microsoft.Extensions.Logging;
 
 namespace Jotdex.Infrastructure.Vault;
@@ -253,6 +254,7 @@ public sealed class VaultService : IVaultService
         if (!s.Notes.TryGetValue(id, out var note)) return null;
 
         var html = RewriteAssetUrls(_markdown.ToHtml(note.Fm.Body), note.Attachments);
+        var attr = NoteProvenance.ResolveAttribution(note.Fm.Fields, note.Fm.Body);
         return new NoteDetail
         {
             Id = note.Summary.Id,
@@ -268,7 +270,14 @@ public sealed class VaultService : IVaultService
             FrontMatter = note.Fm.Fields,
             Attachments = note.Attachments,
             HtmlSidecars = note.Sidecars,
-            HeadingFolds = NoteFoldSidecar.ReadCollapsed(note.AbsolutePath)
+            HeadingFolds = NoteFoldSidecar.ReadCollapsed(note.AbsolutePath),
+            CreatedVia = attr.CreatedVia,
+            CreatedBy = attr.CreatedBy,
+            UpdatedVia = attr.UpdatedVia,
+            UpdatedBy = attr.UpdatedBy,
+            LastApiUpdateAt = attr.LastApiUpdateAt,
+            LastApiUpdateBy = attr.LastApiUpdateBy,
+            ProvenanceInferred = attr.ProvenanceInferred
         };
     }
 

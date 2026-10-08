@@ -34,6 +34,10 @@ Upload **`artifacts\jotdex-win-x64.zip`** to a GitHub Release (tag like `v1.1.0`
 3. Download the Release zip, extract over the install folder, **keep `data\`**.
 4. Start `start-portable.cmd`.
 
+## 1.4.0 (Integrations API + note timestamps)
+
+1.4.0 adds an optional, disabled-by-default bearer Integrations API (`/api/integrations/v1`) for automation (folder-scoped tokens, If-Match, idempotency, never-expire option), Settings → Integrations, and a subtle Created/Updated line in the note chrome (with API attribution). Browser cookie login is unchanged. Vault Markdown is not bulk-rewritten — provenance keys appear only on managed saves. After a move-kit restore, Integrations stays disabled and tokens must be re-issued. Docs: [integrations-api.md](integrations-api.md). Rollback is the previous portable exe (1.3.9).
+
 ## 1.3.9 (same-note fragments; digit heading ids; callouts)
 
 1.3.9 is an authoring fix on top of 1.3.8. Same-note `#fragment` links scroll in the editor; HTML export keeps leading digits in heading ids (`### 3C…` → `#3c-…`); empty `<a id="…"></a>` targets round-trip through Visual; callout titles stay on the marker line so body Markdown is not shown twice. Vault Markdown is unchanged (except notes you already corrupted with broken anchors — open/save after upgrade to re-serialize, or restore anchors manually). Rollback is the previous portable exe (1.3.8).

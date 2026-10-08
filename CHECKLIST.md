@@ -2,7 +2,7 @@
 
 Mark items `- [x]` when done. IDs are stable for chat (“done M1-04”).
 
-**Active milestone:** EUX — Editor UX 1.3.0 (shipped)
+**Active milestone:** INT complete — portable **1.4.0**
 
 ---
 
@@ -320,4 +320,20 @@ Contract: [`docs/decisions/editor-ux-expansion-contract.md`](docs/decisions/edit
 - [x] `EUX-12` vault-format, changelog, README/shortcuts, AI prompt, THIRD_PARTY_NOTICES, portable zip, clean-machine smoke, upgrade 1.2.2→1.3.0 and rollback
 
 - [x] `EUX-GATE` Definition of Done in the contract; ship **1.3.0** only then
+
+---
+
+## INT — Secure Integrations API + note timestamps / attribution
+
+ADR: [`docs/decisions/0011-integrations-api.md`](docs/decisions/0011-integrations-api.md). Docs: [`docs/integrations-api.md`](docs/integrations-api.md). Shipped as portable **1.4.0**. Live vault / Cloudflare policy changes remain operator-owned.
+
+- [x] `INT-01` ADR 0011 + milestone docs; scheme-isolated gate design locked
+- [x] `INT-02` Token store, admin APIs + CSRF, Settings Integrations UI, negative auth tests
+- [x] `INT-03` NoteChangeContext, vault write coordinator, FM provenance + DocumentSameness
+- [x] `INT-04` Scoped read API (whoami/folders/notes/search/attachments/openapi)
+- [x] `INT-05` Create/update/append, If-Match, idempotency, rate limits
+- [x] `INT-06` Note metadata chrome + `/meta` poll / dirty-safe remote refresh
+- [x] `INT-07` integrations-api.md, sample client, move-kit/portability, full test pass
+
+- [x] `INT-GATE` Scheme-isolated bearer API; folder ACL; history + If-Match; idempotency; subtle timestamps; ui/api/external provenance; portable FM; docs + sample client without secrets
 

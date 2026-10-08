@@ -323,6 +323,7 @@ Details: [docs/import-format/onenote-md-exporter.md](docs/import-format/onenote-
 | [docs/upgrading.md](docs/upgrading.md) | Check for updates + Update-Jotdex.ps1 |
 | [docs/backup.md](docs/backup.md) | Move kit + backup ZIP |
 | [docs/cloud-backup.md](docs/cloud-backup.md) | Multi-provider cloud backup (API) |
+| [docs/integrations-api.md](docs/integrations-api.md) | Optional bearer Integrations API (Settings → Integrations; default off) |
 | [docs/portability.md](docs/portability.md) | Moving vaults safely |
 | [docs/shortcuts.md](docs/shortcuts.md) | Keyboard / insert shortcuts |
 | [docs/vault-format.md](docs/vault-format.md) | On-disk Markdown dialect (callouts, tasks, Source-only) |

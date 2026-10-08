@@ -99,7 +99,8 @@ New-Item -ItemType Directory -Force -Path $appdata | Out-Null
 #   secrets\secrets.json, secrets\cloud-backup.json (DPAPI / machine-bound OAuth)
 #   state\cloud-backup\ (runtime status)
 #   exports\cloud-backup-staging\ (transient staging)
-# config\cloud-backup.json settings ARE included when present under config\.
+# config\cloud-backup.json and config\integrations.json preferences ARE included when present.
+# data\integrations\tokens.json is NOT packed (Restore disables Integrations; re-issue tokens).
 foreach ($name in @("config", $(if ($IncludeAuth) { "auth" } else { $null }), $(if ($IncludeHistory) { "history" } else { $null }))) {
     if (-not $name) { continue }
     $src = Join-Path $DataRoot $name
@@ -127,6 +128,7 @@ See docs/backup.md in the Jotdex repo for details.
 For SMTP/Telegram/TOTP secrets, prefer Settings → Backup → Create move kit
 (it unwraps DPAPI). This CLI kit only includes secrets-portable.json if that file already exists.
 Cloud OAuth (data\secrets\cloud-backup.json) is never packed — reconnect providers after restore.
+Integrations API tokens are not activated on restore — re-enable and re-issue in Settings.
 "@
 Set-Content -LiteralPath (Join-Path $stage "README-MOVE.txt") -Value $readme -Encoding UTF8
 

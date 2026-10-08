@@ -293,6 +293,7 @@ try {
     foreach ($rel in @(
             "config",
             "secrets",
+            "integrations",
             "state\cloud-backup",
             "exports\backups",
             "exports\cloud-backup-staging"
@@ -333,6 +334,30 @@ try {
     $cloudBackupSettings = Join-Path $configDir "cloud-backup.json"
     if (Test-Path -LiteralPath $cloudBackupSettings) {
         Write-WarnLine "cloud-backup.json settings were restored; reconnect OneDrive/Google/Dropbox (OAuth is machine-bound)."
+    }
+
+    # Integrations: keep preferences file but never activate tokens from another PC.
+    $integrationsJson = Join-Path $configDir "integrations.json"
+    if (Test-Path -LiteralPath $integrationsJson) {
+        try {
+            $intCfg = Get-Content -LiteralPath $integrationsJson -Raw | ConvertFrom-Json
+            $intCfg | Add-Member -NotePropertyName enabled -NotePropertyValue $false -Force
+            $intCfg | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $integrationsJson -Encoding UTF8
+            Write-WarnLine "Integrations left disabled after restore. Re-enable in Settings and re-issue API tokens."
+        } catch {
+            Write-WarnLine "Could not disable integrations.json: $($_.Exception.Message)"
+        }
+    }
+    $tokenStore = Join-Path $dataDest "integrations\tokens.json"
+    if (Test-Path -LiteralPath $tokenStore) {
+        Remove-Item -LiteralPath $tokenStore -Force -ErrorAction SilentlyContinue
+        Write-WarnLine "Removed integrations\tokens.json (re-issue tokens on this PC)."
+    }
+    foreach ($transient in @("integrations\activity", "integrations\idempotency")) {
+        $p = Join-Path $dataDest $transient
+        if (Test-Path -LiteralPath $p) {
+            Remove-Item -LiteralPath $p -Recurse -Force -ErrorAction SilentlyContinue
+        }
     }
 
     $example = Join-Path $InstallPath "appsettings.json"
