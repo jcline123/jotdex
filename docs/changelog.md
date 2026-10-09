@@ -5,7 +5,7 @@
 **What:** `GET/POST/PATCH /api/integrations/v1/tasks` (`tasks:read` / `tasks:write`; standalone Todos.md is whole-vault only); `POST /notes/{id}/insert` (`notes:insert` or `notes:append`); `GET /notes/changes`; search `snippets` (+ `includeSnippets=false`). Settings create + Edit/rotate token UI expose the new scopes. OpenAPI + `docs/integrations-api.md` updated. Existing integration endpoints unchanged.
 
 **Portable release 1.4.1**
-- Tag `v1.4.1` (commit recorded after ship) — INT-08 Integrations extensions. Live vault Markdown was **not** rewritten by the release. Rollback is the previous exe (1.4.0).
+- Tag `v1.4.1` (`9c66ae7`) — INT-08 Integrations extensions. Live vault Markdown was **not** rewritten by the release. Rollback is the previous exe (1.4.0).
 
 ## 2026-10-08 — Secure Integrations API + note timestamps / attribution
 
