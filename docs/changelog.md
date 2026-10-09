@@ -1,3 +1,12 @@
+## 2026-10-09 — Integrations API: Share HTML export + attachment upload
+
+**Why:** Automation needed the same offline Share HTML the UI downloads, plus the ability to add files into a note’s `.assets` folder the same way paste/drag does.
+
+**What:** `GET /notes/{id}/export` (`format=html|md`, optional `theme` / `includeTitle`) reuses `NoteShareExportService`. `GET/POST /notes/{id}/attachments` with `attachments:write` (multipart upload, magic-byte allowlist, optional placement via append/insert + If-Match). Settings create/Edit expose the new scope. OpenAPI + `docs/integrations-api.md` updated. Existing endpoints unchanged.
+
+**Portable release 1.4.2**
+- Tag `v1.4.2` (commit recorded after ship) — INT-09 export + attachment upload. Live vault Markdown was **not** rewritten by the release. Rollback is the previous exe (1.4.1).
+
 ## 2026-10-08 — Integrations API: tasks, insert, changes-since, search snippets
 
 **Why:** Grok Bot (and other automation) needed task list access, precise inserts (not only append), incremental note sync, and richer search context without changing existing endpoint contracts.

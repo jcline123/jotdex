@@ -4,14 +4,18 @@ using System.Text;
 using System.Text.Json;
 using System.Threading.RateLimiting;
 using Jotdex.Core.Auth;
+using Jotdex.Core.Configuration;
 using Jotdex.Core.Integrations;
 using Jotdex.Core.Search;
 using Jotdex.Core.Vault;
+using Jotdex.Infrastructure.Export;
 using Jotdex.Infrastructure.Integrations;
 using Jotdex.Infrastructure.Vault;
 using Jotdex.Server.Auth;
 using Microsoft.AspNetCore.Antiforgery;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.Extensions.Options;
 
 namespace Jotdex.Server.Integrations;
 
@@ -216,7 +220,14 @@ public static class IntegrationEndpointExtensions
         var writes = api.MapGroup("").RequireRateLimiting(WriteRatePolicy)
             .AddEndpointFilter(async (ctx, next) =>
             {
-                var max = ctx.HttpContext.RequestServices.GetRequiredService<IIntegrationConfigService>().Get().MaxBodyBytes;
+                var cfg = ctx.HttpContext.RequestServices.GetRequiredService<IIntegrationConfigService>().Get();
+                long max = cfg.MaxBodyBytes;
+                var ct = ctx.HttpContext.Request.ContentType ?? "";
+                if (ct.Contains("multipart/form-data", StringComparison.OrdinalIgnoreCase))
+                {
+                    var jot = ctx.HttpContext.RequestServices.GetRequiredService<IOptions<JotdexOptions>>().Value;
+                    max = jot.MaxAttachmentBytes > 0 ? jot.MaxAttachmentBytes : max;
+                }
                 var len = ctx.HttpContext.Request.ContentLength;
                 if (len is > 0 && len > max)
                     return Results.Json(new { error = "Body too large", code = "body_too_large" }, statusCode: 413);
@@ -554,6 +565,46 @@ public static class IntegrationEndpointExtensions
             return Results.Json(new { task = result.Task is null ? null : ToTaskDto(result.Task), etag = result.ETag });
         });
 
+        reads.MapGet("/notes/{id:guid}/export", (Guid id, HttpContext ctx, IVaultService vault, IIntegrationFolderAccess acl,
+            INoteShareExportService share, string? format, string? theme, bool? includeTitle) =>
+        {
+            var token = RequireToken(ctx);
+            if (token is null) return Results.Unauthorized();
+            if (!HasScope(ctx, IntegrationScopes.NotesRead)) return ForbiddenScope();
+            var note = vault.GetNote(id);
+            if (note is null || !acl.AllowsNotePath(token, note.RelativePath))
+                return Results.NotFound(new { error = "Not found", code = "not_found" });
+
+            var fmt = (format ?? "html").Trim().ToLowerInvariant();
+            if (fmt == "pdf")
+                return Results.Json(new { error = "PDF export is not available", code = "unsupported_format" }, statusCode: 400);
+            if (fmt is not ("html" or "md"))
+                return Results.BadRequest(new { error = "format must be html or md", code = "invalid_format" });
+
+            ctx.Response.Headers["X-Jotdex-Etag"] = note.ETag;
+
+            if (fmt == "md")
+            {
+                var body = FrontMatterParser.Parse(note.Markdown).Body;
+                var mdBytes = Encoding.UTF8.GetBytes(body);
+                var mdName = SanitizeExportFileName(note.Title, note.Id) + ".md";
+                return Results.File(mdBytes, "text/markdown; charset=utf-8", mdName);
+            }
+
+            var th = string.Equals(theme, "dark", StringComparison.OrdinalIgnoreCase) ? "dark" : "light";
+            var withTitle = includeTitle != false;
+            var result = share.ExportSelfContainedHtml(id, new NoteShareExportOptions
+            {
+                Theme = th,
+                IncludeTitle = withTitle
+            });
+            if (!result.Success || string.IsNullOrEmpty(result.Html) || string.IsNullOrEmpty(result.FileName))
+                return Results.BadRequest(new { error = result.Error ?? "Export failed", code = "export_failed" });
+
+            var htmlBytes = Encoding.UTF8.GetBytes(result.Html);
+            return Results.File(htmlBytes, "text/html; charset=utf-8", result.FileName);
+        });
+
         reads.MapGet("/notes/{id:guid}", (Guid id, HttpContext ctx, IVaultService vault, IIntegrationFolderAccess acl, IIntegrationActivityLog log) =>
         {
             var token = RequireToken(ctx);
@@ -780,6 +831,38 @@ public static class IntegrationEndpointExtensions
             return Results.Content(json, "application/json");
         });
 
+        reads.MapGet("/notes/{id:guid}/attachments", (Guid id, HttpContext ctx, IVaultService vault,
+            IVaultPathGuard paths, IIntegrationFolderAccess acl) =>
+        {
+            var token = RequireToken(ctx);
+            if (token is null) return Results.Unauthorized();
+            if (!HasScope(ctx, IntegrationScopes.AttachmentsRead)) return ForbiddenScope();
+            var note = vault.GetNote(id);
+            if (note is null || !acl.AllowsNotePath(token, note.RelativePath))
+                return Results.NotFound(new { error = "Not found", code = "not_found" });
+
+            var list = note.Attachments.Select(a =>
+            {
+                DateTimeOffset? createdAt = null;
+                try
+                {
+                    var abs = paths.EnsureInsideVault(a.RelativePath.Replace('/', Path.DirectorySeparatorChar));
+                    if (File.Exists(abs))
+                        createdAt = File.GetCreationTimeUtc(abs);
+                }
+                catch { /* ignore */ }
+                return new
+                {
+                    attachmentId = a.Id,
+                    filename = a.FileName,
+                    contentType = a.ContentType,
+                    size = a.SizeBytes,
+                    createdAt
+                };
+            }).ToList();
+            return Results.Json(new { attachments = list });
+        });
+
         reads.MapGet("/notes/{id:guid}/attachments/{attachmentId}", (Guid id, string attachmentId, HttpContext ctx,
             IVaultService vault, IIntegrationFolderAccess acl) =>
         {
@@ -802,7 +885,152 @@ public static class IntegrationEndpointExtensions
             }
         });
 
+        writes.MapPost("/notes/{id:guid}/attachments", async (Guid id, HttpContext ctx, INoteCommandService commands,
+            IVaultService vault, IVaultPathGuard paths, IIntegrationFolderAccess acl, IIdempotencyStore idem,
+            IIntegrationActivityLog log, IOptions<JotdexOptions> jotOpts, TimeProvider time, HttpRequest req) =>
+        {
+            var token = RequireToken(ctx);
+            if (token is null) return Results.Unauthorized();
+            if (!HasScope(ctx, IntegrationScopes.AttachmentsWrite)) return ForbiddenScope();
+            if (!req.Headers.TryGetValue("Idempotency-Key", out var idk) || string.IsNullOrWhiteSpace(idk))
+                return Results.BadRequest(new { error = "Idempotency-Key required", code = "idempotency_required" });
+            if (!req.HasFormContentType)
+                return Results.BadRequest(new { error = "multipart/form-data required", code = "invalid_content_type" });
+
+            var note = vault.GetNote(id);
+            if (note is null || !acl.AllowsNotePath(token, note.RelativePath))
+                return Results.NotFound(new { error = "Not found", code = "not_found" });
+
+            var feature = ctx.Features.Get<IHttpMaxRequestBodySizeFeature>();
+            if (feature is { IsReadOnly: false })
+                feature.MaxRequestBodySize = jotOpts.Value.MaxAttachmentBytes;
+
+            var form = await req.ReadFormAsync();
+            var file = form.Files.GetFile("file") ?? form.Files.FirstOrDefault();
+            if (file is null || file.Length == 0)
+                return Results.BadRequest(new { error = "file required", code = "invalid_body" });
+            if (file.Length > jotOpts.Value.MaxAttachmentBytes)
+                return Results.Json(new { error = $"File exceeds max size ({jotOpts.Value.MaxAttachmentBytes} bytes)", code = "file_too_large" }, statusCode: 413);
+
+            var filenameOverride = form["filename"].ToString();
+            var altText = form["altText"].ToString();
+            var placement = (form["placement"].ToString() ?? "none").Trim();
+            if (string.IsNullOrEmpty(placement)) placement = "none";
+            var heading = form["heading"].ToString();
+            if (placement is not ("none" or "append" or "top" or "afterHeading"))
+                return Results.BadRequest(new { error = "placement must be none, append, top, or afterHeading", code = "invalid_placement" });
+            if (placement == "afterHeading" && string.IsNullOrWhiteSpace(heading))
+                return Results.BadRequest(new { error = "heading required for afterHeading", code = "invalid_heading" });
+
+            string? ifMatch = null;
+            if (req.Headers.TryGetValue("If-Match", out var matchHdr) && !string.IsNullOrWhiteSpace(matchHdr))
+            {
+                if (matchHdr == "*")
+                    return Results.Json(new { error = "If-Match required (exact ETag)", code = "precondition_required" }, statusCode: 428);
+                ifMatch = matchHdr.ToString().Trim().Trim('"');
+            }
+            if (placement != "none" && string.IsNullOrEmpty(ifMatch))
+                return Results.Json(new { error = "If-Match required when placement is set", code = "precondition_required" }, statusCode: 428);
+
+            await using var uploadStream = file.OpenReadStream();
+            using var ms = new MemoryStream();
+            await uploadStream.CopyToAsync(ms);
+            var bytes = ms.ToArray();
+            var header = bytes.AsSpan(0, Math.Min(bytes.Length, 64));
+            var declaredName = string.IsNullOrWhiteSpace(filenameOverride) ? file.FileName : filenameOverride.Trim();
+            if (!IntegrationAttachmentValidation.TryDetect(header, declaredName, file.ContentType, out var detectedCt, out var detectErr))
+                return Results.BadRequest(new { error = detectErr, code = "invalid_file_type" });
+
+            var fileHash = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
+            var fingerprint = Fingerprint("POST", $"/notes/{id}/attachments",
+                fileHash + "\n" + declaredName + "\n" + altText + "\n" + placement + "\n" + heading + "\n" + (ifMatch ?? ""));
+            var ns = IdemNs(token, "POST", $"/notes/{id}/attachments");
+            var prior = idem.TryGet(ns, idk!, fingerprint);
+            if (prior.FingerprintMismatch)
+                return Results.Conflict(new { error = "Idempotency-Key reused with different body", code = "idempotency_conflict" });
+            if (prior.Found && prior.ResponseJson is not null)
+                return Results.Content(prior.ResponseJson, "application/json", statusCode: prior.StatusCode);
+
+            if (placement != "none" && ifMatch is not null &&
+                !string.Equals(note.ETag.Trim('"'), ifMatch, StringComparison.Ordinal))
+                return Results.Json(new { error = "Stale ETag — reread before retry", code = "precondition_failed", etag = note.ETag }, statusCode: 412);
+
+            ms.Position = 0;
+            var uploaded = commands.AddAttachment(id, ms, declaredName, detectedCt);
+            if (!uploaded.Success)
+                return Results.BadRequest(new { error = uploaded.Error, code = "upload_failed" });
+
+            var isImage = uploaded.IsImage;
+            var label = string.IsNullOrWhiteSpace(altText)
+                ? (isImage ? Path.GetFileNameWithoutExtension(uploaded.FileName) ?? "image" : uploaded.FileName ?? "file")
+                : altText.Trim();
+            var markdown = IntegrationAttachmentValidation.BuildMarkdownSnippet(isImage, label!, uploaded.MarkdownPath!);
+
+            NoteDetail? placedNote = uploaded.Note;
+            string? etagAfter = uploaded.Note?.ETag;
+            if (placement != "none")
+            {
+                var change = new NoteChangeContext(NoteChangeVia.Api, token.Name, token.Id);
+                NoteSaveResult placeResult;
+                if (placement == "append")
+                    placeResult = commands.AppendBody(id, markdown, ifMatch!, change);
+                else
+                    placeResult = commands.InsertMarkdown(id, markdown, placement, heading, 1, ifMatch!, change);
+
+                if (placeResult.Error == "Heading not found")
+                    return Results.Json(new { error = "Heading not found", code = "heading_not_found" }, statusCode: 404);
+                if (placeResult.Conflict)
+                    return Results.Json(new { error = "Stale ETag — reread before retry", code = "precondition_failed", etag = placeResult.ETag }, statusCode: 412);
+                if (!placeResult.Success)
+                    return Results.BadRequest(new { error = placeResult.Error, code = "placement_failed" });
+                placedNote = placeResult.Note;
+                etagAfter = placeResult.ETag;
+            }
+
+            var size = placedNote?.Attachments.FirstOrDefault(a => a.Id == uploaded.AttachmentId)?.SizeBytes
+                       ?? bytes.LongLength;
+            var payload = new
+            {
+                attachmentId = uploaded.AttachmentId,
+                filename = uploaded.FileName,
+                contentType = uploaded.ContentType ?? detectedCt,
+                size,
+                markdown,
+                etag = etagAfter,
+                placement
+            };
+            var json = JsonSerializer.Serialize(payload, JsonOpts);
+            idem.Put(ns, idk!, fingerprint, 200, json, time);
+            log.Record(new IntegrationActivityEntry
+            {
+                At = time.GetUtcNow(),
+                TokenId = token.Id,
+                TokenName = token.Name,
+                Operation = "attachments.upload",
+                NoteId = id.ToString("D"),
+                Outcome = "ok",
+                RequestId = ctx.TraceIdentifier,
+                EtagBefore = ifMatch,
+                EtagAfter = etagAfter
+            });
+            return Results.Content(json, "application/json");
+        });
+
         reads.MapGet("/openapi.json", () => Results.Json(OpenApiDocument()));
+    }
+
+    private static string SanitizeExportFileName(string title, Guid id)
+    {
+        var invalid = Path.GetInvalidFileNameChars();
+        var sb = new StringBuilder(title.Length);
+        foreach (var ch in title.Trim())
+        {
+            if (invalid.Contains(ch) || ch < 32) sb.Append('-');
+            else sb.Append(ch);
+        }
+        var name = System.Text.RegularExpressions.Regex.Replace(sb.ToString(), @"\s+", " ").Trim(' ', '.', '-');
+        if (string.IsNullOrWhiteSpace(name)) name = id.ToString("N")[..8];
+        return name.Length > 80 ? name[..80].Trim() : name;
     }
 
     private static object ToNoteDto(NoteDetail n)
@@ -1088,9 +1316,158 @@ public static class IntegrationEndpointExtensions
                         }
                     }
                 },
+                ["/api/integrations/v1/notes/{id}/export"] = new
+                {
+                    get = new
+                    {
+                        summary = "Export note as Share HTML or raw Markdown body",
+                        security = Scope("notes:read"),
+                        parameters = new object[]
+                        {
+                            new { name = "format", @in = "query", schema = new { type = "string", @enum = new[] { "html", "md" }, @default = "html" } },
+                            new { name = "theme", @in = "query", schema = new { type = "string", @enum = new[] { "light", "dark" }, @default = "light" } },
+                            new { name = "includeTitle", @in = "query", schema = new { type = "boolean", @default = true } }
+                        },
+                        responses = new
+                        {
+                            @default = new
+                            {
+                                description = "HTML or Markdown file; X-Jotdex-Etag header",
+                                content = new Dictionary<string, object>
+                                {
+                                    ["text/html"] = new { schema = new { type = "string", format = "binary" } },
+                                    ["text/markdown"] = new { schema = new { type = "string", format = "binary" } }
+                                },
+                                headers = new
+                                {
+                                    X_Jotdex_Etag = new { schema = new { type = "string" }, description = "Note etag" }
+                                }
+                            }
+                        }
+                    }
+                },
+                ["/api/integrations/v1/notes/{id}/attachments"] = new
+                {
+                    get = new
+                    {
+                        summary = "List note attachments",
+                        security = Scope("attachments:read"),
+                        responses = new
+                        {
+                            @default = new
+                            {
+                                description = "Attachment list",
+                                content = new
+                                {
+                                    application_json = new
+                                    {
+                                        schema = new
+                                        {
+                                            type = "object",
+                                            properties = new
+                                            {
+                                                attachments = new
+                                                {
+                                                    type = "array",
+                                                    items = new
+                                                    {
+                                                        type = "object",
+                                                        properties = new
+                                                        {
+                                                            attachmentId = new { type = "string" },
+                                                            filename = new { type = "string" },
+                                                            contentType = new { type = "string" },
+                                                            size = new { type = "integer" },
+                                                            createdAt = new { type = "string", format = "date-time", nullable = true }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    post = new
+                    {
+                        summary = "Upload attachment into note .assets (optional placement into note body)",
+                        security = Scope("attachments:write"),
+                        parameters = new object[]
+                        {
+                            new { name = "Idempotency-Key", @in = "header", required = true, schema = new { type = "string" } },
+                            new { name = "If-Match", @in = "header", required = false, schema = new { type = "string" }, description = "Required when placement is not none" }
+                        },
+                        requestBody = new
+                        {
+                            required = true,
+                            content = new Dictionary<string, object>
+                            {
+                                ["multipart/form-data"] = new
+                                {
+                                    schema = new
+                                    {
+                                        type = "object",
+                                        required = new[] { "file" },
+                                        properties = new
+                                        {
+                                            file = new { type = "string", format = "binary" },
+                                            filename = new { type = "string" },
+                                            altText = new { type = "string" },
+                                            placement = new { type = "string", @enum = new[] { "none", "append", "top", "afterHeading" }, @default = "none" },
+                                            heading = new { type = "string" }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        responses = new
+                        {
+                            @default = new
+                            {
+                                description = "Upload result with markdown snippet",
+                                content = new
+                                {
+                                    application_json = new
+                                    {
+                                        schema = new
+                                        {
+                                            type = "object",
+                                            properties = new
+                                            {
+                                                attachmentId = new { type = "string" },
+                                                filename = new { type = "string" },
+                                                contentType = new { type = "string" },
+                                                size = new { type = "integer" },
+                                                markdown = new { type = "string" },
+                                                etag = new { type = "string", nullable = true },
+                                                placement = new { type = "string" }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
                 ["/api/integrations/v1/notes/{id}/attachments/{attachmentId}"] = new
                 {
-                    get = new { summary = "Download attachment", security = Scope("attachments:read") }
+                    get = new
+                    {
+                        summary = "Download attachment",
+                        security = Scope("attachments:read"),
+                        responses = new
+                        {
+                            @default = new
+                            {
+                                description = "Binary attachment",
+                                content = new Dictionary<string, object>
+                                {
+                                    ["application/octet-stream"] = new { schema = new { type = "string", format = "binary" } }
+                                }
+                            }
+                        }
+                    }
                 },
                 ["/api/integrations/v1/tasks"] = new
                 {

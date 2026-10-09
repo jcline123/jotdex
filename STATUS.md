@@ -1,7 +1,7 @@
 # Jotdex STATUS
 
-**Active milestone:** INT complete — portable **1.4.1**. Baseline was **1.4.0** (`v1.4.0` @ `e3449fe`).  
-**Last updated:** 2026-10-08
+**Active milestone:** INT complete — portable **1.4.2**. Baseline was **1.4.1** (`v1.4.1` @ `9c66ae7`).  
+**Last updated:** 2026-10-09
 
 ## In progress
 
@@ -9,10 +9,10 @@
 
 ## Just shipped
 
+- Portable **1.4.2** (`v1.4.2`) — Integrations INT-09: Share HTML/md export; attachment list/upload (`attachments:write`) into note `.assets` with optional placement; Settings create/Edit scopes; OpenAPI/docs. Existing endpoints unchanged. Live vault Markdown was **not** rewritten. Rollback is the previous exe (1.4.1); keep `artifacts/jotdex-win-x64-1.4.1.zip` and `C:\JotdexBackupHold\jotdex-win-x64-1.4.1.zip`.
 - Portable **1.4.1** (`v1.4.1` @ `9c66ae7`) — Integrations INT-08: tasks read/write, note insert, changes-since, search snippets; create + Edit/rotate scopes in Settings; OpenAPI/docs. Existing endpoints unchanged. Live vault Markdown was **not** rewritten. Rollback is the previous exe (1.4.0); keep `artifacts/jotdex-win-x64-1.4.0.zip` and `C:\JotdexBackupHold\jotdex-win-x64-1.4.0.zip`.
 - Portable **1.4.0** (`v1.4.0` @ `e3449fe`) — Secure Integrations API (scheme-isolated bearer `/api/integrations/v1`, Settings → Integrations, folder ACL, If-Match, idempotency, never-expire option); note Created/Updated chrome + meta poll; provenance FM. Live vault Markdown was **not** rewritten. Rollback is the previous exe (1.3.9); keep `artifacts/jotdex-win-x64-1.3.9.zip` and `C:\JotdexBackupHold\jotdex-win-x64-1.3.9.zip`.
 - Portable **1.3.9** (`v1.3.9` @ `d9aa2fd`) — same-note `#fragment` nav in the editor; digit-safe HTML export heading ids; explicit `<a id>` round-trip; callout marker titles no longer eat the next body line. Live vault Markdown was **not** rewritten. Rollback is the previous exe (1.3.8); keep `artifacts/jotdex-win-x64-1.3.8.zip` and `C:\JotdexBackupHold\jotdex-win-x64-1.3.8.zip`.
-- Portable **1.3.8** (`v1.3.8` @ `4198e66`) — collapsed Todos ticker scrolls with rAF/modulo (no CSS keyframe seam flash on high-DPI Windows Chrome). Live vault Markdown was **not** rewritten. Rollback is the previous exe (1.3.7); keep `artifacts/jotdex-win-x64-1.3.7.zip` and `C:\JotdexBackupHold\jotdex-win-x64-1.3.7.zip`.
 
 ## Run (Development + SampleVault)
 

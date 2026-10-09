@@ -17,7 +17,11 @@ public sealed class NoteShareExportResult
 
 public interface INoteShareExportService
 {
+    /// <summary>Same as Share HTML in the app (light theme, include title).</summary>
     NoteShareExportResult ExportSelfContainedHtml(Guid noteId);
+
+    /// <summary>Share HTML with optional theme / title for Integrations export.</summary>
+    NoteShareExportResult ExportSelfContainedHtml(Guid noteId, NoteShareExportOptions options);
 }
 
 /// <summary>
@@ -35,8 +39,12 @@ public sealed partial class NoteShareExportService : INoteShareExportService
         _logger = logger;
     }
 
-    public NoteShareExportResult ExportSelfContainedHtml(Guid noteId)
+    public NoteShareExportResult ExportSelfContainedHtml(Guid noteId) =>
+        ExportSelfContainedHtml(noteId, new NoteShareExportOptions());
+
+    public NoteShareExportResult ExportSelfContainedHtml(Guid noteId, NoteShareExportOptions options)
     {
+        options ??= new NoteShareExportOptions();
         var note = _vault.GetNote(noteId);
         if (note is null)
             return new NoteShareExportResult { Success = false, Error = "Note not found" };
@@ -85,7 +93,8 @@ public sealed partial class NoteShareExportService : INoteShareExportService
             }
 
             body = ShareHtmlAnonymizer.StripProductIdentifiers(body);
-            var html = WrapPage(note.Title, body, note.Tags);
+            var theme = string.Equals(options.Theme, "dark", StringComparison.OrdinalIgnoreCase) ? "dark" : "light";
+            var html = WrapPage(note.Title, body, note.Tags, theme, options.IncludeTitle);
             var safeName = SanitizeFileName(note.Title);
             if (string.IsNullOrWhiteSpace(safeName))
                 safeName = note.Id.ToString("N")[..8];
@@ -172,7 +181,7 @@ public sealed partial class NoteShareExportService : INoteShareExportService
         return name.Length > 80 ? name[..80].Trim() : name;
     }
 
-    private static string WrapPage(string title, string bodyHtml, IReadOnlyList<string> tags)
+    private static string WrapPage(string title, string bodyHtml, IReadOnlyList<string> tags, string theme = "light", bool includeTitle = true)
     {
         var tagHtml = tags.Count == 0
             ? ""
@@ -203,56 +212,70 @@ public sealed partial class NoteShareExportService : INoteShareExportService
             </script>
             """;
 
+        var header = includeTitle
+            ? $"<header><h1>{WebUtility.HtmlEncode(title)}</h1>{tagHtml}</header>\n"
+            : (tagHtml.Length > 0 ? $"<header>{tagHtml}</header>\n" : "");
+
         return
             "<!DOCTYPE html>\n<html lang=\"en\"><head>\n" +
             "<meta charset=\"utf-8\" />\n" +
             "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\" />\n" +
             "<meta name=\"referrer\" content=\"no-referrer\" />\n" +
             $"<title>{WebUtility.HtmlEncode(title)}</title>\n" +
-            "<style>\n" + ShareCss() + "\n</style>\n" +
+            "<style>\n" + ShareCss(theme) + "\n</style>\n" +
             "</head><body>\n" +
             "<article class=\"note\">\n" +
-            $"<header><h1>{WebUtility.HtmlEncode(title)}</h1>{tagHtml}</header>\n" +
+            header +
             "<div class=\"body\">\n" + bodyHtml + "\n</div>\n" +
             "</article>\n" +
             copyScript +
             "\n</body></html>\n";
     }
 
-    private static string ShareCss() => """
-        :root { color-scheme: light; --bg:#f4f1ea; --paper:#fffcf7; --ink:#1c1917; --muted:#6b6560; --line:#e4ddd2; --accent:#0f5c4c; --code:#1e1e1e; }
-        * { box-sizing: border-box; }
-        body { margin: 0; font-family: "Segoe UI", "Helvetica Neue", sans-serif; background:
-          radial-gradient(ellipse at top, #ebe4d8 0%, var(--bg) 55%); color: var(--ink); line-height: 1.55; }
-        article.note { max-width: 44rem; margin: 2rem auto; padding: 2rem 1.75rem 3rem; background: var(--paper);
-          border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 18px 40px rgba(28,25,23,.06); }
-        h1 { margin: 0 0 1rem; font-size: 1.85rem; line-height: 1.2; }
-        .tags { display: flex; flex-wrap: wrap; gap: .4rem; margin: 0 0 1.25rem; }
-        .tags span { font-size: .75rem; padding: .15rem .55rem; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); }
-        .body > *:first-child { margin-top: 0; }
-        h2, h3, h4 { line-height: 1.25; }
-        a { color: var(--accent); }
-        img { max-width: 100%; height: auto; border-radius: 8px; }
-        blockquote { margin: 1rem 0; padding: .2rem 1rem; border-left: 3px solid var(--accent); color: var(--muted); }
-        """ + ExportCalloutCss.Rules + """
-        table { border-collapse: collapse; width: 100%; margin: 1rem 0; font-size: .95rem; }
-        th, td { border: 1px solid var(--line); padding: .45rem .6rem; text-align: left; }
-        .code-wrap { position: relative; margin: 1rem 0; }
-        pre { background: var(--code); color: #f2f2f2; padding: .9rem 1rem; overflow: auto; border-radius: 8px; margin: 0; }
-        code { font-family: ui-monospace, Consolas, monospace; font-size: .92em; }
-        :not(pre) > code { background: #efe9df; padding: .1rem .35rem; border-radius: 4px; }
-        button.copy { position: absolute; top: .45rem; right: .45rem; font: inherit; font-size: .75rem;
-          padding: .25rem .55rem; border-radius: 6px; border: 1px solid #444; background: #2a2a2a; color: #eee; cursor: pointer; }
-        ul.contains-task-list { list-style: none; padding-left: 0; }
-        @media (max-width: 640px) {
-          article.note { margin: 0; border-radius: 0; border-left: 0; border-right: 0; }
-        }
-        @media print {
-          body { background: #fff; }
-          article.note { box-shadow: none; border: none; margin: 0; max-width: none; }
-          button.copy { display: none; }
-        }
-        """;
+    private static string ShareCss(string theme = "light")
+    {
+        var root = string.Equals(theme, "dark", StringComparison.OrdinalIgnoreCase)
+            ? """:root { color-scheme: dark; --bg:#1c1917; --paper:#292524; --ink:#fafaf9; --muted:#a8a29e; --line:#44403c; --accent:#5eead4; --code:#0c0a09; --inline-code:#3f3a36; }"""
+            : """:root { color-scheme: light; --bg:#f4f1ea; --paper:#fffcf7; --ink:#1c1917; --muted:#6b6560; --line:#e4ddd2; --accent:#0f5c4c; --code:#1e1e1e; --inline-code:#efe9df; }""";
+
+        var bodyBg = string.Equals(theme, "dark", StringComparison.OrdinalIgnoreCase)
+            ? """radial-gradient(ellipse at top, #292524 0%, var(--bg) 55%)"""
+            : """radial-gradient(ellipse at top, #ebe4d8 0%, var(--bg) 55%)""";
+
+        return root + $$"""
+            * { box-sizing: border-box; }
+            body { margin: 0; font-family: "Segoe UI", "Helvetica Neue", sans-serif; background:
+              {{bodyBg}}; color: var(--ink); line-height: 1.55; }
+            article.note { max-width: 44rem; margin: 2rem auto; padding: 2rem 1.75rem 3rem; background: var(--paper);
+              border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 18px 40px rgba(28,25,23,.06); }
+            h1 { margin: 0 0 1rem; font-size: 1.85rem; line-height: 1.2; }
+            .tags { display: flex; flex-wrap: wrap; gap: .4rem; margin: 0 0 1.25rem; }
+            .tags span { font-size: .75rem; padding: .15rem .55rem; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); }
+            .body > *:first-child { margin-top: 0; }
+            h2, h3, h4 { line-height: 1.25; }
+            a { color: var(--accent); }
+            img { max-width: 100%; height: auto; border-radius: 8px; }
+            blockquote { margin: 1rem 0; padding: .2rem 1rem; border-left: 3px solid var(--accent); color: var(--muted); }
+            """ + ExportCalloutCss.Rules + """
+            table { border-collapse: collapse; width: 100%; margin: 1rem 0; font-size: .95rem; }
+            th, td { border: 1px solid var(--line); padding: .45rem .6rem; text-align: left; }
+            .code-wrap { position: relative; margin: 1rem 0; }
+            pre { background: var(--code); color: #f2f2f2; padding: .9rem 1rem; overflow: auto; border-radius: 8px; margin: 0; }
+            code { font-family: ui-monospace, Consolas, monospace; font-size: .92em; }
+            :not(pre) > code { background: var(--inline-code); padding: .1rem .35rem; border-radius: 4px; }
+            button.copy { position: absolute; top: .45rem; right: .45rem; font: inherit; font-size: .75rem;
+              padding: .25rem .55rem; border-radius: 6px; border: 1px solid #444; background: #2a2a2a; color: #eee; cursor: pointer; }
+            ul.contains-task-list { list-style: none; padding-left: 0; }
+            @media (max-width: 640px) {
+              article.note { margin: 0; border-radius: 0; border-left: 0; border-right: 0; }
+            }
+            @media print {
+              body { background: #fff; }
+              article.note { box-shadow: none; border: none; margin: 0; max-width: none; }
+              button.copy { display: none; }
+            }
+            """;
+    }
 
     [GeneratedRegex(@"<\s*script\b[^>]*>[\s\S]*?<\s*/\s*script\s*>", RegexOptions.IgnoreCase | RegexOptions.Compiled)]
     private static partial Regex ScriptBlockRegex();

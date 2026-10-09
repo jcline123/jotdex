@@ -9,7 +9,7 @@ Disabled-by-default REST surface for automation (for example Grok Bot) through C
 
 1. Set a local administrator password (Settings → Security).
 2. Settings → **Integrations** → enable Integrations.
-3. Create a token with a preset (Read / Capture+append / Read+edit), optional attachments / **tasks** / **insert** scopes, folders or explicit whole-vault, expiration ≤ 365 days, or **Never expire** (still revocable anytime).
+3. Create a token with a preset (Read / Capture+append / Read+edit), optional attachments read/write / **tasks** / **insert** scopes, folders or explicit whole-vault, expiration ≤ 365 days, or **Never expire** (still revocable anytime).
 4. Confirm with the admin password (and TOTP if enabled).
 5. Copy the secret once (`jdx_…`). Store it only in your bot’s secret store.
 
@@ -44,12 +44,15 @@ Authenticated OpenAPI sketch: `GET /api/integrations/v1/openapi.json`.
 | GET | `/notes/changes?since=` | `notes:read` |
 | GET | `/search?q=` | `notes:read` (optional `includeSnippets=false`) |
 | GET | `/notes/{id}` | `notes:read` |
+| GET | `/notes/{id}/export?format=html\|md` | `notes:read` |
+| GET | `/notes/{id}/attachments` | `attachments:read` |
 | GET | `/notes/{id}/attachments/{attachmentId}` | `attachments:read` |
 | GET | `/tasks` | `tasks:read` |
 | POST | `/notes` | `notes:create` + `Idempotency-Key` |
 | PUT | `/notes/{id}` | `notes:update` + `If-Match` |
 | POST | `/notes/{id}/append` | `notes:append` + `Idempotency-Key` + `If-Match` |
 | POST | `/notes/{id}/insert` | `notes:insert` or `notes:append` + `Idempotency-Key` + `If-Match` |
+| POST | `/notes/{id}/attachments` | `attachments:write` + `Idempotency-Key` (+ `If-Match` when placement ≠ none) |
 | POST | `/tasks` | `tasks:write` + whole-vault + `Idempotency-Key` |
 | PATCH | `/tasks/{id}` | `tasks:write` + `If-Match` (note/Todos.md etag) |
 
@@ -74,7 +77,16 @@ Write bodies for notes accept `bodyMarkdown` only (merged into existing front ma
 
 Search hits keep the existing `snippet` field and add `snippets` (up to 3 short matches with nearest heading). Pass `includeSnippets=false` to omit the array.
 
-Limits (defaults): ~120 read/min/token, ~20 write/min/token, 2 MiB body, page size ≤ 100. Over limit → `429` + `Retry-After`.
+### HTML / Markdown export
+
+`GET /notes/{id}/export?format=html` returns the same self-contained Share HTML the app downloads (inline CSS, images as data URIs, no external requests, front matter / API metadata excluded). Optional `theme=light|dark` (default `light`) and `includeTitle=true|false` (default `true`). `format=md` returns the raw Markdown body (no front matter). `format=pdf` is not available. Response headers: `Content-Type`, `Content-Disposition: attachment; filename="…"`, `X-Jotdex-Etag`.
+
+### Attachments
+
+- `GET /notes/{id}/attachments` lists `attachmentId`, `filename`, `contentType`, `size`, `createdAt`.
+- `POST /notes/{id}/attachments` is `multipart/form-data` with `file` (required) and optional `filename`, `altText`, `placement` (`none`|`append`|`top`|`afterHeading`), `heading`. Stores under `{Note}.assets/` like the editor. Allowed: png, jpg/jpeg, gif, webp, pdf, docx, xlsx, txt, csv (magic-byte checked). Size limit matches the app (`MaxAttachmentBytes`, default 100 MB). Response includes a ready-to-paste `markdown` snippet (`![](…)` for images, `[…](…)` otherwise). Placement inserts that snippet via append/insert (If-Match required; 428/412).
+
+Limits (defaults): ~120 read/min/token, ~20 write/min/token, 2 MiB JSON body (multipart uploads use the attachment size limit), page size ≤ 100. Over limit → `429` + `Retry-After`.
 
 Folder ACL is enforced on every path. Out-of-scope ids return `404` (no title leak). Missing scope → `403`. Responses use `Cache-Control: no-store`.
 

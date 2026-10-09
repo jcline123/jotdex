@@ -34,6 +34,10 @@ Upload **`artifacts\jotdex-win-x64.zip`** to a GitHub Release (tag like `v1.1.0`
 3. Download the Release zip, extract over the install folder, **keep `data\`**.
 4. Start `start-portable.cmd`.
 
+## 1.4.2 (Integrations Share HTML export + attachment upload)
+
+1.4.2 extends the Integrations API without changing existing endpoint behavior. New: `GET /notes/{id}/export` (same self-contained Share HTML as the app, plus `format=md`; optional `theme` / `includeTitle`), `GET/POST /notes/{id}/attachments` with `attachments:write` (multipart into `{Note}.assets/`, optional placement). Settings create + Edit/rotate expose the new scope — rotate tokens for Grokbot. Docs: [integrations-api.md](integrations-api.md). Rollback is the previous portable exe (1.4.1).
+
 ## 1.4.1 (Integrations tasks, insert, changes, snippets)
 
 1.4.1 extends the Integrations API without changing existing endpoint behavior. New: `GET/POST/PATCH /tasks` (`tasks:read` / `tasks:write`; standalone Todos.md is whole-vault only), `POST /notes/{id}/insert` (`notes:insert` or `notes:append`), `GET /notes/changes?since=`, and search `snippets` (optional `includeSnippets=false`). Settings create + Edit/rotate expose the new scopes — re-issue or rotate tokens for Grokbot. Docs: [integrations-api.md](integrations-api.md). Rollback is the previous portable exe (1.4.0).

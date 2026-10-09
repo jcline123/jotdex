@@ -8,13 +8,14 @@ public static class IntegrationScopes
     public const string NotesUpdate = "notes:update";
     public const string NotesInsert = "notes:insert";
     public const string AttachmentsRead = "attachments:read";
+    public const string AttachmentsWrite = "attachments:write";
     public const string TasksRead = "tasks:read";
     public const string TasksWrite = "tasks:write";
 
     public static readonly IReadOnlyList<string> All =
     [
         NotesRead, NotesCreate, NotesAppend, NotesUpdate, NotesInsert,
-        AttachmentsRead, TasksRead, TasksWrite
+        AttachmentsRead, AttachmentsWrite, TasksRead, TasksWrite
     ];
 
     public static IReadOnlyList<string> PresetReadOnly => [NotesRead];

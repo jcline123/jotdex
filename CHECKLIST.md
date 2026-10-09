@@ -2,7 +2,7 @@
 
 Mark items `- [x]` when done. IDs are stable for chat (“done M1-04”).
 
-**Active milestone:** INT complete — portable **1.4.1**
+**Active milestone:** INT complete — portable **1.4.2**
 
 ---
 
@@ -325,7 +325,7 @@ Contract: [`docs/decisions/editor-ux-expansion-contract.md`](docs/decisions/edit
 
 ## INT — Secure Integrations API + note timestamps / attribution
 
-ADR: [`docs/decisions/0011-integrations-api.md`](docs/decisions/0011-integrations-api.md). Docs: [`docs/integrations-api.md`](docs/integrations-api.md). Shipped as portable **1.4.0**; INT-08 extensions in **1.4.1**. Live vault / Cloudflare policy changes remain operator-owned.
+ADR: [`docs/decisions/0011-integrations-api.md`](docs/decisions/0011-integrations-api.md). Docs: [`docs/integrations-api.md`](docs/integrations-api.md). Shipped as portable **1.4.0**; INT-08 in **1.4.1**; INT-09 export/upload in **1.4.2**. Live vault / Cloudflare policy changes remain operator-owned.
 
 - [x] `INT-01` ADR 0011 + milestone docs; scheme-isolated gate design locked
 - [x] `INT-02` Token store, admin APIs + CSRF, Settings Integrations UI, negative auth tests
@@ -335,6 +335,7 @@ ADR: [`docs/decisions/0011-integrations-api.md`](docs/decisions/0011-integration
 - [x] `INT-06` Note metadata chrome + `/meta` poll / dirty-safe remote refresh
 - [x] `INT-07` integrations-api.md, sample client, move-kit/portability, full test pass
 - [x] `INT-08` Tasks read/write, note insert, changes-since, search snippets; scopes in create/edit UI; OpenAPI + docs + smoke/unit tests
+- [x] `INT-09` HTML/md export + attachment list/upload (`attachments:write`); OpenAPI + docs + tests
 
 - [x] `INT-GATE` Scheme-isolated bearer API; folder ACL; history + If-Match; idempotency; subtle timestamps; ui/api/external provenance; portable FM; docs + sample client without secrets
 

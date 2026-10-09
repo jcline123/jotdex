@@ -45,12 +45,17 @@ async function csrfToken(): Promise<string> {
 function buildScopes(
   presetId: string,
   attach: boolean,
+  attachWrite: boolean,
   tasksRead: boolean,
   tasksWrite: boolean,
   notesInsert: boolean,
 ): string[] {
   const scopes = [...(PRESETS.find((p) => p.id === presetId)?.scopes ?? ['notes:read'])]
   if (attach) scopes.push('attachments:read')
+  if (attachWrite) {
+    scopes.push('attachments:write')
+    if (!scopes.includes('attachments:read')) scopes.push('attachments:read')
+  }
   if (tasksRead) scopes.push('tasks:read')
   if (tasksWrite) {
     scopes.push('tasks:write')
@@ -64,6 +69,7 @@ function applyTokenToForm(t: TokenPublic): {
   name: string
   preset: string
   attach: boolean
+  attachWrite: boolean
   tasksRead: boolean
   tasksWrite: boolean
   notesInsert: boolean
@@ -78,7 +84,8 @@ function applyTokenToForm(t: TokenPublic): {
   return {
     name: t.name,
     preset,
-    attach: s.has('attachments:read'),
+    attach: s.has('attachments:read') || s.has('attachments:write'),
+    attachWrite: s.has('attachments:write'),
     tasksRead: s.has('tasks:read') || s.has('tasks:write'),
     tasksWrite: s.has('tasks:write'),
     notesInsert: s.has('notes:insert'),
@@ -93,6 +100,7 @@ export function IntegrationSettings({ onHint, onError, folders }: Props) {
   const [name, setName] = useState('Grok Bot')
   const [preset, setPreset] = useState('read')
   const [attach, setAttach] = useState(false)
+  const [attachWrite, setAttachWrite] = useState(false)
   const [tasksRead, setTasksRead] = useState(false)
   const [tasksWrite, setTasksWrite] = useState(false)
   const [notesInsert, setNotesInsert] = useState(false)
@@ -152,7 +160,7 @@ export function IntegrationSettings({ onHint, onError, folders }: Props) {
     setBusy(true)
     setPlaintext(null)
     try {
-      const scopes = buildScopes(preset, attach, tasksRead, tasksWrite, notesInsert)
+      const scopes = buildScopes(preset, attach, attachWrite, tasksRead, tasksWrite, notesInsert)
       const token = await csrfToken()
       const path = editingId
         ? `/api/admin/integrations/tokens/${editingId}/rotate`
@@ -194,6 +202,7 @@ export function IntegrationSettings({ onHint, onError, folders }: Props) {
     setName(f.name)
     setPreset(f.preset)
     setAttach(f.attach)
+    setAttachWrite(f.attachWrite)
     setTasksRead(f.tasksRead)
     setTasksWrite(f.tasksWrite)
     setNotesInsert(f.notesInsert)
@@ -276,7 +285,18 @@ export function IntegrationSettings({ onHint, onError, folders }: Props) {
       </label>
       <label className="field checkbox">
         <input type="checkbox" checked={attach} onChange={(e) => setAttach(e.target.checked)} />
-        Allow attachment downloads
+        Read / download attachments (attachments:read)
+      </label>
+      <label className="field checkbox">
+        <input
+          type="checkbox"
+          checked={attachWrite}
+          onChange={(e) => {
+            setAttachWrite(e.target.checked)
+            if (e.target.checked) setAttach(true)
+          }}
+        />
+        Upload attachments (attachments:write)
       </label>
       <label className="field checkbox">
         <input type="checkbox" checked={tasksRead} onChange={(e) => setTasksRead(e.target.checked)} />
