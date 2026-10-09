@@ -34,6 +34,10 @@ Upload **`artifacts\jotdex-win-x64.zip`** to a GitHub Release (tag like `v1.1.0`
 3. Download the Release zip, extract over the install folder, **keep `data\`**.
 4. Start `start-portable.cmd`.
 
+## 1.4.1 (Integrations tasks, insert, changes, snippets)
+
+1.4.1 extends the Integrations API without changing existing endpoint behavior. New: `GET/POST/PATCH /tasks` (`tasks:read` / `tasks:write`; standalone Todos.md is whole-vault only), `POST /notes/{id}/insert` (`notes:insert` or `notes:append`), `GET /notes/changes?since=`, and search `snippets` (optional `includeSnippets=false`). Settings create + Edit/rotate expose the new scopes — re-issue or rotate tokens for Grokbot. Docs: [integrations-api.md](integrations-api.md). Rollback is the previous portable exe (1.4.0).
+
 ## 1.4.0 (Integrations API + note timestamps)
 
 1.4.0 adds an optional, disabled-by-default bearer Integrations API (`/api/integrations/v1`) for automation (folder-scoped tokens, If-Match, idempotency, never-expire option), Settings → Integrations, and a subtle Created/Updated line in the note chrome (with API attribution). Browser cookie login is unchanged. Vault Markdown is not bulk-rewritten — provenance keys appear only on managed saves. After a move-kit restore, Integrations stays disabled and tokens must be re-issued. Docs: [integrations-api.md](integrations-api.md). Rollback is the previous portable exe (1.3.9).

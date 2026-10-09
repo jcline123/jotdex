@@ -9,11 +9,11 @@ Disabled-by-default REST surface for automation (for example Grok Bot) through C
 
 1. Set a local administrator password (Settings → Security).
 2. Settings → **Integrations** → enable Integrations.
-3. Create a token with a preset (Read / Capture+append / Read+edit), optional attachments, folders or explicit whole-vault, expiration ≤ 365 days, or **Never expire** (still revocable anytime).
+3. Create a token with a preset (Read / Capture+append / Read+edit), optional attachments / **tasks** / **insert** scopes, folders or explicit whole-vault, expiration ≤ 365 days, or **Never expire** (still revocable anytime).
 4. Confirm with the admin password (and TOTP if enabled).
 5. Copy the secret once (`jdx_…`). Store it only in your bot’s secret store.
 
-Revoke or rotate from the same page. Removing the local password is blocked while Integrations is enabled.
+**Edit** on an active token loads its scopes/folders into the form; **Save and rotate** issues a new secret with the updated scopes (update your bot). Revoke from the same page. Removing the local password is blocked while Integrations is enabled.
 
 ## Cloudflare three-header model
 
@@ -41,14 +41,38 @@ Authenticated OpenAPI sketch: `GET /api/integrations/v1/openapi.json`.
 | GET | `/whoami` | any valid token |
 | GET | `/folders` | `notes:read` |
 | GET | `/notes` | `notes:read` |
-| GET | `/search?q=` | `notes:read` |
+| GET | `/notes/changes?since=` | `notes:read` |
+| GET | `/search?q=` | `notes:read` (optional `includeSnippets=false`) |
 | GET | `/notes/{id}` | `notes:read` |
 | GET | `/notes/{id}/attachments/{attachmentId}` | `attachments:read` |
+| GET | `/tasks` | `tasks:read` |
 | POST | `/notes` | `notes:create` + `Idempotency-Key` |
 | PUT | `/notes/{id}` | `notes:update` + `If-Match` |
 | POST | `/notes/{id}/append` | `notes:append` + `Idempotency-Key` + `If-Match` |
+| POST | `/notes/{id}/insert` | `notes:insert` or `notes:append` + `Idempotency-Key` + `If-Match` |
+| POST | `/tasks` | `tasks:write` + whole-vault + `Idempotency-Key` |
+| PATCH | `/tasks/{id}` | `tasks:write` + `If-Match` (note/Todos.md etag) |
 
-Write bodies accept `bodyMarkdown` only (merged into existing front matter). Clients cannot set ids, dates, or attribution. Updates require exact `If-Match` ETag → `428` if missing, `412` if stale. Create/append require `Idempotency-Key` (24h, same key + different body → `409`).
+Write bodies for notes accept `bodyMarkdown` only (merged into existing front matter), except insert which uses `{ markdown, position, heading?, occurrence? }`. Clients cannot set ids, dates, or attribution. Updates require exact `If-Match` ETag → `428` if missing, `412` if stale. Create/append/insert/task-create require `Idempotency-Key` (24h, same key + different body → `409`).
+
+### Tasks
+
+- `GET /tasks?status=open|done|all` (default `open`), optional `folder` / `folderId`, `updatedSince`, `limit`, `cursor`.
+- Each task includes `id`, `text`, `done`, `dueDate`, `source` (`todo-list` \| `note`), note fields for note tasks, `line`, containing-file `etag`, timestamps.
+- Folder ACL applies to note tasks. Standalone `Todos.md` tasks are returned **only** for whole-vault tokens.
+- `POST /tasks` adds a standalone todo (whole-vault required). `PATCH /tasks/{id}` toggles done / edits text for note or todo-list tasks; only that checkbox line changes.
+
+### Insert
+
+`POST /notes/{id}/insert` with `position=top|afterHeading`. Top inserts after the first H1 when present; `afterHeading` inserts below the matching heading (`occurrence` default 1). Missing heading → `404` `heading_not_found`.
+
+### Changes since
+
+`GET /notes/changes?since=<ISO>` returns created/updated notes (newest first) with `nextCursor` and `nextSince`. Deleted ids are reserved (`deleted: []` until tracked). Folder ACL applies.
+
+### Search snippets
+
+Search hits keep the existing `snippet` field and add `snippets` (up to 3 short matches with nearest heading). Pass `includeSnippets=false` to omit the array.
 
 Limits (defaults): ~120 read/min/token, ~20 write/min/token, 2 MiB body, page size ≤ 100. Over limit → `429` + `Retry-After`.
 

@@ -281,7 +281,7 @@ public static class IntegrationEndpointExtensions
         });
 
         reads.MapGet("/search", (HttpContext ctx, ISearchIndex search, IVaultService vault, IVaultPathGuard paths,
-            IIntegrationFolderAccess acl, IIntegrationConfigService cfg, string? q, string? folder, int? limit) =>
+            IIntegrationFolderAccess acl, IIntegrationConfigService cfg, string? q, string? folder, int? limit, bool? includeSnippets) =>
         {
             if (!paths.IsConfigured) return Results.NotFound(new { error = "Vault not configured" });
             var token = RequireToken(ctx);
@@ -293,6 +293,7 @@ public static class IntegrationEndpointExtensions
                 return Results.NotFound(new { error = "Not found", code = "not_found" });
 
             var max = Math.Clamp(limit ?? 25, 1, cfg.Get().MaxPageSize);
+            var withSnippets = includeSnippets != false;
             // Oversample then filter so scoped results are not starved by unrestricted top-N.
             var raw = search.Search(new SearchRequest { RawQuery = q, Limit = Math.Min(max * 8, 400) });
             var hits = new List<object>();
@@ -305,17 +306,252 @@ public static class IntegrationEndpointExtensions
                         .Equals(IntegrationFolderAccess.Normalize(folder), StringComparison.OrdinalIgnoreCase))
                     continue;
                 if (!acl.AllowsNotePath(token, h.RelativePath)) continue;
+                object[]? snippets = null;
+                if (withSnippets)
+                {
+                    var note = vault.GetNote(h.NoteId);
+                    if (note is not null)
+                    {
+                        var body = FrontMatterParser.Parse(note.Markdown).Body;
+                        snippets = IntegrationMarkdownInsert.FindSnippets(body, q).Cast<object>().ToArray();
+                    }
+                    else
+                        snippets = [];
+                }
                 hits.Add(new
                 {
                     id = h.NoteId,
                     title = h.Title,
                     relativePath = h.RelativePath,
                     folderPath = h.FolderPath,
-                    snippet = Truncate(h.Snippet, 280)
+                    snippet = Truncate(h.Snippet, 280),
+                    snippets
                 });
                 if (hits.Count >= max) break;
             }
             return Results.Json(new { hits, query = q });
+        });
+
+        // Must be registered before /notes/{id:guid}
+        reads.MapGet("/notes/changes", (HttpContext ctx, IVaultService vault, IVaultPathGuard paths,
+            IIntegrationFolderAccess acl, IIntegrationConfigService cfg, string? since, int? limit, string? cursor) =>
+        {
+            if (!paths.IsConfigured) return Results.NotFound(new { error = "Vault not configured" });
+            var token = RequireToken(ctx);
+            if (token is null) return Results.Unauthorized();
+            if (!HasScope(ctx, IntegrationScopes.NotesRead)) return ForbiddenScope();
+            if (string.IsNullOrWhiteSpace(since) || !DateTimeOffset.TryParse(since, out var sinceAt))
+                return Results.BadRequest(new { error = "since required (ISO timestamp)", code = "invalid_since" });
+
+            var max = Math.Clamp(limit ?? 50, 1, cfg.Get().MaxPageSize);
+            var all = vault.ListNotes(null)
+                .Where(n => acl.AllowsNotePath(token, n.RelativePath))
+                .Select(n =>
+                {
+                    var created = n.Created;
+                    var updated = n.Modified ?? n.Created;
+                    var changeAt = updated ?? created ?? DateTimeOffset.MinValue;
+                    string changeType;
+                    if (created is not null && created >= sinceAt)
+                        changeType = "created";
+                    else if (updated is not null && updated >= sinceAt)
+                        changeType = "updated";
+                    else
+                        changeType = "";
+                    return new { note = n, changeAt, changeType };
+                })
+                .Where(x => x.changeType.Length > 0 && x.changeAt >= sinceAt)
+                .OrderByDescending(x => x.changeAt)
+                .ThenBy(x => x.note.Id)
+                .ToList();
+
+            var start = 0;
+            if (!string.IsNullOrEmpty(cursor) && int.TryParse(cursor, out var c))
+                start = Math.Clamp(c, 0, all.Count);
+            var page = all.Skip(start).Take(max).ToList();
+            var next = start + page.Count < all.Count ? (start + page.Count).ToString() : null;
+            var nextSince = page.Count > 0
+                ? page.Min(x => x.changeAt).ToString("O")
+                : sinceAt.ToString("O");
+
+            // Resolve etags from detail cache (lightweight for page only).
+            var changes = page.Select(x =>
+            {
+                var detail = vault.GetNote(x.note.Id);
+                return new
+                {
+                    id = x.note.Id,
+                    title = x.note.Title,
+                    folderPath = x.note.FolderPath,
+                    updatedAt = x.changeAt,
+                    etag = detail?.ETag,
+                    changeType = x.changeType
+                };
+            }).ToList();
+
+            return Results.Json(new
+            {
+                changes,
+                deleted = Array.Empty<string>(),
+                nextCursor = next,
+                nextSince
+            });
+        });
+
+        reads.MapGet("/tasks", (HttpContext ctx, IVaultTaskService tasks, IVaultPathGuard paths,
+            IIntegrationFolderAccess acl, IIntegrationConfigService cfg,
+            string? status, string? folder, string? folderId, string? updatedSince, int? limit, string? cursor) =>
+        {
+            if (!paths.IsConfigured) return Results.NotFound(new { error = "Vault not configured" });
+            var token = RequireToken(ctx);
+            if (token is null) return Results.Unauthorized();
+            if (!HasScope(ctx, IntegrationScopes.TasksRead)) return ForbiddenScope();
+
+            var folderFilter = folder ?? folderId;
+            if (folderFilter is not null && !acl.AllowsFolder(token, folderFilter))
+                return Results.NotFound(new { error = "Not found", code = "not_found" });
+
+            DateTimeOffset? sinceAt = null;
+            if (!string.IsNullOrWhiteSpace(updatedSince))
+            {
+                if (!DateTimeOffset.TryParse(updatedSince, out var parsed))
+                    return Results.BadRequest(new { error = "updatedSince must be ISO timestamp", code = "invalid_updated_since" });
+                sinceAt = parsed;
+            }
+
+            var max = Math.Clamp(limit ?? 50, 1, cfg.Get().MaxPageSize);
+            var all = tasks.ListTasks(status ?? "open")
+                .Where(t =>
+                {
+                    if (t.StandaloneTodosMd)
+                        return token.WholeVault;
+                    if (!acl.AllowsNotePath(token, t.NoteRelativePath))
+                        return false;
+                    if (folderFilter is not null)
+                    {
+                        var f = IntegrationFolderAccess.Normalize(t.FolderPath);
+                        var want = IntegrationFolderAccess.Normalize(folderFilter);
+                        if (!f.Equals(want, StringComparison.OrdinalIgnoreCase) &&
+                            !f.StartsWith(want + "/", StringComparison.OrdinalIgnoreCase))
+                            return false;
+                    }
+                    if (sinceAt is not null)
+                    {
+                        var u = t.NoteModified ?? t.NoteCreated;
+                        if (u is null || u < sinceAt) return false;
+                    }
+                    return true;
+                })
+                .ToList();
+
+            var start = 0;
+            if (!string.IsNullOrEmpty(cursor) && int.TryParse(cursor, out var c))
+                start = Math.Clamp(c, 0, all.Count);
+            var page = all.Skip(start).Take(max).Select(ToTaskDto).ToList();
+            var next = start + page.Count < all.Count ? (start + page.Count).ToString() : null;
+            return Results.Json(new { tasks = page, nextCursor = next });
+        });
+
+        writes.MapPost("/tasks", async (HttpContext ctx, IVaultTaskService tasks, IIdempotencyStore idem,
+            IIntegrationActivityLog log, TimeProvider time, HttpRequest req) =>
+        {
+            var token = RequireToken(ctx);
+            if (token is null) return Results.Unauthorized();
+            if (!HasScope(ctx, IntegrationScopes.TasksWrite)) return ForbiddenScope();
+            if (!token.WholeVault)
+                return Results.Json(new { error = "Standalone todo-list writes require whole-vault access", code = "whole_vault_required" }, statusCode: 403);
+            if (!req.Headers.TryGetValue("Idempotency-Key", out var idk) || string.IsNullOrWhiteSpace(idk))
+                return Results.BadRequest(new { error = "Idempotency-Key required", code = "idempotency_required" });
+
+            var body = await req.ReadFromJsonAsync<CreateTaskBody>();
+            if (body is null || string.IsNullOrWhiteSpace(body.Text))
+                return Results.BadRequest(new { error = "text required", code = "invalid_body" });
+
+            var fingerprint = Fingerprint("POST", "/tasks", body.Text + "\n" + (body.DueDate ?? ""));
+            var ns = IdemNs(token, "POST", "/tasks");
+            var prior = idem.TryGet(ns, idk!, fingerprint);
+            if (prior.FingerprintMismatch)
+                return Results.Conflict(new { error = "Idempotency-Key reused with different body", code = "idempotency_conflict" });
+            if (prior.Found && prior.ResponseJson is not null)
+                return Results.Content(prior.ResponseJson, "application/json", statusCode: prior.StatusCode);
+
+            var change = new NoteChangeContext(NoteChangeVia.Api, token.Name, token.Id);
+            var result = tasks.CreateStandalone(body.Text.Trim(), body.DueDate, change);
+            if (!result.Success)
+                return Results.BadRequest(new { error = result.Error, code = "create_failed" });
+
+            var dto = result.Task is null ? null : ToTaskDto(result.Task);
+            var json = JsonSerializer.Serialize(new { task = dto, etag = result.ETag }, JsonOpts);
+            idem.Put(ns, idk!, fingerprint, 200, json, time);
+            log.Record(new IntegrationActivityEntry
+            {
+                At = time.GetUtcNow(),
+                TokenId = token.Id,
+                TokenName = token.Name,
+                Operation = "tasks.create",
+                NoteId = result.NoteId?.ToString("D"),
+                Outcome = "ok",
+                RequestId = ctx.TraceIdentifier,
+                EtagAfter = result.ETag
+            });
+            return Results.Content(json, "application/json");
+        });
+
+        writes.MapPatch("/tasks/{taskId}", async (string taskId, HttpContext ctx, IVaultTaskService tasks,
+            IIntegrationFolderAccess acl, IIntegrationActivityLog log, TimeProvider time, HttpRequest req) =>
+        {
+            var token = RequireToken(ctx);
+            if (token is null) return Results.Unauthorized();
+            if (!HasScope(ctx, IntegrationScopes.TasksWrite)) return ForbiddenScope();
+            if (!req.Headers.TryGetValue("If-Match", out var match) || string.IsNullOrWhiteSpace(match) || match == "*")
+                return Results.Json(new { error = "If-Match required (exact ETag)", code = "precondition_required" }, statusCode: 428);
+
+            var existing = tasks.ListTasks("all").FirstOrDefault(t =>
+                t.Id.Equals(taskId, StringComparison.OrdinalIgnoreCase));
+            if (existing is null)
+                return Results.NotFound(new { error = "Not found", code = "not_found" });
+            if (existing.StandaloneTodosMd)
+            {
+                if (!token.WholeVault)
+                    return Results.Json(new { error = "Standalone todo-list access requires whole-vault", code = "whole_vault_required" }, statusCode: 403);
+            }
+            else if (!acl.AllowsNotePath(token, existing.NoteRelativePath))
+            {
+                return Results.NotFound(new { error = "Not found", code = "not_found" });
+            }
+
+            var body = await req.ReadFromJsonAsync<PatchTaskBody>();
+            if (body is null)
+                return Results.BadRequest(new { error = "Invalid body", code = "invalid_body" });
+
+            var etag = match.ToString().Trim().Trim('"');
+            var change = new NoteChangeContext(NoteChangeVia.Api, token.Name, token.Id);
+            var result = tasks.Patch(taskId, new VaultTaskPatch
+            {
+                Text = body.Text,
+                Done = body.Done,
+                Due = body.DueDate
+            }, etag, change);
+            if (result.Conflict)
+                return Results.Json(new { error = "Stale ETag — reread before retry", code = "precondition_failed", etag = result.ETag }, statusCode: 412);
+            if (!result.Success)
+                return result.Error == "Task not found"
+                    ? Results.NotFound(new { error = "Not found", code = "not_found" })
+                    : Results.BadRequest(new { error = result.Error, code = "patch_failed" });
+
+            log.Record(new IntegrationActivityEntry
+            {
+                At = time.GetUtcNow(),
+                TokenId = token.Id,
+                TokenName = token.Name,
+                Operation = "tasks.patch",
+                NoteId = result.NoteId?.ToString("D"),
+                Outcome = "ok",
+                RequestId = ctx.TraceIdentifier,
+                EtagBefore = etag,
+                EtagAfter = result.ETag
+            });
+            return Results.Json(new { task = result.Task is null ? null : ToTaskDto(result.Task), etag = result.ETag });
         });
 
         reads.MapGet("/notes/{id:guid}", (Guid id, HttpContext ctx, IVaultService vault, IIntegrationFolderAccess acl, IIntegrationActivityLog log) =>
@@ -480,6 +716,70 @@ public static class IntegrationEndpointExtensions
             return Results.Content(json, "application/json");
         });
 
+        writes.MapPost("/notes/{id:guid}/insert", async (Guid id, HttpContext ctx, INoteCommandService commands, IVaultService vault,
+            IIntegrationFolderAccess acl, IIdempotencyStore idem, IIntegrationActivityLog log, TimeProvider time, HttpRequest req) =>
+        {
+            var token = RequireToken(ctx);
+            if (token is null) return Results.Unauthorized();
+            if (!HasScope(ctx, IntegrationScopes.NotesInsert) && !HasScope(ctx, IntegrationScopes.NotesAppend))
+                return ForbiddenScope();
+            if (!req.Headers.TryGetValue("Idempotency-Key", out var idk) || string.IsNullOrWhiteSpace(idk))
+                return Results.BadRequest(new { error = "Idempotency-Key required", code = "idempotency_required" });
+            if (!req.Headers.TryGetValue("If-Match", out var match) || string.IsNullOrWhiteSpace(match) || match == "*")
+                return Results.Json(new { error = "If-Match required (exact ETag)", code = "precondition_required" }, statusCode: 428);
+
+            var note = vault.GetNote(id);
+            if (note is null || !acl.AllowsNotePath(token, note.RelativePath))
+                return Results.NotFound(new { error = "Not found", code = "not_found" });
+
+            var body = await req.ReadFromJsonAsync<InsertBody>();
+            if (body is null || string.IsNullOrWhiteSpace(body.Markdown))
+                return Results.BadRequest(new { error = "markdown required", code = "invalid_body" });
+            var position = (body.Position ?? "").Trim();
+            if (position is not ("top" or "afterHeading"))
+                return Results.BadRequest(new { error = "position must be top or afterHeading", code = "invalid_position" });
+            if (position == "afterHeading" && string.IsNullOrWhiteSpace(body.Heading))
+                return Results.BadRequest(new { error = "heading required for afterHeading", code = "invalid_heading" });
+
+            var etag = match.ToString().Trim().Trim('"');
+            var occurrence = body.Occurrence is > 0 ? body.Occurrence.Value : 1;
+            var fingerprint = Fingerprint("POST", $"/notes/{id}/insert", position + "\n" + (body.Heading ?? "") + "\n" + occurrence + "\n" + etag + "\n" + body.Markdown);
+            var ns = IdemNs(token, "POST", $"/notes/{id}/insert");
+            var prior = idem.TryGet(ns, idk!, fingerprint);
+            if (prior.FingerprintMismatch)
+                return Results.Conflict(new { error = "Idempotency-Key reused with different body", code = "idempotency_conflict" });
+            if (prior.Found && prior.ResponseJson is not null)
+                return Results.Content(prior.ResponseJson, "application/json", statusCode: prior.StatusCode);
+
+            if (!acl.AllowsNotePath(token, note.RelativePath))
+                return Results.NotFound(new { error = "Not found", code = "not_found" });
+
+            var change = new NoteChangeContext(NoteChangeVia.Api, token.Name, token.Id);
+            var result = commands.InsertMarkdown(id, body.Markdown, position, body.Heading, occurrence, etag, change);
+            if (result.Error == "Heading not found")
+                return Results.Json(new { error = "Heading not found", code = "heading_not_found" }, statusCode: 404);
+            if (result.Conflict)
+                return Results.Json(new { error = "Stale ETag — reread before retry", code = "precondition_failed", etag = result.ETag }, statusCode: 412);
+            if (!result.Success)
+                return Results.BadRequest(new { error = result.Error, code = "insert_failed" });
+
+            var json = JsonSerializer.Serialize(ToNoteDto(result.Note!), JsonOpts);
+            idem.Put(ns, idk!, fingerprint, 200, json, time);
+            log.Record(new IntegrationActivityEntry
+            {
+                At = time.GetUtcNow(),
+                TokenId = token.Id,
+                TokenName = token.Name,
+                Operation = "notes.insert",
+                NoteId = id.ToString("D"),
+                Outcome = "ok",
+                RequestId = ctx.TraceIdentifier,
+                EtagBefore = etag,
+                EtagAfter = result.ETag
+            });
+            return Results.Content(json, "application/json");
+        });
+
         reads.MapGet("/notes/{id:guid}/attachments/{attachmentId}", (Guid id, string attachmentId, HttpContext ctx,
             IVaultService vault, IIntegrationFolderAccess acl) =>
         {
@@ -539,6 +839,22 @@ public static class IntegrationEndpointExtensions
         updatedAt = n.Modified
     };
 
+    private static object ToTaskDto(VaultTaskDto t) => new
+    {
+        id = t.Id,
+        text = t.Text,
+        done = t.Done,
+        dueDate = t.Due,
+        source = t.StandaloneTodosMd ? "todo-list" : "note",
+        noteId = t.StandaloneTodosMd ? null : (Guid?)t.NoteId,
+        noteTitle = t.StandaloneTodosMd ? null : t.NoteTitle,
+        folderPath = t.StandaloneTodosMd ? null : t.FolderPath,
+        line = t.LineIndex + 1,
+        etag = t.ETag,
+        createdAt = t.Added ?? t.NoteCreated?.ToString("O"),
+        updatedAt = t.NoteModified
+    };
+
     private static IntegrationTokenRecord? RequireToken(HttpContext ctx)
     {
         var id = ctx.User.FindFirstValue(IntegrationAuth.ClaimTokenId);
@@ -581,29 +897,317 @@ public static class IntegrationEndpointExtensions
         docs = "See docs/integrations-api.md"
     };
 
-    private static object OpenApiDocument() => new
+    private static object OpenApiDocument()
     {
-        openapi = "3.0.3",
-        info = new { title = "Jotdex Integrations API", version = "v1" },
-        paths = new Dictionary<string, object>
+        var note = new
         {
-            ["/api/integrations/v1/whoami"] = new { get = new { summary = "Verify token" } },
-            ["/api/integrations/v1/folders"] = new { get = new { summary = "List permitted folders" } },
-            ["/api/integrations/v1/notes"] = new { get = new { summary = "List notes" }, post = new { summary = "Create note" } },
-            ["/api/integrations/v1/search"] = new { get = new { summary = "Search notes" } },
-            ["/api/integrations/v1/notes/{id}"] = new { get = new { summary = "Get note" }, put = new { summary = "Replace body" } },
-            ["/api/integrations/v1/notes/{id}/append"] = new { post = new { summary = "Append body" } },
-            ["/api/integrations/v1/notes/{id}/attachments/{attachmentId}"] = new { get = new { summary = "Download attachment" } }
-        },
-        components = new
-        {
-            securitySchemes = new
+            type = "object",
+            properties = new
             {
-                bearerAuth = new { type = "http", scheme = "bearer", bearerFormat = "JotdexIntegrationToken" }
+                id = new { type = "string", format = "uuid" },
+                title = new { type = "string" },
+                relativePath = new { type = "string" },
+                folderPath = new { type = "string" },
+                tags = new { type = "array", items = new { type = "string" } },
+                bodyMarkdown = new { type = "string" },
+                etag = new { type = "string" },
+                createdAt = new { type = "string", format = "date-time" },
+                updatedAt = new { type = "string", format = "date-time" }
             }
-        },
-        security = new[] { new { bearerAuth = Array.Empty<string>() } }
-    };
+        };
+        var task = new
+        {
+            type = "object",
+            properties = new
+            {
+                id = new { type = "string" },
+                text = new { type = "string" },
+                done = new { type = "boolean" },
+                dueDate = new { type = "string", nullable = true },
+                source = new { type = "string", @enum = new[] { "todo-list", "note" } },
+                noteId = new { type = "string", format = "uuid", nullable = true },
+                noteTitle = new { type = "string", nullable = true },
+                folderPath = new { type = "string", nullable = true },
+                line = new { type = "integer" },
+                etag = new { type = "string" },
+                createdAt = new { type = "string", nullable = true },
+                updatedAt = new { type = "string", format = "date-time", nullable = true }
+            }
+        };
+        return new
+        {
+            openapi = "3.0.3",
+            info = new { title = "Jotdex Integrations API", version = "v1" },
+            paths = new Dictionary<string, object>
+            {
+                ["/api/integrations/v1/whoami"] = new
+                {
+                    get = new
+                    {
+                        summary = "Verify token",
+                        responses = new { @default = new { description = "Token identity and scopes" } }
+                    }
+                },
+                ["/api/integrations/v1/folders"] = new { get = new { summary = "List permitted folders", security = Scope("notes:read") } },
+                ["/api/integrations/v1/notes"] = new
+                {
+                    get = new { summary = "List notes", security = Scope("notes:read") },
+                    post = new
+                    {
+                        summary = "Create note",
+                        security = Scope("notes:create"),
+                        parameters = new object[]
+                        {
+                            new { name = "Idempotency-Key", @in = "header", required = true, schema = new { type = "string" } }
+                        },
+                        requestBody = new
+                        {
+                            required = true,
+                            content = new
+                            {
+                                application_json = new
+                                {
+                                    schema = new
+                                    {
+                                        type = "object",
+                                        required = new[] { "title", "folderPath" },
+                                        properties = new
+                                        {
+                                            title = new { type = "string" },
+                                            folderPath = new { type = "string" },
+                                            bodyMarkdown = new { type = "string" }
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        responses = new { @default = new { description = "Created note", content = new { application_json = new { schema = note } } } }
+                    }
+                },
+                ["/api/integrations/v1/notes/changes"] = new
+                {
+                    get = new
+                    {
+                        summary = "Notes changed since timestamp",
+                        security = Scope("notes:read"),
+                        parameters = new object[]
+                        {
+                            new { name = "since", @in = "query", required = true, schema = new { type = "string", format = "date-time" } },
+                            new { name = "limit", @in = "query", schema = new { type = "integer" } },
+                            new { name = "cursor", @in = "query", schema = new { type = "string" } }
+                        }
+                    }
+                },
+                ["/api/integrations/v1/search"] = new
+                {
+                    get = new
+                    {
+                        summary = "Search notes",
+                        security = Scope("notes:read"),
+                        parameters = new object[]
+                        {
+                            new { name = "q", @in = "query", required = true, schema = new { type = "string" } },
+                            new { name = "includeSnippets", @in = "query", schema = new { type = "boolean", @default = true } }
+                        }
+                    }
+                },
+                ["/api/integrations/v1/notes/{id}"] = new
+                {
+                    get = new { summary = "Get note", security = Scope("notes:read") },
+                    put = new
+                    {
+                        summary = "Replace body",
+                        security = Scope("notes:update"),
+                        parameters = new object[]
+                        {
+                            new { name = "If-Match", @in = "header", required = true, schema = new { type = "string" } }
+                        },
+                        requestBody = new
+                        {
+                            required = true,
+                            content = new
+                            {
+                                application_json = new
+                                {
+                                    schema = new
+                                    {
+                                        type = "object",
+                                        required = new[] { "bodyMarkdown" },
+                                        properties = new { bodyMarkdown = new { type = "string" } }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                ["/api/integrations/v1/notes/{id}/append"] = new
+                {
+                    post = new
+                    {
+                        summary = "Append body",
+                        security = Scope("notes:append"),
+                        parameters = new object[]
+                        {
+                            new { name = "Idempotency-Key", @in = "header", required = true, schema = new { type = "string" } },
+                            new { name = "If-Match", @in = "header", required = true, schema = new { type = "string" } }
+                        }
+                    }
+                },
+                ["/api/integrations/v1/notes/{id}/insert"] = new
+                {
+                    post = new
+                    {
+                        summary = "Insert markdown at top or after a heading",
+                        security = Scope("notes:insert"),
+                        parameters = new object[]
+                        {
+                            new { name = "Idempotency-Key", @in = "header", required = true, schema = new { type = "string" } },
+                            new { name = "If-Match", @in = "header", required = true, schema = new { type = "string" } }
+                        },
+                        requestBody = new
+                        {
+                            required = true,
+                            content = new
+                            {
+                                application_json = new
+                                {
+                                    schema = new
+                                    {
+                                        type = "object",
+                                        required = new[] { "markdown", "position" },
+                                        properties = new
+                                        {
+                                            markdown = new { type = "string" },
+                                            position = new { type = "string", @enum = new[] { "top", "afterHeading" } },
+                                            heading = new { type = "string" },
+                                            occurrence = new { type = "integer", @default = 1 }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                ["/api/integrations/v1/notes/{id}/attachments/{attachmentId}"] = new
+                {
+                    get = new { summary = "Download attachment", security = Scope("attachments:read") }
+                },
+                ["/api/integrations/v1/tasks"] = new
+                {
+                    get = new
+                    {
+                        summary = "List tasks",
+                        security = Scope("tasks:read"),
+                        parameters = new object[]
+                        {
+                            new { name = "status", @in = "query", schema = new { type = "string", @enum = new[] { "open", "done", "all" }, @default = "open" } },
+                            new { name = "folder", @in = "query", schema = new { type = "string" } },
+                            new { name = "updatedSince", @in = "query", schema = new { type = "string", format = "date-time" } },
+                            new { name = "limit", @in = "query", schema = new { type = "integer" } },
+                            new { name = "cursor", @in = "query", schema = new { type = "string" } }
+                        },
+                        responses = new
+                        {
+                            @default = new
+                            {
+                                description = "Task page",
+                                content = new
+                                {
+                                    application_json = new
+                                    {
+                                        schema = new
+                                        {
+                                            type = "object",
+                                            properties = new
+                                            {
+                                                tasks = new { type = "array", items = task },
+                                                nextCursor = new { type = "string", nullable = true }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    post = new
+                    {
+                        summary = "Create standalone todo (Todos.md); requires wholeVault",
+                        security = Scope("tasks:write"),
+                        parameters = new object[]
+                        {
+                            new { name = "Idempotency-Key", @in = "header", required = true, schema = new { type = "string" } }
+                        },
+                        requestBody = new
+                        {
+                            required = true,
+                            content = new
+                            {
+                                application_json = new
+                                {
+                                    schema = new
+                                    {
+                                        type = "object",
+                                        required = new[] { "text" },
+                                        properties = new
+                                        {
+                                            text = new { type = "string" },
+                                            dueDate = new { type = "string", format = "date-time" }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                },
+                ["/api/integrations/v1/tasks/{taskId}"] = new
+                {
+                    patch = new
+                    {
+                        summary = "Patch task done/text (If-Match = containing note etag)",
+                        security = Scope("tasks:write"),
+                        parameters = new object[]
+                        {
+                            new { name = "If-Match", @in = "header", required = true, schema = new { type = "string" } }
+                        },
+                        requestBody = new
+                        {
+                            required = true,
+                            content = new
+                            {
+                                application_json = new
+                                {
+                                    schema = new
+                                    {
+                                        type = "object",
+                                        properties = new
+                                        {
+                                            text = new { type = "string" },
+                                            done = new { type = "boolean" },
+                                            dueDate = new { type = "string", format = "date-time" }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            components = new
+            {
+                schemas = new { Note = note, Task = task },
+                securitySchemes = new
+                {
+                    bearerAuth = new { type = "http", scheme = "bearer", bearerFormat = "JotdexIntegrationToken" }
+                }
+            },
+            security = new[] { new { bearerAuth = Array.Empty<string>() } }
+        };
+    }
+
+    private static object[] Scope(string scope) =>
+    [
+        new Dictionary<string, string[]> { ["bearerAuth"] = [scope] }
+    ];
 
     private sealed class ConfigBody
     {
@@ -643,5 +1247,26 @@ public static class IntegrationEndpointExtensions
     private sealed class BodyOnly
     {
         public string? BodyMarkdown { get; set; }
+    }
+
+    private sealed class InsertBody
+    {
+        public string? Markdown { get; set; }
+        public string? Position { get; set; }
+        public string? Heading { get; set; }
+        public int? Occurrence { get; set; }
+    }
+
+    private sealed class CreateTaskBody
+    {
+        public string? Text { get; set; }
+        public string? DueDate { get; set; }
+    }
+
+    private sealed class PatchTaskBody
+    {
+        public string? Text { get; set; }
+        public bool? Done { get; set; }
+        public string? DueDate { get; set; }
     }
 }

@@ -40,6 +40,8 @@ public interface INoteCommandService
     NoteSaveResult ReplaceBody(Guid id, string bodyMarkdown, string expectedETag, NoteChangeContext change);
     /// <summary>Append Markdown to the body; preserve front matter and merge provenance.</summary>
     NoteSaveResult AppendBody(Guid id, string appendMarkdown, string expectedETag, NoteChangeContext change);
+    /// <summary>Insert Markdown at top (after first H1) or after a heading; preserve surrounding body text.</summary>
+    NoteSaveResult InsertMarkdown(Guid id, string markdown, string position, string? heading, int occurrence, string expectedETag, NoteChangeContext change);
     bool MoveToTrash(Guid id);
     NoteSaveResult RestoreHistory(Guid id, string snapshotId);
     NoteMoveResult Move(Guid id, string targetFolderRelativePath, string? newTitle = null);
@@ -231,6 +233,28 @@ public sealed class NoteCommandService : INoteCommandService
             var parsed = FrontMatterParser.Parse(existing.Markdown);
             var body = parsed.Body.TrimEnd() + "\n\n" + (appendMarkdown ?? "").TrimStart() + "\n";
             var next = JoinFrontMatter(parsed.Fields, body);
+            return SaveCore(id, next, expectedETag, force: false, change);
+        });
+    }
+
+    public NoteSaveResult InsertMarkdown(Guid id, string markdown, string position, string? heading, int occurrence, string expectedETag, NoteChangeContext change)
+    {
+        return _writes.Execute(() =>
+        {
+            var existing = _vault.GetNote(id);
+            if (existing is null) return Fail("Note not found");
+            string next;
+            try
+            {
+                var inserted = IntegrationMarkdownInsert.Insert(existing.Markdown, markdown, position, heading, occurrence);
+                if (inserted is null)
+                    return Fail("Heading not found");
+                next = inserted;
+            }
+            catch (ArgumentOutOfRangeException ex)
+            {
+                return Fail(ex.Message);
+            }
             return SaveCore(id, next, expectedETag, force: false, change);
         });
     }

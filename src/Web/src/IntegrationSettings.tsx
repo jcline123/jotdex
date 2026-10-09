@@ -42,11 +42,60 @@ async function csrfToken(): Promise<string> {
   return j.token
 }
 
+function buildScopes(
+  presetId: string,
+  attach: boolean,
+  tasksRead: boolean,
+  tasksWrite: boolean,
+  notesInsert: boolean,
+): string[] {
+  const scopes = [...(PRESETS.find((p) => p.id === presetId)?.scopes ?? ['notes:read'])]
+  if (attach) scopes.push('attachments:read')
+  if (tasksRead) scopes.push('tasks:read')
+  if (tasksWrite) {
+    scopes.push('tasks:write')
+    if (!scopes.includes('tasks:read')) scopes.push('tasks:read')
+  }
+  if (notesInsert) scopes.push('notes:insert')
+  return [...new Set(scopes)]
+}
+
+function applyTokenToForm(t: TokenPublic): {
+  name: string
+  preset: string
+  attach: boolean
+  tasksRead: boolean
+  tasksWrite: boolean
+  notesInsert: boolean
+  wholeVault: boolean
+  selectedFolders: string[]
+  neverExpires: boolean
+} {
+  const s = new Set(t.scopes)
+  let preset = 'read'
+  if (s.has('notes:update')) preset = 'edit'
+  else if (s.has('notes:create') || s.has('notes:append')) preset = 'capture'
+  return {
+    name: t.name,
+    preset,
+    attach: s.has('attachments:read'),
+    tasksRead: s.has('tasks:read') || s.has('tasks:write'),
+    tasksWrite: s.has('tasks:write'),
+    notesInsert: s.has('notes:insert'),
+    wholeVault: t.wholeVault,
+    selectedFolders: [...t.allowedFolderRoots],
+    neverExpires: !!t.neverExpires,
+  }
+}
+
 export function IntegrationSettings({ onHint, onError, folders }: Props) {
   const [state, setState] = useState<AdminState | null>(null)
   const [name, setName] = useState('Grok Bot')
   const [preset, setPreset] = useState('read')
   const [attach, setAttach] = useState(false)
+  const [tasksRead, setTasksRead] = useState(false)
+  const [tasksWrite, setTasksWrite] = useState(false)
+  const [notesInsert, setNotesInsert] = useState(false)
   const [wholeVault, setWholeVault] = useState(false)
   const [selectedFolders, setSelectedFolders] = useState<string[]>([])
   const [days, setDays] = useState(90)
@@ -55,6 +104,7 @@ export function IntegrationSettings({ onHint, onError, folders }: Props) {
   const [totp, setTotp] = useState('')
   const [plaintext, setPlaintext] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     try {
@@ -98,14 +148,16 @@ export function IntegrationSettings({ onHint, onError, folders }: Props) {
     }
   }
 
-  const createToken = async () => {
+  const saveToken = async () => {
     setBusy(true)
     setPlaintext(null)
     try {
-      const scopes = [...(PRESETS.find((p) => p.id === preset)?.scopes ?? ['notes:read'])]
-      if (attach) scopes.push('attachments:read')
+      const scopes = buildScopes(preset, attach, tasksRead, tasksWrite, notesInsert)
       const token = await csrfToken()
-      const r = await fetch('/api/admin/integrations/tokens', {
+      const path = editingId
+        ? `/api/admin/integrations/tokens/${editingId}/rotate`
+        : '/api/admin/integrations/tokens'
+      const r = await fetch(path, {
         method: 'POST',
         credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': token },
@@ -121,17 +173,40 @@ export function IntegrationSettings({ onHint, onError, folders }: Props) {
         }),
       })
       const j = (await r.json()) as { error?: string; plaintextSecret?: string; warning?: string }
-      if (!r.ok) throw new Error(j.error || 'Create failed')
+      if (!r.ok) throw new Error(j.error || (editingId ? 'Rotate failed' : 'Create failed'))
+      const wasEdit = !!editingId
       setPlaintext(j.plaintextSecret ?? null)
       setAdminPassword('')
       setTotp('')
-      onHint(j.warning || 'Token created.')
+      setEditingId(null)
+      onHint(j.warning || (wasEdit ? 'Token rotated — copy the new secret.' : 'Token created.'))
       await load()
     } catch (e) {
-      onError(e instanceof Error ? e.message : 'Create failed')
+      onError(e instanceof Error ? e.message : 'Save failed')
     } finally {
       setBusy(false)
     }
+  }
+
+  const beginEdit = (t: TokenPublic) => {
+    const f = applyTokenToForm(t)
+    setEditingId(t.id)
+    setName(f.name)
+    setPreset(f.preset)
+    setAttach(f.attach)
+    setTasksRead(f.tasksRead)
+    setTasksWrite(f.tasksWrite)
+    setNotesInsert(f.notesInsert)
+    setWholeVault(f.wholeVault)
+    setSelectedFolders(f.selectedFolders)
+    setNeverExpires(f.neverExpires)
+    setPlaintext(null)
+    onHint(`Editing “${t.name}” — saving rotates the secret and applies new scopes.`)
+  }
+
+  const cancelEdit = () => {
+    setEditingId(null)
+    onHint(null)
   }
 
   const revoke = async (id: string) => {
@@ -179,7 +254,12 @@ export function IntegrationSettings({ onHint, onError, folders }: Props) {
         Enable integrations
       </label>
 
-      <h4 className="settings-subhead">Create token</h4>
+      <h4 className="settings-subhead">{editingId ? 'Edit / rotate token' : 'Create token'}</h4>
+      {editingId && (
+        <p className="muted">
+          Saving issues a new secret and updates scopes/folders. Update your bot with the new token.
+        </p>
+      )}
       <label className="field">
         Name
         <input value={name} onChange={(e) => setName(e.target.value)} maxLength={80} />
@@ -197,6 +277,25 @@ export function IntegrationSettings({ onHint, onError, folders }: Props) {
       <label className="field checkbox">
         <input type="checkbox" checked={attach} onChange={(e) => setAttach(e.target.checked)} />
         Allow attachment downloads
+      </label>
+      <label className="field checkbox">
+        <input type="checkbox" checked={tasksRead} onChange={(e) => setTasksRead(e.target.checked)} />
+        Read tasks (tasks:read)
+      </label>
+      <label className="field checkbox">
+        <input
+          type="checkbox"
+          checked={tasksWrite}
+          onChange={(e) => {
+            setTasksWrite(e.target.checked)
+            if (e.target.checked) setTasksRead(true)
+          }}
+        />
+        Write tasks (tasks:write) — standalone Todos.md needs whole vault
+      </label>
+      <label className="field checkbox">
+        <input type="checkbox" checked={notesInsert} onChange={(e) => setNotesInsert(e.target.checked)} />
+        Insert into notes (notes:insert)
       </label>
       <label className="field checkbox">
         <input type="checkbox" checked={wholeVault} onChange={(e) => setWholeVault(e.target.checked)} />
@@ -246,8 +345,13 @@ export function IntegrationSettings({ onHint, onError, folders }: Props) {
         <input value={totp} onChange={(e) => setTotp(e.target.value)} autoComplete="one-time-code" />
       </label>
       <div className="modal-actions">
-        <button type="button" disabled={busy || !adminPassword} onClick={() => void createToken()}>
-          Create token
+        {editingId && (
+          <button type="button" className="ghost" disabled={busy} onClick={cancelEdit}>
+            Cancel edit
+          </button>
+        )}
+        <button type="button" disabled={busy || !adminPassword} onClick={() => void saveToken()}>
+          {editingId ? 'Save and rotate' : 'Create token'}
         </button>
       </div>
 
@@ -286,9 +390,14 @@ export function IntegrationSettings({ onHint, onError, folders }: Props) {
               </span>
             </div>
             {t.active && (
-              <button type="button" className="ghost" disabled={busy} onClick={() => void revoke(t.id)}>
-                Revoke
-              </button>
+              <div className="modal-actions">
+                <button type="button" className="ghost" disabled={busy} onClick={() => beginEdit(t)}>
+                  Edit
+                </button>
+                <button type="button" className="ghost" disabled={busy} onClick={() => void revoke(t.id)}>
+                  Revoke
+                </button>
+              </div>
             )}
           </li>
         ))}

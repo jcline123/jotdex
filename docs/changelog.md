@@ -1,3 +1,12 @@
+## 2026-10-08 — Integrations API: tasks, insert, changes-since, search snippets
+
+**Why:** Grok Bot (and other automation) needed task list access, precise inserts (not only append), incremental note sync, and richer search context without changing existing endpoint contracts.
+
+**What:** `GET/POST/PATCH /api/integrations/v1/tasks` (`tasks:read` / `tasks:write`; standalone Todos.md is whole-vault only); `POST /notes/{id}/insert` (`notes:insert` or `notes:append`); `GET /notes/changes`; search `snippets` (+ `includeSnippets=false`). Settings create + Edit/rotate token UI expose the new scopes. OpenAPI + `docs/integrations-api.md` updated. Existing integration endpoints unchanged.
+
+**Portable release 1.4.1**
+- Tag `v1.4.1` (commit recorded after ship) — INT-08 Integrations extensions. Live vault Markdown was **not** rewritten by the release. Rollback is the previous exe (1.4.0).
+
 ## 2026-10-08 — Secure Integrations API + note timestamps / attribution
 
 **Why:** Automation (e.g. Grok Bot) needed a Cloudflare-friendly way to read/write selected notes without sharing the admin cookie session, and the note chrome needed Created/Updated (and API attribution) without putting that text into Markdown copy/Share HTML.
