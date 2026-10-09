@@ -5,7 +5,7 @@
 **What:** `GET /notes/{id}/export` (`format=html|md`, optional `theme` / `includeTitle`) reuses `NoteShareExportService`. `GET/POST /notes/{id}/attachments` with `attachments:write` (multipart upload, magic-byte allowlist, optional placement via append/insert + If-Match). Settings create/Edit expose the new scope. OpenAPI + `docs/integrations-api.md` updated. Existing endpoints unchanged.
 
 **Portable release 1.4.2**
-- Tag `v1.4.2` (commit recorded after ship) — INT-09 export + attachment upload. Live vault Markdown was **not** rewritten by the release. Rollback is the previous exe (1.4.1).
+- Tag `v1.4.2` (`5f726b9`) — INT-09 export + attachment upload. Live vault Markdown was **not** rewritten by the release. Rollback is the previous exe (1.4.1).
 
 ## 2026-10-08 — Integrations API: tasks, insert, changes-since, search snippets
 
