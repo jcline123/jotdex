@@ -73,19 +73,27 @@ public class SmokeTests : IClassFixture<WebApplicationFactory<Program>>
         Assert.Equal(HttpStatusCode.OK, create.StatusCode);
         var created = await create.Content.ReadFromJsonAsync<SnippetCreateDto>();
         Assert.NotNull(created?.Snippet);
-        Assert.Equal("Snippets", created!.Snippet!.FolderPath, ignoreCase: true);
-        Assert.Equal(trigger, created!.Snippet!.Trigger);
+        try
+        {
+            Assert.Equal("Snippets", created!.Snippet!.FolderPath, ignoreCase: true);
+            Assert.Equal(trigger, created!.Snippet!.Trigger);
 
-        var list = await _client.GetFromJsonAsync<SnippetListDto>($"/api/snippets?q={trigger}");
-        Assert.NotNull(list?.Items);
-        Assert.Contains(list!.Items!, s => s.Title == title);
+            var list = await _client.GetFromJsonAsync<SnippetListDto>($"/api/snippets?q={trigger}");
+            Assert.NotNull(list?.Items);
+            Assert.Contains(list!.Items!, s => s.Title == title);
 
-        var notes = await _client.GetFromJsonAsync<List<NoteSummaryDto>>("/api/notes");
-        Assert.NotNull(notes);
-        Assert.DoesNotContain(notes!, n => n.Title == title);
+            var notes = await _client.GetFromJsonAsync<List<NoteSummaryDto>>("/api/notes");
+            Assert.NotNull(notes);
+            Assert.DoesNotContain(notes!, n => n.Title == title);
 
-        var treeJson = await _client.GetStringAsync("/api/tree");
-        Assert.DoesNotContain("\"name\":\"Snippets\"", treeJson, StringComparison.OrdinalIgnoreCase);
+            var treeJson = await _client.GetStringAsync("/api/tree");
+            Assert.DoesNotContain("\"name\":\"Snippets\"", treeJson, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
+        {
+            if (created?.Snippet is { NoteId: var id } && id != Guid.Empty)
+                await _client.DeleteAsync($"/api/notes/{id}");
+        }
     }
 
     [Fact]
@@ -93,25 +101,36 @@ public class SmokeTests : IClassFixture<WebApplicationFactory<Program>>
     {
         var suffix = Guid.NewGuid().ToString("N")[..8];
         var trigger = $"dup-{suffix}";
-        var first = await _client.PostAsJsonAsync("/api/snippets", new
+        Guid? firstId = null;
+        try
         {
-            title = $"First {suffix}",
-            trigger,
-            language = "powershell",
-            code = "Get-Date",
-        });
-        Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+            var first = await _client.PostAsJsonAsync("/api/snippets", new
+            {
+                title = $"First {suffix}",
+                trigger,
+                language = "powershell",
+                code = "Get-Date",
+            });
+            Assert.Equal(HttpStatusCode.OK, first.StatusCode);
+            var created = await first.Content.ReadFromJsonAsync<SnippetCreateDto>();
+            firstId = created?.Snippet?.NoteId;
 
-        var second = await _client.PostAsJsonAsync("/api/snippets", new
+            var second = await _client.PostAsJsonAsync("/api/snippets", new
+            {
+                title = $"Second {suffix}",
+                trigger,
+                language = "powershell",
+                code = "Get-Process",
+            });
+            Assert.Equal(HttpStatusCode.BadRequest, second.StatusCode);
+            var err = await second.Content.ReadAsStringAsync();
+            Assert.Contains("already exists", err, StringComparison.OrdinalIgnoreCase);
+        }
+        finally
         {
-            title = $"Second {suffix}",
-            trigger,
-            language = "powershell",
-            code = "Get-Process",
-        });
-        Assert.Equal(HttpStatusCode.BadRequest, second.StatusCode);
-        var err = await second.Content.ReadAsStringAsync();
-        Assert.Contains("already exists", err, StringComparison.OrdinalIgnoreCase);
+            if (firstId is Guid id && id != Guid.Empty)
+                await _client.DeleteAsync($"/api/notes/{id}");
+        }
     }
 
     [Fact]

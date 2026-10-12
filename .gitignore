@@ -19,3 +19,9 @@ data/
 
 # Personal migration runs (paths + note titles)
 docs/import-format/migration-report-*
+
+# Smoke-test leftovers written into SampleVault (do not commit)
+tools/SampleVault/Conflict *.md
+tools/SampleVault/Snippets/Smoke snippet *.md
+tools/SampleVault/Snippets/First *.md
+tools/SampleVault/Snippets/Second *.md

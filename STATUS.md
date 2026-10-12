@@ -41,7 +41,6 @@ $env:JOTDEX_API_TOKEN="jdx_...."
 
 ## Known small polish (not blocking)
 
-- Leftover `tools/SampleVault/Conflict *.md` from earlier conflict tests (safe to delete)
 - NuGet NU1903 warning on SQLitePCLRaw (dependency bump later)
 - Cloud backup Dropbox/Google live matrices pending (`docs/cloud-backup-matrices.md`)
 - One pre-existing unit test fail: `OneDriveCloudBackupProviderTests.Api_401_surfaces_AuthenticationRequired` (not INT)
