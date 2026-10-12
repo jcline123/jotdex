@@ -5,7 +5,7 @@
 **What:** Slash menu opens only while typing a `/` token (not on note load or caret moves through old text); query cannot include spaces; empty matches render nothing; document replace sets `jotdexReplaceDocument` so loads clear the menu; touch long-press Insert ignores non-editor targets.
 
 **Portable release 1.4.3**
-- Tag `v1.4.3` — concurrent-edit integrity (INT-10) + slash open polish + README refresh. Live vault Markdown was **not** rewritten by the release. Rollback is the previous exe (1.4.2).
+- Tag `v1.4.3` (`91bf7c4`) — concurrent-edit integrity (INT-10) + slash open polish + README refresh. Live vault Markdown was **not** rewritten by the release. Rollback is the previous exe (1.4.2).
 
 ## 2026-10-12 — Concurrent edit / stale autosave data-loss protections
 
