@@ -1,3 +1,18 @@
+## 2026-10-12 — Slash menu “No matching commands” on note open
+
+**Why:** Opening a note showed a small “No matching commands” plate under the Paste row until the editor was clicked. The `/` insert menu treated an existing `/…` already in the document (or a load/selection) like a freshly typed slash, and the empty-state box stayed visible.
+
+**What:** Slash menu opens only while typing a `/` token (not on note load or caret moves through old text); query cannot include spaces; empty matches render nothing; document replace sets `jotdexReplaceDocument` so loads clear the menu; touch long-press Insert ignores non-editor targets.
+
+**Portable release 1.4.3**
+- Tag `v1.4.3` — concurrent-edit integrity (INT-10) + slash open polish + README refresh. Live vault Markdown was **not** rewritten by the release. Rollback is the previous exe (1.4.2).
+
+## 2026-10-12 — Concurrent edit / stale autosave data-loss protections
+
+**Why:** An open browser tab (or a stale API client) could overwrite newer content written by Integrations (e.g. Grok Bot). Root causes confirmed: (1) browser autosave treated any 409 as last-write-wins and retried the local draft with the newer ETag; (2) `SaveCore` accepted a match against a **cached** vault ETag even when disk had moved on; (3) append/insert built next content from the cached body; (4) clean remote refresh updated React draft without bumping TipTap `contentEpoch`, so the visible editor stayed stale; (5) 401 / keepalive paths could mark work Saved without confirmation; (6) “Keep editing” resumed autosave against a newer server version.
+
+**What:** Disk-only ETag authorization inside the write lock (fail closed if unreadable); append/insert/replace read authoritative disk Markdown; reject empty ETags on normal saves; remove LWW conflict retry; pause autosave on true conflicts with Compare / Reload / confirmed Overwrite; clean meta-poll refresh bumps `editorEpoch`; focus/visibility + shorter poll; multi-tab `localStorage` hint; destructive full-body API replace needs `confirmDestructive`; conflict outcomes in integration activity; history prune defaults 120 / 90 days; vault scan ETags now use the same LF-normalized hash as SaveCore (avoids false 412 on Windows CRLF); concurrency smoke tests. Polling is convenience only — write preconditions protect even if the UI never refreshes.
+
 ## 2026-10-09 — Integrations API: Share HTML export + attachment upload
 
 **Why:** Automation needed the same offline Share HTML the UI downloads, plus the ability to add files into a note’s `.assets` folder the same way paste/drag does.

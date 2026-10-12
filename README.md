@@ -1,89 +1,90 @@
 # Jotdex
 
-**A private notebook on your Windows PC. The files are yours.**
+**Your private notebook — on a Windows PC you already own — that feels like a modern app and still speaks Markdown files.**
 
 [![Latest release](https://img.shields.io/github/v/release/jcline123/jotdex?label=latest)](https://github.com/jcline123/jotdex/releases/latest)
 
-Jotdex is a self-hosted notes app that runs on a Windows computer you already own. Your notes are ordinary **Markdown files in a folder on disk** — not a proprietary database, not a cloud account, not a subscription. Open them in a browser on this PC, on a Mac or phone on your network, or from elsewhere over a VPN or a [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/).
-
-If Jotdex disappeared tomorrow, you would still have every note, picture, and attachment. Copy the folder. Open it in another editor. Zip it. Put it on a USB drive. That is the whole point.
+Open it in a browser on this PC, a Mac on the LAN, or your phone from anywhere through a [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/). Write with a visual editor. Check off todos from a shared rail. Let automation (including Grok Bot) search, append, and update notes through a secure Integrations API. Your vault stays ordinary Markdown on disk — no subscription, no telemetry, no proprietary lock-in.
 
 | Piece | What it is |
 |---|---|
 | **Vault** | A folder of your notes (`.md` files + pictures) |
-| **Jotdex** | A small program on Windows that shows and edits that folder |
+| **Jotdex** | A small Windows program that serves and edits that folder |
 | **Browser** | Where you read and write (Edge, Chrome, Safari, Firefox) |
 
 No Docker. No Linux box. No Node or .NET runtime on the PC that *runs* it. Unzip, start, open a URL.
 
 ---
 
-## Why people use it
+## What it feels like
 
-**You are done renting your notes.** OneNote, Notion, and Evernote are great until the account, the sync, the export, or the product changes. Jotdex never holds your content hostage: the vault is just files.
+**A notebook you actually want to open.** Visual editing for headings, lists, tables, callouts, tasks, code boxes, colors, and images — with `/` insert, paste modes that keep structure, and Source mode one click away when you want raw Markdown. It feels familiar if you came from OneNote; it stays portable if you already live in Markdown.
 
-**One Windows box, every device.** Leave it running on the PC under the desk. Open the same vault from your Mac, a laptop on the LAN, or your phone — at home on the network, or away via a VPN or Cloudflare Tunnel. No app to install on those machines. Walk away and idle lock + a password (optional TOTP) cover the screen.
+**Todos that live where the work lives.** Checkboxes in notes and items you add in the **Todos** rail share one list — priority, due dates, reminders, and a chip that jumps straight back to the source note. Finish a task in the runbook it belongs to, or park a scratch item in `Todos.md`. The rail stays useful on a phone while the note stays the source of truth.
 
-**Built for notes you actually work from.** Runbooks, ticket write-ups, meeting lists, KB articles, PowerShell snippets, screenshots. Search finds `192.168.1.50` and `Get-Service`, not just whole words. Paste from a wiki or a ticket and keep the structure. Clip a webpage into a note with title and summary, not a raw URL.
+**Your notes on every device — without giving them to a cloud notes company.** Leave Jotdex running on a Windows box. Reach it from home on the LAN, or from anywhere with a Cloudflare Tunnel (outbound only — no port-forwarding). Optional password, idle lock, and TOTP. Walk away; come back from a Mac or phone and keep writing.
 
-**Leaving OneNote without starting over.** Export, migrate into a new vault (your original export is never touched), keep writing in a visual editor that still feels like notebooks and pages.
+**Automation that respects the vault.** Turn on **Settings → Integrations**, mint a scoped token, and let scripts or Grok Bot search, create, append, insert, update tasks, export Share HTML, and upload attachments — with `If-Match`, idempotency, and folder ACL. Activity logs get new entries without a human opening the note. Concurrent edits from the browser and the API no longer silently overwrite each other.
+
+**Safety nets you stop thinking about.** Autosave after every real edit. Per-note history and rollback. Trash. Optional vault mirror to a sync folder (read-only copy — never the live vault). Encrypted cloud Move Kits to Dropbox / Google Drive / OneDrive. In-app **Updates** and a one-ZIP move kit when you change PCs.
 
 ---
 
-## What makes Jotdex different
+## Why the files matter
 
-Most notes apps pick two of: *nice editor*, *files you own*, *open it from any device*. Jotdex is the combination that is usually missing — a real editor, on your hardware, with the vault as normal files.
+If Jotdex disappeared tomorrow, you would still have every note, picture, and attachment. Copy the folder. Open it in another editor. Zip it. Put it on a USB drive.
+
+That is not a backup slogan — it is the architecture:
+
+1. **Files are the product.** SQLite is only a rebuildable search index and app state.
+2. **Nothing is silently dropped.** Unsupported HTML is preserved or forces Source with a clear warning.
+3. **The live vault stays on local disk.** iCloud / OneDrive are optional one-way mirrors, never the folder Jotdex writes to while it runs.
 
 | | Jotdex | Typical cloud notes | Typical local Markdown app |
 |---|---|---|---|
 | Notes are ordinary files on disk | Yes | No (database / account) | Yes |
 | Visual editor in the browser | Yes | Yes | Usually a desktop app per device |
+| Phone / Mac via tunnel or LAN | Yes | Yes | Awkward |
+| Scoped automation API | Yes (optional) | Sometimes | Rare |
 | No account, no telemetry, no subscription | Yes | Rarely | Often |
-| Search that finds IPs, errors, cmdlets | Built in | Weak | Plugins / maybe |
-| Docker / Linux required | No | Sometimes | No |
-| Live vault inside iCloud/OneDrive | **Never** (that's how files get corrupted) | Sync is the product | People often do this and regret it |
-
-Three rules the app will not break:
-
-1. **Files are the product.** SQLite is only a rebuildable search index and app state. Delete it; your notes are still there.
-2. **Nothing is silently dropped.** The visual editor uses official Tiptap Markdown plus a Jotdex dialect. Visual is the default, including long notes with HTML samples in code fences. **Source** is still one click away, and is forced only for live-body `script` / `iframe` / `javascript:` so those are not flattened.
-3. **The live vault stays on local disk.** iCloud and OneDrive are a **one-way backup mirror**, not the folder Jotdex writes to.
+| Live vault inside iCloud/OneDrive | **Never** | Sync is the product | People often regret this |
 
 ---
 
-## Features
+## Features at a glance
 
-### Write like a notebook, store like a developer
-Visual editor for headings, lists, tables, callouts, tasks, code boxes, images, and colors — saved as Markdown you can open anywhere. Collapse a heading and it stays collapsed on the next device (`Title.folds.json` beside the note). Drag a picture’s corner to resize; drag a code box from the ⋮⋮ grip (or use **↑/↓** / Alt+Arrow). Type `/` or use **Insert** / gutter **+** for commands. Drag in screenshots. Paste rich HTML, plain text, or as a code box. Wikilinks (`[[`) to other notes. See [docs/shortcuts.md](docs/shortcuts.md).
+### Editor
+Headings, lists, tables, callouts, tasks, code boxes (PowerShell diagnostics included), images with resize handles, wikilinks (`[[`), heading folds that travel with the vault, Share HTML export, clip-from-URL, and paste modes (smart / plain / code / keep HTML). See [docs/shortcuts.md](docs/shortcuts.md).
 
-### Search that is fast on a real vault
-SQLite FTS5 with a word index **and** a trigram index. Find a hostname, an error code, or half a PowerShell command across hundreds of notes. Attachment text (logs, CSV, HTML sidecars) is indexed too. The index rebuilds from the vault if it ever gets lost.
+### Search
+SQLite FTS5 with word **and** trigram indexes — find `192.168.1.50`, error codes, and half a cmdlet across a real vault. Attachment text is indexed too. The index rebuilds from files if it ever gets lost.
 
-### Capture from the web
-**Clip page** fetches a URL on the server and drops in title, description, and an excerpt. A bookmarklet saves the page you are looking at. Home shows recently viewed, created, and updated notes — the same on every device.
+### Todos
+One rail for note checkboxes and standalone items: priority, due dates, browser reminders, and jump-to-note. Edit the line in the note or patch it through the Integrations API.
 
-### Todos where you wrote them
-Checkboxes in notes and items you add in the rail share one **Todos** list, ordered by priority then when you added them. A chip still opens the source note. Finish the task in the note it belongs to. A standalone inbox lives in `Todos.md` if you want a scratch list.
+### Integrations API (optional)
+Bearer tokens under **Settings → Integrations** — folder ACL, scopes (read / append / update / tasks / attachments / …), `If-Match`, idempotency keys, never-expire option. Built for Grok Bot and other automation: append to activity logs, insert under a heading, sync tasks, export HTML, upload into `.assets/`. Docs: [docs/integrations-api.md](docs/integrations-api.md).
 
-### Safety net, not a leap of faith
-Every edit **autosaves**. Per-note **history** lives outside the vault so you can compare and roll back a bad change. Trash (restore or delete). Optional password, idle lock, and TOTP. **Share HTML** downloads one note as a clean single file you can email — no Jotdex name in the page or the HTML source; the recipient does not need the app.
+### Away-from-desk access
+LAN from Settings (firewall helper included). Away: VPN, or **Cloudflare Tunnel** to `http://127.0.0.1:5180` without opening inbound ports. Optional Cloudflare Access in front. Optional Windows Service / Start with Windows.
 
-### Your network, your backup, your next PC
-LAN access from Settings (firewall helper included). Away from home: a VPN, or a **Cloudflare Tunnel** so you do not open inbound ports. Optional Windows Service so it comes back after reboot. Optional **vault mirror** to another local path, UNC share, or sync folder. Optional **multi-provider cloud backup** (encrypted Move Kits to Dropbox / Google Drive / OneDrive APIs). **Move kit** ZIP to pick up the whole install on a new machine. In-app **Updates** pull the latest portable release.
+### Backup and move
+Autosave + history. Vault mirror. Multi-provider encrypted cloud backup. Move kit ZIP + `Restore-Jotdex.ps1` for a new PC. **Settings → Updates** / `Update-Jotdex.ps1` for portable upgrades.
 
-### OneNote → Jotdex without touching the export
-Offline migration copies into a staging vault. Your original OneNote Markdown export stays exactly as the exporter wrote it.
+### OneNote → Jotdex
+Offline migration copies into a staging vault. Your original export is never modified.
 
 ---
 
 ## Who it is for
 
-- You want **OneNote-like folders and pages** but files you can backup, grep, and keep forever
+- You want **OneNote-like folders and pages** with files you can backup, grep, and keep forever
 - You take **IT / work notes** (runbooks, tickets, KB clips, commands) and need search that is not fuzzy mush
-- You have a **Windows PC that can stay on**, and you want to open notes from a Mac or phone without installing another client (LAN, VPN, or Cloudflare Tunnel)
-- You care about **privacy by architecture**: nothing leaves the machine unless you set up a backup mirror yourself
+- You want a **Windows PC that stays on**, and phones/Macs that just open a URL (LAN, VPN, or Cloudflare Tunnel)
+- You want **bots and scripts** to help maintain logs and tasks without giving them your whole vault
+- You care about **privacy by architecture**: nothing leaves the machine unless you set up a tunnel or backup yourself
 
-**Not the right fit if** you need several people editing the same note at once, a phone App Store client, or a hosted SaaS with no PC of your own. Jotdex is one writable server per vault — on purpose.
+**Not the right fit if** you need several people editing the same note at once in a SaaS sense, a phone App Store client, or a hosted product with no PC of your own. Jotdex is one writable server per vault — on purpose.
 
 ---
 
@@ -243,9 +244,11 @@ In Development it may start with a sample vault. Use **Settings** to point at `C
    - Select a folder, then **Move**, leave the box blank → moves that folder to the root.
 3. Click **New note**, type something, wait for the green **saved** chip.
 4. Press **Ctrl+K** and search.
-5. Open a note → **Share HTML** to download a file you can email (no app name in the page or HTML source).
-6. **Settings → Start with Windows** so Jotdex comes back after a reboot (or install the Windows Service — see [SETUP.md](SETUP.md)).
-7. **Settings → Logs → View recent log** if something goes wrong (files also live under app data `\logs\`).
+5. Open the **Todos** rail — add an item, set a due date, open a note checkbox from the chip.
+6. Open a note → **Share HTML** to download a file you can email (no app name in the page or HTML source).
+7. **Settings → Integrations** if you want a token for Grok Bot or scripts ([docs/integrations-api.md](docs/integrations-api.md)).
+8. **Settings → Start with Windows** so Jotdex comes back after a reboot (or install the Windows Service — see [SETUP.md](SETUP.md)).
+9. **Settings → Logs → View recent log** if something goes wrong (files also live under app data `\logs\`).
 
 ### Folders
 
@@ -281,6 +284,8 @@ Do **not** port-forward `5180` to the public internet.
 2. Turn on a **password** (and **TOTP** if you want a second factor). A tunnel makes the app reachable from anywhere, so lock it.
 3. Install [cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/) and create a tunnel whose origin is `http://127.0.0.1:5180`.
 4. Open your tunnel hostname in a browser (phone, Mac, another network).
+
+That same URL is what Grok Bot and other Integrations clients use with a bearer token — tunnel for reachability, Integrations for scoped automation, Jotdex password/TOTP (and optional Cloudflare Access) for humans.
 
 Cloudflare’s setup guide: [Connect apps with Cloudflare Tunnels](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/). Optional: put [Cloudflare Access](https://developers.cloudflare.com/cloudflare-one/policies/access/) in front for an extra login before Jotdex’s own.
 

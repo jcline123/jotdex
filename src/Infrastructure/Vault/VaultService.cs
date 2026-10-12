@@ -120,7 +120,9 @@ public sealed class VaultService : IVaultService
                     }
                 }
 
-                var etag = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text))).ToLowerInvariant();
+                // Same definition as NoteCommandService.SaveCore: hash LF-normalized Markdown.
+                var etagSource = text.Replace("\r\n", "\n", StringComparison.Ordinal).Replace('\r', '\n');
+                var etag = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(etagSource))).ToLowerInvariant();
                 notes[id] = new IndexedNote(
                     new NoteSummary
                     {

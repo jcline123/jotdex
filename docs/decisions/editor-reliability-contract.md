@@ -798,8 +798,10 @@ Required behavior:
 - A response applies only to the matching note session.
 - A response marks Saved only when its revision is still the newest validated revision.
 - If newer edits exist, update the ETag as appropriate and immediately or normally schedule the newer revision without clearing dirty state.
-- Do not retry a real external conflict as last-write-wins without surfacing it.
+- Do not retry a real external conflict as last-write-wins without surfacing it. (2026-10-12: LWW retry removed; only same-document / same-baseline 409s may adopt ETag and continue.)
 - Distinguish an overlapping local autosave from an actual disk change by revision/request identity, not only by broad Markdown normalization.
+- Clean remote updates (meta poll / focus) must bump `contentEpoch` so TipTap replaces the visible document; dirty remote updates enter conflict and must not advance the save baseline.
+- Auth failures and keepalive dispatch must never report Saved; overwrite requires explicit confirmation.
 - Preserve explicit overwrite as an intentional user action.
 
 ### 6.9 Typed server events

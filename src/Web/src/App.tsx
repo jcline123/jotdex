@@ -698,13 +698,21 @@ function App() {
     return () => document.removeEventListener('pointerdown', onPointerDown, true)
   }, [searchOpen])
 
+  const enterConflict = useCallback((disk: NoteDetail | null, message?: string) => {
+    if (disk) setConflictDisk(disk)
+    setSaveStatus('conflict')
+    setError(message ?? 'This note was updated elsewhere. Your unsaved changes are preserved.')
+  }, [])
+
   const saveNote = useCallback(
     async (bodyMarkdown: string, currentEtag: string, force = false, retry = 0) => {
       if (!selectedId) return
+      if (saveStatusRef.current === 'conflict' && !force) return
       if (savingRef.current && !force) {
         // A save is in flight — re-check once it should be done, don't stack saves
         if (saveTimer.current) window.clearTimeout(saveTimer.current)
         saveTimer.current = window.setTimeout(() => {
+          if (saveStatusRef.current === 'conflict') return
           const pending = joinFrontMatter(frontMatterRef.current, draftRef.current)
           if (sameMarkdown(pending, baselineRef.current)) {
             baselineRef.current = pending
@@ -715,6 +723,7 @@ function App() {
         }, 800)
         return
       }
+      const noteIdAtStart = selectedId
       savingRef.current = true
       setSaveStatus('saving')
       const revisionSent = editorRevisionRef.current
@@ -722,22 +731,28 @@ function App() {
       const etagToSend = etagRef.current || currentEtag
       const markdown = joinFrontMatter(frontMatterRef.current, bodyMarkdown)
       try {
-        const res = await fetch(`/api/notes/${selectedId}`, {
+        const res = await fetch(`/api/notes/${noteIdAtStart}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ markdown, etag: etagToSend, force }),
         })
+        // Stale response for a previously selected note must not mutate current UI.
+        if (selectedIdRef.current !== noteIdAtStart) return
         if (res.status === 401) {
-          // Session gone — idle lock overlay takes over; don't leave "Save failed" on the note.
-          setSaveStatus('saved')
+          // Session gone — keep draft as unsaved; idle lock overlay handles re-auth.
+          setSaveStatus('error')
+          setError('Not signed in — unsaved changes are still in the editor.')
           return
         }
         const data = await res.json()
+        if (selectedIdRef.current !== noteIdAtStart) return
         if (res.status === 409 || data.conflict) {
           const diskMarkdown = (data.note?.markdown as string | undefined) ?? ''
           const diskEtag = (data.etag as string) || data.note?.etag
 
-          // Same document (exact or cosmetic TipTap differences) — adopt quietly
+          // Same document we tried to write, or disk still matches our last confirmed baseline
+          // (overlapping autosave after our own prior write). Safe to adopt ETag and continue.
+          // Never treat "disk matches neither" as retryable — that is another writer's content.
           if (
             sameMarkdown(diskMarkdown, markdown) ||
             sameMarkdown(diskMarkdown, baselineRef.current)
@@ -752,8 +767,6 @@ function App() {
             setConflictDisk(null)
             setError(null)
 
-            // If the editor has moved on, save again with the fresh ETag — but only
-            // if we actually got one, and never more than a few times (no hot loops).
             const latest = joinFrontMatter(frontMatterRef.current, draftRef.current)
             if (!sameMarkdown(latest, baselineRef.current) && diskEtag && retry < 3) {
               savingRef.current = false
@@ -762,19 +775,10 @@ function App() {
             return
           }
 
-          // Stale ETag from overlapping autosave — retry with disk ETag (last-write-wins)
-          if (!force && retry < 3 && diskEtag) {
-            if (diskEtag) {
-              setEtag(diskEtag)
-              etagRef.current = diskEtag
-            }
-            savingRef.current = false
-            return await saveNote(draftRef.current, diskEtag, false, retry + 1)
-          }
-
-          setSaveStatus('conflict')
-          setConflictDisk(data.note ?? null)
-          setError(data.error ?? 'Note changed on disk.')
+          enterConflict(
+            data.note ?? null,
+            data.error ?? 'This note was updated elsewhere. Your unsaved changes are preserved.',
+          )
           return
         }
         if (!res.ok || !data.success) {
@@ -782,6 +786,8 @@ function App() {
           setError(data.error ?? 'Save failed')
           return
         }
+        // Ignore success that arrived after the editor moved on to a newer revision and we are
+        // no longer on the baseline we sent — still adopt ETag only if body we sent is baseline.
         const newEtag = data.etag as string
         setEtag(newEtag)
         etagRef.current = newEtag
@@ -816,6 +822,11 @@ function App() {
         setError(null)
         setTasksRefreshKey((k) => k + 1)
         void refreshNotes()
+        try {
+          localStorage.setItem('jotdex-note-saved', `${noteIdAtStart}:${newEtag}:${Date.now()}`)
+        } catch {
+          /* private mode */
+        }
 
         // If the user typed something meaningfully different while we saved,
         // let the normal debounce pick it up — do not chain rapid saves here.
@@ -823,11 +834,16 @@ function App() {
         if (sameMarkdown(latest, markdown) && latest !== markdown) {
           baselineRef.current = latest
         }
+      } catch {
+        if (selectedIdRef.current === noteIdAtStart) {
+          setSaveStatus('error')
+          setError('Save failed — check your connection. Unsaved changes are still in the editor.')
+        }
       } finally {
         savingRef.current = false
       }
     },
-    [selectedId, refreshNotes],
+    [selectedId, refreshNotes, enterConflict],
   )
 
   // Poll note meta while visible: pick up API/disk attribution; dirty → conflict, never clobber buffer.
@@ -872,16 +888,25 @@ function App() {
           const full = await fetch(`/api/notes/${selectedId}`, { credentials: 'same-origin' })
           if (full.ok) {
             const disk = (await full.json()) as NoteDetail
-            setConflictDisk(disk)
+            enterConflict(disk)
+          } else {
+            enterConflict(null)
           }
-          setSaveStatus('conflict')
-          setError('Updated elsewhere — reload from disk or overwrite.')
           return
         }
         const full = await fetch(`/api/notes/${selectedId}`, { credentials: 'same-origin' })
         if (!full.ok || cancelled) return
         const n = (await full.json()) as NoteDetail
         if (selectedIdRef.current !== selectedId) return
+        // Another edit landed while we were fetching — do not clobber a newly dirty buffer.
+        const stillClean = sameMarkdown(
+          joinFrontMatter(frontMatterRef.current, draftRef.current),
+          baselineRef.current,
+        )
+        if (!stillClean) {
+          enterConflict(n)
+          return
+        }
         setNote(n)
         const split = splitFrontMatter(n.markdown)
         setFrontMatter(split.frontMatter)
@@ -891,26 +916,36 @@ function App() {
         draftRef.current = split.body
         frontMatterRef.current = split.frontMatter
         baselineRef.current = joinFrontMatter(split.frontMatter, split.body)
+        // TipTap only replaces the document when contentEpoch changes.
+        setEditorEpoch((e) => e + 1)
         setSaveStatus('saved')
+        setConflictDisk(null)
+        setError(null)
       } catch {
         /* ignore poll errors */
       }
     }
 
-    const id = window.setInterval(() => void poll(), 30_000)
+    const id = window.setInterval(() => void poll(), 20_000)
     const onFocus = () => void poll()
     const onVis = () => {
       if (document.visibilityState === 'visible') void poll()
     }
     window.addEventListener('focus', onFocus)
     document.addEventListener('visibilitychange', onVis)
+    // Lightweight multi-tab hint: another tab saved → check meta soon.
+    const onStorage = (ev: StorageEvent) => {
+      if (ev.key === 'jotdex-note-saved' && ev.newValue?.startsWith(selectedId)) void poll()
+    }
+    window.addEventListener('storage', onStorage)
     return () => {
       cancelled = true
       window.clearInterval(id)
       window.removeEventListener('focus', onFocus)
       document.removeEventListener('visibilitychange', onVis)
+      window.removeEventListener('storage', onStorage)
     }
-  }, [selectedId, note?.id])
+  }, [selectedId, note?.id, enterConflict])
 
   useEffect(() => {
     draftRef.current = draft
@@ -968,6 +1003,7 @@ function App() {
 
   // Flush pending edits when the window/tab closes or hides (pop-out and main).
   // keepalive lets the PUT finish after the window is gone (Chrome + Safari).
+  // Do NOT mark Saved / advance baseline — dispatch is not confirmation.
   useEffect(() => {
     const flushPendingSave = () => {
       window.dispatchEvent(new Event('jotdex-editor-flush'))
@@ -982,6 +1018,7 @@ function App() {
       const pending = joinFrontMatter(frontMatterRef.current, draftRef.current)
       if (sameMarkdown(pending, baselineRef.current)) return
       const etagToSend = etagRef.current
+      if (!etagToSend) return
       try {
         void fetch(`/api/notes/${id}`, {
           method: 'PUT',
@@ -990,7 +1027,6 @@ function App() {
           credentials: 'same-origin',
           keepalive: true,
         })
-        baselineRef.current = pending
       } catch {
         /* best-effort on unload */
       }
@@ -2063,6 +2099,13 @@ function App() {
   }
 
   function overwriteDisk() {
+    if (
+      !window.confirm(
+        'Replace the on-disk note with your editor copy? Your unsaved draft is kept in the editor; a history snapshot of the current disk version is saved when the write proceeds.',
+      )
+    ) {
+      return
+    }
     void saveNote(draftRef.current, etagRef.current, true)
   }
 
@@ -2174,7 +2217,7 @@ function App() {
         {aiPromptHint && <p className="upload-status">{aiPromptHint}</p>}
         {saveStatus === 'conflict' && (
           <div className="conflict-banner">
-            <p>{error ?? 'This note changed on disk.'}</p>
+            <p>{error ?? 'This note was updated elsewhere. Your unsaved changes are preserved.'}</p>
             <div className="modal-actions">
               <button type="button" className="primary" onClick={reloadFromDisk}>
                 Reload from disk
@@ -2182,8 +2225,20 @@ function App() {
               <button type="button" className="ghost" onClick={overwriteDisk}>
                 Overwrite disk
               </button>
-              <button type="button" className="ghost" onClick={() => { setSaveStatus('editing'); setError(null) }}>
-                Keep editing
+              <button
+                type="button"
+                className="ghost"
+                onClick={() => {
+                  if (!conflictDisk) return
+                  const current = joinFrontMatter(frontMatterRef.current, draftRef.current)
+                  setHistoryDiff({
+                    snapshotId: 'conflict',
+                    lines: diffLines(conflictDisk.markdown, current),
+                  })
+                  setHistoryOpen(true)
+                }}
+              >
+                Compare
               </button>
             </div>
           </div>
@@ -4127,7 +4182,7 @@ function App() {
           {error && saveStatus !== 'conflict' && <p className="err">{error}</p>}
           {saveStatus === 'conflict' && (
             <div className="conflict-banner">
-              <p>{error ?? 'This note changed on disk.'}</p>
+              <p>{error ?? 'This note was updated elsewhere. Your unsaved changes are preserved.'}</p>
               <div className="modal-actions">
                 <button type="button" className="primary" onClick={reloadFromDisk}>
                   Reload from disk
@@ -4149,9 +4204,6 @@ function App() {
                   }}
                 >
                   Compare
-                </button>
-                <button type="button" className="ghost" onClick={() => { setSaveStatus('editing'); setError(null) }}>
-                  Keep editing
                 </button>
               </div>
             </div>

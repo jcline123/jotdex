@@ -14,7 +14,16 @@ export function setMarkdownDocument(editor: Editor, markdown: string, options: I
   const fences = closeDanglingFence(anchors.markdown)
   const parsed = editor.markdown?.parse(fences.markdown) ?? { type: 'doc', content: [] }
   const fixed = applyOfficialParseFixes(parsed)
-  return editor.commands.setContent(fixed.doc, { emitUpdate: options.emitUpdate ?? false })
+  // jotdexReplaceDocument marks this as a load so the slash menu does not open from
+  // an incidental `/` already in the note body.
+  return editor
+    .chain()
+    .command(({ tr }) => {
+      tr.setMeta('jotdexReplaceDocument', true)
+      return true
+    })
+    .setContent(fixed.doc, { emitUpdate: options.emitUpdate ?? false })
+    .run()
 }
 
 export function insertMarkdown(editor: Editor, markdown: string) {

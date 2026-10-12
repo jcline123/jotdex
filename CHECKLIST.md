@@ -2,7 +2,7 @@
 
 Mark items `- [x]` when done. IDs are stable for chat (“done M1-04”).
 
-**Active milestone:** INT complete — portable **1.4.2**
+**Active milestone:** INT complete — portable **1.4.3**
 
 ---
 
@@ -325,7 +325,7 @@ Contract: [`docs/decisions/editor-ux-expansion-contract.md`](docs/decisions/edit
 
 ## INT — Secure Integrations API + note timestamps / attribution
 
-ADR: [`docs/decisions/0011-integrations-api.md`](docs/decisions/0011-integrations-api.md). Docs: [`docs/integrations-api.md`](docs/integrations-api.md). Shipped as portable **1.4.0**; INT-08 in **1.4.1**; INT-09 export/upload in **1.4.2**. Live vault / Cloudflare policy changes remain operator-owned.
+ADR: [`docs/decisions/0011-integrations-api.md`](docs/decisions/0011-integrations-api.md). Docs: [`docs/integrations-api.md`](docs/integrations-api.md). Shipped as portable **1.4.0**; INT-08 in **1.4.1**; INT-09 export/upload in **1.4.2**; INT-10 concurrency integrity in **1.4.3**. Live vault / Cloudflare policy changes remain operator-owned.
 
 - [x] `INT-01` ADR 0011 + milestone docs; scheme-isolated gate design locked
 - [x] `INT-02` Token store, admin APIs + CSRF, Settings Integrations UI, negative auth tests
@@ -338,4 +338,5 @@ ADR: [`docs/decisions/0011-integrations-api.md`](docs/decisions/0011-integration
 - [x] `INT-09` HTML/md export + attachment list/upload (`attachments:write`); OpenAPI + docs + tests
 
 - [x] `INT-GATE` Scheme-isolated bearer API; folder ACL; history + If-Match; idempotency; subtle timestamps; ui/api/external provenance; portable FM; docs + sample client without secrets
+- [x] `INT-10` Concurrent-edit integrity: disk-only ETag, no LWW autosave retry, live clean refresh via editorEpoch, destructive replace confirm, concurrency tests
 

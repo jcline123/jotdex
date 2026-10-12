@@ -1355,10 +1355,13 @@ export function NoteEditor({
       <div
         className="editor-stage"
         onPointerDown={(e) => {
+          // Long-press Insert: touch only, on the ProseMirror surface (not toolbar chrome).
           if (e.pointerType !== 'touch') return
+          const target = e.target as HTMLElement | null
+          if (!target?.closest?.('.tiptap, .ProseMirror')) return
           const timer = window.setTimeout(() => {
             openInsertMenu(Boolean(plusStateRef.current?.fromGap))
-          }, 500)
+          }, 550)
           insertPressRef.current = { timer, x: e.clientX, y: e.clientY }
         }}
         onPointerMove={(e) => {

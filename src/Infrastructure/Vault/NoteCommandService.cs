@@ -20,6 +20,8 @@ public sealed class NoteSaveResult
     public required string ETag { get; init; }
     public string? Error { get; init; }
     public bool Conflict { get; init; }
+    /// <summary>True when a full-body replace would remove a large share of content without confirmation.</summary>
+    public bool DestructiveRequiresConfirm { get; init; }
     public NoteDetail? Note { get; init; }
 }
 
@@ -37,7 +39,7 @@ public interface INoteCommandService
     /// <summary>Write a complete note file (already includes YAML front matter). Does not wrap another front matter block.</summary>
     NoteDetail? CreateComplete(string folderRelativePath, string title, string fullMarkdown, NoteChangeContext? change = null);
     /// <summary>Replace body Markdown only; preserve front matter and merge provenance.</summary>
-    NoteSaveResult ReplaceBody(Guid id, string bodyMarkdown, string expectedETag, NoteChangeContext change);
+    NoteSaveResult ReplaceBody(Guid id, string bodyMarkdown, string expectedETag, NoteChangeContext change, bool confirmDestructive = false);
     /// <summary>Append Markdown to the body; preserve front matter and merge provenance.</summary>
     NoteSaveResult AppendBody(Guid id, string appendMarkdown, string expectedETag, NoteChangeContext change);
     /// <summary>Insert Markdown at top (after first H1) or after a heading; preserve surrounding body text.</summary>
@@ -111,27 +113,32 @@ public sealed class NoteCommandService : INoteCommandService
         if (!_paths.IsConfigured)
             return Fail("Vault not configured");
 
-        // Prefer disk for write preconditions (watcher may lag).
+        // Prefer disk for write preconditions (watcher may lag). Never authorize from a stale cache ETag.
         var existing = _vault.GetNote(id);
         if (existing is null)
             return Fail("Note not found");
 
-        string diskMarkdown;
-        try
-        {
-            var abs = _paths.EnsureInsideVault(existing.RelativePath.Replace('/', Path.DirectorySeparatorChar));
-            diskMarkdown = File.Exists(abs) ? File.ReadAllText(abs) : existing.Markdown;
-        }
-        catch
-        {
-            diskMarkdown = existing.Markdown;
-        }
-        var diskEtag = Hash(diskMarkdown.Replace("\r\n", "\n", StringComparison.Ordinal));
+        if (!TryReadAuthoritativeMarkdown(existing, out var diskMarkdown, out var diskAbs, out var readError))
+            return Fail(readError ?? "Could not read note from disk");
 
-        // Empty expected ETag = client has no baseline (first save, older client) — skip the check.
-        if (!force && !string.IsNullOrEmpty(expectedETag) &&
-            !string.Equals(diskEtag, expectedETag, StringComparison.OrdinalIgnoreCase) &&
-            !string.Equals(existing.ETag, expectedETag, StringComparison.OrdinalIgnoreCase))
+        var diskEtag = ContentETag(diskMarkdown);
+        var diskNote = WithDiskContent(existing, diskMarkdown, diskEtag);
+
+        // Missing ETag on a normal write is not "first save" — reject so stale clients cannot skip checks.
+        if (!force && string.IsNullOrWhiteSpace(expectedETag))
+        {
+            return new NoteSaveResult
+            {
+                Success = false,
+                Conflict = true,
+                ETag = diskEtag,
+                Error = "ETag required (If-Match / etag). Reread the note before saving.",
+                Note = diskNote
+            };
+        }
+
+        if (!force &&
+            !string.Equals(diskEtag, expectedETag.Trim().Trim('"'), StringComparison.OrdinalIgnoreCase))
         {
             // TipTap/editor may resubmit with a stale ETag but identical document — not a real conflict.
             if (SameDocument(diskMarkdown, markdown))
@@ -140,17 +147,20 @@ public sealed class NoteCommandService : INoteCommandService
                 {
                     Success = true,
                     ETag = diskEtag,
-                    Note = existing
+                    Note = diskNote
                 };
             }
 
+            _logger.LogInformation(
+                "NoteSave conflict note={NoteId} via={Via} by={By} etagExpected={Expected} etagDisk={Disk}",
+                id, change.Via, change.ActorDisplayName ?? "", expectedETag, diskEtag);
             return new NoteSaveResult
             {
                 Success = false,
                 Conflict = true,
                 ETag = diskEtag,
                 Error = "Note changed on disk (or in another session). Reload or overwrite.",
-                Note = existing
+                Note = diskNote
             };
         }
 
@@ -161,26 +171,79 @@ public sealed class NoteCommandService : INoteCommandService
             {
                 Success = true,
                 ETag = diskEtag,
-                Note = existing
+                Note = diskNote
             };
         }
 
-        var absolute = _paths.EnsureInsideVault(existing.RelativePath.Replace('/', Path.DirectorySeparatorChar));
         _history.SnapshotIfChanged(id, diskMarkdown);
         var now = _time.GetUtcNow();
         var toWrite = UpsertFrontMatterModified(markdown, now)
             .Replace("\r\n", "\n", StringComparison.Ordinal);
         toWrite = NoteProvenance.ApplyOnUpdate(toWrite, change, now);
-        AtomicWrite(absolute, toWrite);
+        AtomicWrite(diskAbs!, toWrite);
         _vault.Rescan();
         var updated = _vault.GetNote(id);
+        var after = updated?.ETag ?? Hash(toWrite);
+        _logger.LogInformation(
+            "NoteSave ok note={NoteId} via={Via} by={By} etagBefore={EtagBefore} etagAfter={EtagAfter}",
+            id, change.Via, change.ActorDisplayName ?? "", diskEtag, after);
         return new NoteSaveResult
         {
             Success = true,
-            ETag = updated?.ETag ?? Hash(toWrite),
+            ETag = after,
             Note = updated
         };
     }
+
+    /// <summary>Read the note file from disk inside the write gate. Fails closed if unreadable.</summary>
+    private bool TryReadAuthoritativeMarkdown(NoteDetail existing, out string markdown, out string? absolutePath, out string? error)
+    {
+        markdown = "";
+        absolutePath = null;
+        error = null;
+        try
+        {
+            absolutePath = _paths.EnsureInsideVault(existing.RelativePath.Replace('/', Path.DirectorySeparatorChar));
+            if (!File.Exists(absolutePath))
+            {
+                error = "Note file missing on disk";
+                return false;
+            }
+            markdown = File.ReadAllText(absolutePath);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            error = "Could not read note from disk: " + ex.Message;
+            return false;
+        }
+    }
+
+    private static NoteDetail WithDiskContent(NoteDetail existing, string diskMarkdown, string diskEtag) =>
+        new()
+        {
+            Id = existing.Id,
+            Title = existing.Title,
+            RelativePath = existing.RelativePath,
+            FolderPath = existing.FolderPath,
+            Markdown = diskMarkdown,
+            Html = existing.Html,
+            ETag = diskEtag,
+            Tags = existing.Tags,
+            Modified = existing.Modified,
+            Created = existing.Created,
+            FrontMatter = FrontMatterParser.Parse(diskMarkdown).Fields,
+            Attachments = existing.Attachments,
+            HtmlSidecars = existing.HtmlSidecars,
+            HeadingFolds = existing.HeadingFolds,
+            CreatedVia = existing.CreatedVia,
+            CreatedBy = existing.CreatedBy,
+            UpdatedVia = existing.UpdatedVia,
+            UpdatedBy = existing.UpdatedBy,
+            LastApiUpdateAt = existing.LastApiUpdateAt,
+            LastApiUpdateBy = existing.LastApiUpdateBy,
+            ProvenanceInferred = existing.ProvenanceInferred
+        };
 
     public NoteDetail? Create(string folderRelativePath, string title, string? markdown = null, NoteChangeContext? change = null)
     {
@@ -212,16 +275,50 @@ public sealed class NoteCommandService : INoteCommandService
         });
     }
 
-    public NoteSaveResult ReplaceBody(Guid id, string bodyMarkdown, string expectedETag, NoteChangeContext change)
+    public NoteSaveResult ReplaceBody(Guid id, string bodyMarkdown, string expectedETag, NoteChangeContext change, bool confirmDestructive = false)
     {
         return _writes.Execute(() =>
         {
             var existing = _vault.GetNote(id);
             if (existing is null) return Fail("Note not found");
-            var parsed = FrontMatterParser.Parse(existing.Markdown);
-            var next = JoinFrontMatter(parsed.Fields, bodyMarkdown ?? "");
+            if (!TryReadAuthoritativeMarkdown(existing, out var diskMarkdown, out _, out var readError))
+                return Fail(readError ?? "Could not read note from disk");
+            var parsed = FrontMatterParser.Parse(diskMarkdown);
+            var newBody = bodyMarkdown ?? "";
+            if (!confirmDestructive && IsUnusuallyDestructiveReplace(parsed.Body, newBody))
+            {
+                var diskEtag = ContentETag(diskMarkdown);
+                _logger.LogWarning(
+                    "NoteReplace blocked as destructive note={NoteId} via={Via} by={By} oldBodyChars={Old} newBodyChars={New}",
+                    id, change.Via, change.ActorDisplayName ?? "", parsed.Body.Length, newBody.Length);
+                return new NoteSaveResult
+                {
+                    Success = false,
+                    Conflict = false,
+                    DestructiveRequiresConfirm = true,
+                    ETag = diskEtag,
+                    Error =
+                        "Replacement would remove a large portion of this note. Re-send with confirmDestructive=true after reviewing, or use append/insert.",
+                    Note = WithDiskContent(existing, diskMarkdown, diskEtag)
+                };
+            }
+
+            var next = JoinFrontMatter(parsed.Fields, newBody);
             return SaveCore(id, next, expectedETag, force: false, change);
         });
+    }
+
+    /// <summary>
+    /// Heuristic guard for accidental full-document wipes (e.g. bot replace with a short stub).
+    /// Append/insert are unaffected. Legitimate large edits pass confirmDestructive.
+    /// </summary>
+    public static bool IsUnusuallyDestructiveReplace(string existingBody, string newBody)
+    {
+        var oldLen = existingBody.Replace("\r\n", "\n", StringComparison.Ordinal).Length;
+        var newLen = (newBody ?? "").Replace("\r\n", "\n", StringComparison.Ordinal).Length;
+        if (oldLen < 4000) return false;
+        if (newLen >= oldLen * 0.5) return false;
+        return oldLen - newLen >= 2000;
     }
 
     public NoteSaveResult AppendBody(Guid id, string appendMarkdown, string expectedETag, NoteChangeContext change)
@@ -230,7 +327,9 @@ public sealed class NoteCommandService : INoteCommandService
         {
             var existing = _vault.GetNote(id);
             if (existing is null) return Fail("Note not found");
-            var parsed = FrontMatterParser.Parse(existing.Markdown);
+            if (!TryReadAuthoritativeMarkdown(existing, out var diskMarkdown, out _, out var readError))
+                return Fail(readError ?? "Could not read note from disk");
+            var parsed = FrontMatterParser.Parse(diskMarkdown);
             var body = parsed.Body.TrimEnd() + "\n\n" + (appendMarkdown ?? "").TrimStart() + "\n";
             var next = JoinFrontMatter(parsed.Fields, body);
             return SaveCore(id, next, expectedETag, force: false, change);
@@ -243,10 +342,12 @@ public sealed class NoteCommandService : INoteCommandService
         {
             var existing = _vault.GetNote(id);
             if (existing is null) return Fail("Note not found");
+            if (!TryReadAuthoritativeMarkdown(existing, out var diskMarkdown, out _, out var readError))
+                return Fail(readError ?? "Could not read note from disk");
             string next;
             try
             {
-                var inserted = IntegrationMarkdownInsert.Insert(existing.Markdown, markdown, position, heading, occurrence);
+                var inserted = IntegrationMarkdownInsert.Insert(diskMarkdown, markdown, position, heading, occurrence);
                 if (inserted is null)
                     return Fail("Heading not found");
                 next = inserted;
@@ -781,6 +882,10 @@ public sealed class NoteCommandService : INoteCommandService
 
     private static bool SameDocument(string a, string b) =>
         Jotdex.Core.Markdown.DocumentSameness.EqualsExactSave(a, b);
+
+    /// <summary>LF-normalized content hash — must match <see cref="VaultService"/> scan ETags.</summary>
+    private static string ContentETag(string content) =>
+        Hash(content.Replace("\r\n", "\n", StringComparison.Ordinal).Replace('\r', '\n'));
 
     private static string Hash(string content) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(content))).ToLowerInvariant();

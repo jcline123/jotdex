@@ -18,13 +18,9 @@ export function SlashMenu({ editor, state, registry, ctx, index, onIndex: _onInd
   const items =
     state.source === 'plus' ? registry.plusItems(state.query) : registry.slashItems(state.query)
   const enabled = items.filter((c) => c.isEnabled(editor)).slice(0, 12)
-  if (!enabled.length) {
-    return (
-      <div className="wiki-suggest jotdex-slash" role="listbox" aria-label="Insert">
-        <div className="wiki-suggest-empty">No matching commands</div>
-      </div>
-    )
-  }
+  // Never show an empty "No matching commands" plate — it was appearing on note open
+  // when the caret sat after an incidental `/…` in the document.
+  if (!enabled.length) return null
   const run = (cmd: EditorCommandDescriptor) => {
     if (state.source === 'slash') {
       editor.chain().focus().deleteRange({ from: state.from, to: state.to }).run()

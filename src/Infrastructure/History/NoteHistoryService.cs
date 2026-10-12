@@ -24,7 +24,7 @@ public interface INoteHistoryService
     /// <summary>List with diff summaries. Pass current note markdown for the newest row.</summary>
     IReadOnlyList<NoteHistoryEntry> ListWithSummaries(Guid noteId, string? currentMarkdown = null);
     string? ReadSnapshot(Guid noteId, string snapshotId);
-    void Prune(Guid noteId, int maxSnapshots = 50, int maxAgeDays = 30);
+    void Prune(Guid noteId, int maxSnapshots = 120, int maxAgeDays = 90);
 }
 
 public sealed class NoteHistoryService : INoteHistoryService
@@ -142,7 +142,7 @@ public sealed class NoteHistoryService : INoteHistoryService
         return File.Exists(path) ? File.ReadAllText(path, Encoding.UTF8) : null;
     }
 
-    public void Prune(Guid noteId, int maxSnapshots = 50, int maxAgeDays = 30)
+    public void Prune(Guid noteId, int maxSnapshots = 120, int maxAgeDays = 90)
     {
         var entries = List(noteId);
         var cutoff = DateTimeOffset.UtcNow.AddDays(-maxAgeDays);

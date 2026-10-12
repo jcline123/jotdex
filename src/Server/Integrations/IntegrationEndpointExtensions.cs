@@ -694,9 +694,45 @@ public static class IntegrationEndpointExtensions
 
             var etag = match.ToString().Trim().Trim('"');
             var change = new NoteChangeContext(NoteChangeVia.Api, token.Name, token.Id);
-            var result = commands.ReplaceBody(id, body.BodyMarkdown, etag, change);
+            var result = commands.ReplaceBody(id, body.BodyMarkdown, etag, change, body.ConfirmDestructive == true);
             if (result.Conflict)
+            {
+                log.Record(new IntegrationActivityEntry
+                {
+                    At = time.GetUtcNow(),
+                    TokenId = token.Id,
+                    TokenName = token.Name,
+                    Operation = "notes.update",
+                    NoteId = id.ToString("D"),
+                    Outcome = "conflict",
+                    RequestId = ctx.TraceIdentifier,
+                    EtagBefore = etag,
+                    EtagAfter = result.ETag
+                });
                 return Results.Json(new { error = "Stale ETag — reread before retry", code = "precondition_failed", etag = result.ETag }, statusCode: 412);
+            }
+            if (result.DestructiveRequiresConfirm)
+            {
+                log.Record(new IntegrationActivityEntry
+                {
+                    At = time.GetUtcNow(),
+                    TokenId = token.Id,
+                    TokenName = token.Name,
+                    Operation = "notes.update",
+                    NoteId = id.ToString("D"),
+                    Outcome = "destructive_confirm_required",
+                    RequestId = ctx.TraceIdentifier,
+                    EtagBefore = etag,
+                    EtagAfter = result.ETag
+                });
+                return Results.Json(new
+                {
+                    error = result.Error,
+                    code = "destructive_confirm_required",
+                    etag = result.ETag,
+                    confirmDestructive = true
+                }, statusCode: 409);
+            }
             if (!result.Success)
                 return Results.BadRequest(new { error = result.Error, code = "update_failed" });
 
@@ -746,7 +782,21 @@ public static class IntegrationEndpointExtensions
             var change = new NoteChangeContext(NoteChangeVia.Api, token.Name, token.Id);
             var result = commands.AppendBody(id, body.BodyMarkdown, etag, change);
             if (result.Conflict)
+            {
+                log.Record(new IntegrationActivityEntry
+                {
+                    At = time.GetUtcNow(),
+                    TokenId = token.Id,
+                    TokenName = token.Name,
+                    Operation = "notes.append",
+                    NoteId = id.ToString("D"),
+                    Outcome = "conflict",
+                    RequestId = ctx.TraceIdentifier,
+                    EtagBefore = etag,
+                    EtagAfter = result.ETag
+                });
                 return Results.Json(new { error = "Stale ETag — reread before retry", code = "precondition_failed", etag = result.ETag }, statusCode: 412);
+            }
             if (!result.Success)
                 return Results.BadRequest(new { error = result.Error, code = "append_failed" });
 
@@ -810,7 +860,21 @@ public static class IntegrationEndpointExtensions
             if (result.Error == "Heading not found")
                 return Results.Json(new { error = "Heading not found", code = "heading_not_found" }, statusCode: 404);
             if (result.Conflict)
+            {
+                log.Record(new IntegrationActivityEntry
+                {
+                    At = time.GetUtcNow(),
+                    TokenId = token.Id,
+                    TokenName = token.Name,
+                    Operation = "notes.insert",
+                    NoteId = id.ToString("D"),
+                    Outcome = "conflict",
+                    RequestId = ctx.TraceIdentifier,
+                    EtagBefore = etag,
+                    EtagAfter = result.ETag
+                });
                 return Results.Json(new { error = "Stale ETag — reread before retry", code = "precondition_failed", etag = result.ETag }, statusCode: 412);
+            }
             if (!result.Success)
                 return Results.BadRequest(new { error = result.Error, code = "insert_failed" });
 
@@ -1261,7 +1325,15 @@ public static class IntegrationEndpointExtensions
                                     {
                                         type = "object",
                                         required = new[] { "bodyMarkdown" },
-                                        properties = new { bodyMarkdown = new { type = "string" } }
+                                        properties = new
+                                        {
+                                            bodyMarkdown = new { type = "string" },
+                                            confirmDestructive = new
+                                            {
+                                                type = "boolean",
+                                                description = "Required when the replace would remove a large portion of the note body"
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -1624,6 +1696,8 @@ public static class IntegrationEndpointExtensions
     private sealed class BodyOnly
     {
         public string? BodyMarkdown { get; set; }
+        /// <summary>Required when PUT would shrink the body by a large amount (accidental wipe guard).</summary>
+        public bool? ConfirmDestructive { get; set; }
     }
 
     private sealed class InsertBody

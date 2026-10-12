@@ -58,6 +58,15 @@ Authenticated OpenAPI sketch: `GET /api/integrations/v1/openapi.json`.
 
 Write bodies for notes accept `bodyMarkdown` only (merged into existing front matter), except insert which uses `{ markdown, position, heading?, occurrence? }`. Clients cannot set ids, dates, or attribution. Updates require exact `If-Match` ETag → `428` if missing, `412` if stale. Create/append/insert/task-create require `Idempotency-Key` (24h, same key + different body → `409`).
 
+### Concurrency and activity logs
+
+- Server write preconditions use the **on-disk** note bytes inside the write lock — a stale vault-cache ETag cannot authorize an overwrite.
+- Prefer `POST …/append` or `POST …/insert` for log-style additions. Do not full-replace a long note just to add a section.
+- On `412`, reread `GET /notes/{id}`, then retry the same narrow append/insert with a **new** Idempotency-Key (or the same key only if the body+etag fingerprint matches).
+- Capture+append tokens (`notes:append` without `notes:update`) cannot replace the whole body — safest for Grok activity logs.
+- Unusually destructive `PUT /notes/{id}` (large body shrink) returns `409` with `code: destructive_confirm_required`. Retry with `"confirmDestructive": true` only after reviewing. Append/insert are unaffected.
+- Integration activity records `ok` / `conflict` / `destructive_confirm_required` with etag before/after (no note bodies).
+
 ### Tasks
 
 - `GET /tasks?status=open|done|all` (default `open`), optional `folder` / `folderId`, `updatedSince`, `limit`, `cursor`.

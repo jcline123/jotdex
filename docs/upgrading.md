@@ -34,6 +34,10 @@ Upload **`artifacts\jotdex-win-x64.zip`** to a GitHub Release (tag like `v1.1.0`
 3. Download the Release zip, extract over the install folder, **keep `data\`**.
 4. Start `start-portable.cmd`.
 
+## 1.4.3 (Concurrent-edit integrity + slash menu polish)
+
+1.4.3 hardens note writes so a stale browser tab or API client cannot silently overwrite newer content (disk-authoritative ETags, no last-write-wins autosave retry, clean notes refresh in TipTap when the API updates them, conflict UI when dirty). Also fixes the empty “No matching commands” slash plate on note open, and refreshes the README product story. Rollback is the previous portable exe (1.4.2).
+
 ## 1.4.2 (Integrations Share HTML export + attachment upload)
 
 1.4.2 extends the Integrations API without changing existing endpoint behavior. New: `GET /notes/{id}/export` (same self-contained Share HTML as the app, plus `format=md`; optional `theme` / `includeTitle`), `GET/POST /notes/{id}/attachments` with `attachments:write` (multipart into `{Note}.assets/`, optional placement). Settings create + Edit/rotate expose the new scope — rotate tokens for Grokbot. Docs: [integrations-api.md](integrations-api.md). Rollback is the previous portable exe (1.4.1).
