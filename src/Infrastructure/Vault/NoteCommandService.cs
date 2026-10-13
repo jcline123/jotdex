@@ -576,7 +576,13 @@ public sealed class NoteCommandService : INoteCommandService
         try
         {
             if (content.CanSeek && content.Length > _options.MaxAttachmentBytes)
-                return new AttachmentUploadResult { Success = false, Error = $"File exceeds max size ({_options.MaxAttachmentBytes} bytes)" };
+                return new AttachmentUploadResult
+                {
+                    Success = false,
+                    Error =
+                        $"File exceeds the maximum size ({AttachmentServing.FormatByteSize(_options.MaxAttachmentBytes)}). " +
+                        "Choose a smaller file, or raise MaxAttachmentBytes in server config."
+                };
 
             var mdAbs = _paths.EnsureInsideVault(note.RelativePath.Replace('/', Path.DirectorySeparatorChar));
             var stem = Path.GetFileNameWithoutExtension(mdAbs);
@@ -609,7 +615,13 @@ public sealed class NoteCommandService : INoteCommandService
                     {
                         fs.Close();
                         File.Delete(temp);
-                        return new AttachmentUploadResult { Success = false, Error = $"File exceeds max size ({_options.MaxAttachmentBytes} bytes)" };
+                        return new AttachmentUploadResult
+                        {
+                            Success = false,
+                            Error =
+                                $"File exceeds the maximum size ({AttachmentServing.FormatByteSize(_options.MaxAttachmentBytes)}). " +
+                                "Choose a smaller file, or raise MaxAttachmentBytes in server config."
+                        };
                     }
                     fs.Write(buffer, 0, read);
                 }
@@ -622,7 +634,9 @@ public sealed class NoteCommandService : INoteCommandService
                 string.Equals(a.FileName, safeName, StringComparison.OrdinalIgnoreCase));
 
             var mdPath = EncodeSpaces(stem) + ".assets/" + EncodeSpaces(safeName);
-            var ct = contentType ?? GuessContentType(safeName);
+            var ct = string.IsNullOrWhiteSpace(contentType) || contentType == "application/octet-stream"
+                ? GuessContentType(safeName)
+                : contentType;
             return new AttachmentUploadResult
             {
                 Success = true,
@@ -630,7 +644,8 @@ public sealed class NoteCommandService : INoteCommandService
                 MarkdownPath = mdPath,
                 AttachmentId = att?.Id,
                 ContentType = ct,
-                IsImage = ct.StartsWith("image/", StringComparison.OrdinalIgnoreCase),
+                // Only types we render inline — SVG/HTML etc. stay download-only links.
+                IsImage = AttachmentServing.IsInlineImage(ct),
                 Note = updated
             };
         }
@@ -783,12 +798,31 @@ public sealed class NoteCommandService : INoteCommandService
             ".jpg" or ".jpeg" => "image/jpeg",
             ".gif" => "image/gif",
             ".webp" => "image/webp",
+            ".bmp" => "image/bmp",
+            ".tif" or ".tiff" => "image/tiff",
             ".svg" => "image/svg+xml",
             ".pdf" => "application/pdf",
+            ".doc" => "application/msword",
+            ".docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            ".xls" => "application/vnd.ms-excel",
+            ".xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            ".ppt" => "application/vnd.ms-powerpoint",
+            ".pptx" => "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            ".odt" => "application/vnd.oasis.opendocument.text",
+            ".ods" => "application/vnd.oasis.opendocument.spreadsheet",
+            ".odp" => "application/vnd.oasis.opendocument.presentation",
+            ".zip" => "application/zip",
+            ".7z" => "application/x-7z-compressed",
+            ".rar" => "application/vnd.rar",
+            ".gz" or ".tgz" => "application/gzip",
             ".html" or ".htm" => "text/html",
             ".md" => "text/markdown",
             ".json" => "application/json",
-            ".txt" => "text/plain",
+            ".csv" => "text/csv",
+            ".xml" => "application/xml",
+            ".txt" or ".log" => "text/plain",
+            ".rtf" => "application/rtf",
+            ".epub" => "application/epub+zip",
             _ => "application/octet-stream"
         };
 

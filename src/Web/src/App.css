@@ -2489,7 +2489,8 @@ button {
   opacity: 1;
 }
 
-.note-image-remove {
+.note-image-remove,
+.note-image-download {
   border: 1px solid rgba(0, 0, 0, 0.35);
   background: rgba(20, 24, 33, 0.92);
   color: #f3f4f6;
@@ -2500,9 +2501,21 @@ button {
   cursor: pointer;
 }
 
+.note-image-download:hover {
+  background: #175cd3;
+  border-color: #175cd3;
+}
+
 .note-image-remove:hover {
   background: #b42318;
   border-color: #b42318;
+}
+
+.template-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15rem;
+  padding: 0 0.35rem 0.35rem;
 }
 
 .note-image-resize {
@@ -3276,6 +3289,9 @@ body.jotdex-image-resizing .jotdex-gutter-plus {
 }
 
 .folders-rail-snippet {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
   padding: 0.35rem 0.45rem 0.85rem;
   margin-top: 0.15rem;
 }

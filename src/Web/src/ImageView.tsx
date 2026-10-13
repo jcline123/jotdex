@@ -1,6 +1,7 @@
 import { NodeViewWrapper } from '@tiptap/react'
 import type { NodeViewProps } from '@tiptap/react'
 import { useEffect, useRef, useState } from 'react'
+import { downloadAttachmentById, resolveAttachmentId } from './attachmentDownload'
 import { displayUrlForSrc, getAttachmentResolverState } from './editor/assets/AttachmentResolver'
 import {
   currentImageWidthPercent,
@@ -165,8 +166,35 @@ export function ImageView({ node, selected, deleteNode, editor, updateAttributes
             <span className="note-image-broken-hint">Missing or broken — click Remove</span>
           </div>
         )}
-        {editor.isEditable && (
-          <div className="note-image-actions">
+        <div className="note-image-actions">
+          <button
+            type="button"
+            className="note-image-download"
+            title="Download original image"
+            onClick={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              const state = getAttachmentResolverState(editor)
+              const inventory = state ? Array.from(state.byId.values()) : []
+              const id = resolveAttachmentId(canonical, inventory)
+              if (id) {
+                downloadAttachmentById(id, fileNameFromSrc(canonical) || undefined)
+                return
+              }
+              // External / unresolved — open display URL with download hint when possible
+              const url = src.includes('?') ? `${src}&download=1` : `${src}?download=1`
+              const a = document.createElement('a')
+              a.href = /^(?:\/api\/|https?:)/i.test(src) ? url : src
+              a.download = fileNameFromSrc(canonical) || 'image'
+              a.rel = 'noopener'
+              document.body.appendChild(a)
+              a.click()
+              a.remove()
+            }}
+          >
+            Download
+          </button>
+          {editor.isEditable && (
             <button
               type="button"
               className="note-image-remove"
@@ -179,8 +207,8 @@ export function ImageView({ node, selected, deleteNode, editor, updateAttributes
             >
               Remove
             </button>
-          </div>
-        )}
+          )}
+        </div>
         {selected && editor.isEditable && !broken && (
           <>
             {(['nw', 'ne', 'sw', 'se', 'w', 'e'] as const).map((name) => (

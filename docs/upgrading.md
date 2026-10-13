@@ -34,6 +34,10 @@ Upload **`artifacts\jotdex-win-x64.zip`** to a GitHub Release (tag like `v1.1.0`
 3. Download the Release zip, extract over the install folder, **keep `data\`**.
 4. Start `start-portable.cmd`.
 
+## 1.4.4 (Downloadable attachments + note templates)
+
+1.4.4 adds reliable file attachment downloads (click a PDF/Office/ZIP link to save with the original name; images keep display plus an explicit Download) and reusable note templates stored under vault `Templates/` (save current note as template, Templates pane, new-note picker, insert at cursor with asset copy). Integrations attachment allowlist is broader for common document types. Rollback is the previous portable exe (1.4.3).
+
 ## 1.4.3 (Concurrent-edit integrity + slash menu polish)
 
 1.4.3 hardens note writes so a stale browser tab or API client cannot silently overwrite newer content (disk-authoritative ETags, no last-write-wins autosave retry, clean notes refresh in TipTap when the API updates them, conflict UI when dirty). Also fixes the empty “No matching commands” slash plate on note open, and refreshes the README product story. Rollback is the previous portable exe (1.4.2).

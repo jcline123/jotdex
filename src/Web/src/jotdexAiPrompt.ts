@@ -61,6 +61,8 @@ In the editor, each code box edits inline like a normal code box (language, Copy
 
 **Reusable snippets** live as vault files under a reserved \`Snippets/\` folder with front matter \`jotdex_type: code-snippet\`, plus \`jotdex_trigger\` (shortcut keyword for Ctrl+Space) and \`jotdex_language\`. The fenced code block in the note body is the snippet body. Click a snippet to edit it in the main note pane (full editor). Stored under \`Snippets/\`, separate from your notes list. **Insert snippet** / **Save as snippet** are under the ☰ menu on code boxes and in the **Edit** dialog.
 
+**Reusable note templates** live under \`Templates/\` with \`jotdex_type: note-template\` (optional \`jotdex_description\`). Save the current note as a template, create/edit templates in the Templates pane, start a new note from a template, or insert a template at the cursor (undoable; never replaces the whole note). Template attachments are copied into the new/target note’s \`.assets\` so links stay portable and independent.
+
 **Check formatting** (note header) runs remark-lint on the note body only — report-only, never auto-fixes on save.
 
 ## Callouts
@@ -133,8 +135,10 @@ GitHub-style pipes:
 | IP | |
 
 ## Images & attachments
-- Prefer relative asset links after files exist: \`![desc](Note title.assets/file.png)\`
+- Prefer relative asset links after files exist: \`![desc](Note title.assets/file.png)\` for images, \`[Report.pdf](Note title.assets/Report.pdf)\` for other files
+- Images display inline; other common files (PDF, Office, ZIP, text, …) are downloadable attachments stored beside the note in \`.assets/\`
 - Do not invent binary/base64 images; use a short placeholder like \`[screenshot: firewall rule]\` if needed
+- Never rely on HTML/JS executing inside Jotdex — active content is downloaded, not rendered
 
 ## Wikilinks / cross-notes
 Prefer markdown links to other notes: \`[VPN runbook](Network/VPN runbook.md)\`

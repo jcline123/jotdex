@@ -1,3 +1,14 @@
+## 2026-10-13 — Downloadable attachments + reusable note templates
+
+**Why:** Notes needed first-class file attachments (not only images) with reliable downloads on desktop and mobile, and reusable note layouts that stay portable with the vault — without coupling templates to note identity/history.
+
+**What:**
+- Attachment GET uses RFC 5987 `Content-Disposition` (`filename` + `filename*`); `?download=1` force-saves; only safe raster images inline; HTML/SVG/JS always octets. Broader Integrations upload allowlist (Office/ZIP/text/etc.); clearer size-limit errors. UI: toolbar **Attach** + drag-drop (multi-file), click file links to download, image **Download** control — no separate attachment strip.
+- Vault templates under `Templates/` (`jotdex_type: note-template`): save current note as template, CRUD pane, new-note picker (built-in + vault), instantiate with fresh IDs + copied `.assets`, prepare-insert remaps assets for undoable cursor insert (append confirm when unfocused). Hidden from notes list/folders rail like Snippets.
+
+**Portable release 1.4.4**
+- Tag `v1.4.4` (commit filled after tag) — attachments download + note templates. Live vault Markdown was **not** rewritten by the release. Rollback is the previous exe (1.4.3).
+
 ## 2026-10-12 — Slash menu “No matching commands” on note open
 
 **Why:** Opening a note showed a small “No matching commands” plate under the Paste row until the editor was clicked. The `/` insert menu treated an existing `/…` already in the document (or a load/selection) like a freshly typed slash, and the empty-state box stayed visible.

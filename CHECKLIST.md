@@ -340,3 +340,8 @@ ADR: [`docs/decisions/0011-integrations-api.md`](docs/decisions/0011-integration
 - [x] `INT-GATE` Scheme-isolated bearer API; folder ACL; history + If-Match; idempotency; subtle timestamps; ui/api/external provenance; portable FM; docs + sample client without secrets
 - [x] `INT-10` Concurrent-edit integrity: disk-only ETag, no LWW autosave retry, live clean refresh via editorEpoch, destructive replace confirm, concurrency tests
 
+### Post-INT polish (unreleased)
+
+- [x] `ATT-01` Downloadable attachments: safe Content-Disposition/`filename*`, broad common types, force-download active content, image Download + attachment strip, multi-file/drag-drop, clearer size errors; Integrations allowlist widened
+- [x] `TPL-01` Reusable note templates in `Templates/` (`jotdex_type: note-template`): save-from-note, CRUD pane, new-note picker, instantiate with asset copy, prepare-insert at cursor (undoable; append confirm when unfocused)
+

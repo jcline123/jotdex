@@ -17,6 +17,7 @@ import { pasteAsCodeBlock, pastePlainIntoCodeBlock, plainTextForCodeBoxPaste } f
 import { createEditorExtensions } from './editor/extensions/createEditorExtensions'
 import { insertHtml, insertLiteralText, insertMarkdown, setMarkdownDocument } from './editor/operations/contentInsertion'
 import { dispatchAttachmentInventory } from './editor/assets/AttachmentResolver'
+import { downloadAttachmentHref } from './attachmentDownload'
 import { imageFileFromClipboard } from './editor/paste/clipboardImage'
 import { EditorRevisionCoordinator } from './editor/revisions/EditorRevisionCoordinator'
 import { assertSetContentReason } from './editor/operations/operationMeta'
@@ -66,7 +67,13 @@ const FONT_SIZES = [
 
 export type PasteMode = 'smart' | 'plain' | 'code' | 'keep' | 'preserve'
 
-type AttachmentInfo = { id: string; fileName: string; contentType: string }
+type AttachmentInfo = {
+  id: string
+  fileName: string
+  contentType: string
+  sizeBytes?: number
+  relativePath?: string
+}
 
 export type NoteCatalogItem = {
   id: string
@@ -95,6 +102,8 @@ type Props = {
   onDirty?: () => void
   onPastePending?: (pending: boolean) => void
   onOutline?: (items: LiveOutlineItem[]) => void
+  /** External Markdown insert (e.g. template) — undoable; never replaces the document. */
+  insertRequest?: { markdown: string; nonce: number } | null
   /** Test/host override for uploads. Production uses the live `/api/notes/...` endpoints. */
   assetTransport?: AssetTransport
 }
@@ -135,7 +144,23 @@ async function uploadFile(noteId: string, file: File): Promise<UploadResult> {
   const form = new FormData()
   form.append('file', file, file.name || 'image.png')
   const res = await fetch(`/api/notes/${noteId}/attachments`, { method: 'POST', body: form })
-  return (await res.json()) as UploadResult
+  let data: UploadResult
+  try {
+    data = (await res.json()) as UploadResult
+  } catch {
+    return {
+      success: false,
+      error: `Upload failed (HTTP ${res.status}). The file may exceed the server size limit.`,
+    }
+  }
+  if (!res.ok && !data.error) {
+    return {
+      ...data,
+      success: false,
+      error: data.error ?? `Upload failed (HTTP ${res.status}). Check the file size limit and try again.`,
+    }
+  }
+  return data
 }
 
 async function defaultImportRemote(noteId: string, url: string): Promise<PasteUploadResult> {
@@ -192,6 +217,7 @@ export function NoteEditor({
   onPastePending,
   assetTransport,
   onOutline,
+  insertRequest = null,
 }: Props) {
   const [uploadStatus, setUploadStatus] = useState<string | null>(null)
   const [validationBanner, setValidationBanner] = useState<string | null>(null)
@@ -306,9 +332,15 @@ export function NoteEditor({
     coordinatorRef.current?.flush()
   }
 
+  const isInlineImageFile = (file: File) =>
+    file.type === 'image/png' ||
+    file.type === 'image/jpeg' ||
+    file.type === 'image/gif' ||
+    file.type === 'image/webp'
+
   const handleUpload = async (file: File) => {
     const ed = editorRef.current
-    const isImage = file.type.startsWith('image/')
+    const isImage = isInlineImageFile(file)
     const pasteSessionId = crypto.randomUUID()
     const uploadId = crypto.randomUUID()
     if (ed && isImage) {
@@ -348,7 +380,7 @@ export function NoteEditor({
 
       const result = await transportRef.current.uploadFile(noteIdRef.current, file)
       if (!result.success || !result.markdownPath) {
-        onError?.(result.error ?? 'Upload failed')
+        onError?.(result.error ?? 'Upload failed — check the file size limit and try again.')
         setUploadStatus(null)
         return
       }
@@ -366,7 +398,7 @@ export function NoteEditor({
       setUploadStatus('Uploaded')
       window.setTimeout(() => setUploadStatus(null), 1200)
     } catch (e) {
-      onError?.(e instanceof Error ? e.message : 'Upload failed')
+      onError?.(e instanceof Error ? e.message : 'Upload failed — check the file size limit and try again.')
       setUploadStatus(null)
       onPastePending?.(false)
     }
@@ -503,10 +535,14 @@ export function NoteEditor({
   const openAttachPicker = () => {
     const input = document.createElement('input')
     input.type = 'file'
-    input.accept = 'image/*,*/*'
+    input.multiple = true
+    // Broad picker — images display inline; other types become downloadable links.
+    input.accept = '*/*'
     input.onchange = () => {
-      const file = input.files?.[0]
-      if (file) void handleUpload(file)
+      const files = input.files ? Array.from(input.files) : []
+      void (async () => {
+        for (const file of files) await uploadRef.current(file)
+      })()
     }
     input.click()
   }
@@ -637,6 +673,27 @@ export function NoteEditor({
         return false
       },
       handleDOMEvents: {
+        click: (_view, event) => {
+          const target = event.target as HTMLElement | null
+          const a = target?.closest?.('a') as HTMLAnchorElement | null
+          if (!a) return false
+          const href = a.getAttribute('href') || ''
+          // Vault attachments download with original filename (not navigate/preview).
+          if (
+            href.includes('.assets/') ||
+            href.startsWith('/api/attachments/') ||
+            /^\.?\/?[^/]+\.assets\//i.test(href)
+          ) {
+            event.preventDefault()
+            event.stopPropagation()
+            if (!downloadAttachmentHref(href, attachmentsRef.current)) {
+              // Fallback: open authenticated URL with download hint
+              window.location.assign(href.includes('?') ? `${href}&download=1` : `${href}?download=1`)
+            }
+            return true
+          }
+          return false
+        },
         copy: (_view, event) => copyPlainTextFromCodeBox(event),
         cut: (view, event) => {
           if (!copyPlainTextFromCodeBox(event)) return false
@@ -821,6 +878,24 @@ export function NoteEditor({
     if (!editor) return
     return installCodeBoxClipboardGuards(editor.view)
   }, [editor])
+
+  useEffect(() => {
+    if (!editor || !insertRequest?.markdown || !insertRequest.nonce) return
+    const md = insertRequest.markdown
+    const focused = editor.view.hasFocus()
+    if (!focused) {
+      const append = window.confirm(
+        'No cursor position in the editor.\n\nOK = Append template at the end of the note\nCancel = Cancel insert',
+      )
+      if (!append) return
+      editor.chain().focus('end').run()
+    } else {
+      editor.commands.focus()
+    }
+    insertMarkdown(editor, md.startsWith('\n') ? md : `\n${md}`)
+    emitMarkdown(editor)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only on nonce
+  }, [editor, insertRequest?.nonce])
 
   useEffect(() => {
     if (!editor || !jumpHeading?.text) return

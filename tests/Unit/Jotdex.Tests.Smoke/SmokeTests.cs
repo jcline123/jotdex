@@ -370,10 +370,168 @@ public class SmokeTests : IClassFixture<WebApplicationFactory<Program>>
             Assert.Contains(
                 Directory.GetFiles(settings!.VaultPath!, "*", SearchOption.AllDirectories),
                 f => f.EndsWith(result.FileName!, StringComparison.OrdinalIgnoreCase));
+
+            // Download preserves bytes + original filename disposition
+            var dl = await _client.GetAsync($"/api/attachments/{result.AttachmentId}?download=1");
+            Assert.Equal(HttpStatusCode.OK, dl.StatusCode);
+            Assert.Equal("application/octet-stream", dl.Content.Headers.ContentType?.MediaType);
+            var cd = dl.Content.Headers.ContentDisposition?.ToString()
+                     ?? string.Join(",", dl.Headers.GetValues("Content-Disposition"));
+            Assert.Contains("attachment", cd, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("shot.png", cd, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("filename*", cd, StringComparison.OrdinalIgnoreCase);
+            var downloaded = await dl.Content.ReadAsByteArrayAsync();
+            Assert.Equal(new byte[] { 137, 80, 78, 71, 13, 10, 26, 10 }, downloaded);
+
+            // Inline image (no download) keeps image media type
+            var inline = await _client.GetAsync($"/api/attachments/{result.AttachmentId}");
+            Assert.Equal(HttpStatusCode.OK, inline.StatusCode);
+            Assert.Equal("image/png", inline.Content.Headers.ContentType?.MediaType);
+
+            // Non-image PDF-like upload becomes a downloadable link (not IsImage)
+            using var pdfContent = new MultipartFormDataContent();
+            var pdfBytes = new ByteArrayContent("%PDF-1.4\n% smoke"u8.ToArray());
+            pdfBytes.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/pdf");
+            pdfContent.Add(pdfBytes, "file", "Report Final.pdf");
+            var pdfUpload = await _client.PostAsync($"/api/notes/{note.Id}/attachments", pdfContent);
+            Assert.Equal(HttpStatusCode.OK, pdfUpload.StatusCode);
+            var pdfResult = await pdfUpload.Content.ReadFromJsonAsync<UploadDto>();
+            Assert.NotNull(pdfResult);
+            Assert.True(pdfResult!.Success);
+            Assert.False(pdfResult.IsImage);
+            Assert.Contains("Report Final.pdf", pdfResult.FileName, StringComparison.OrdinalIgnoreCase);
+
+            var pdfDl = await _client.GetAsync($"/api/attachments/{pdfResult.AttachmentId}");
+            Assert.Equal(HttpStatusCode.OK, pdfDl.StatusCode);
+            Assert.Equal("application/octet-stream", pdfDl.Content.Headers.ContentType?.MediaType);
+            var pdfCd = pdfDl.Content.Headers.ContentDisposition?.ToString()
+                        ?? string.Join(",", pdfDl.Headers.GetValues("Content-Disposition"));
+            Assert.Contains("attachment", pdfCd, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("Report", pdfCd, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("Final.pdf", pdfCd, StringComparison.OrdinalIgnoreCase);
         }
         finally
         {
             await _client.DeleteAsync($"/api/notes/{note!.Id}");
+        }
+    }
+
+    [Fact]
+    public async Task Templates_save_instantiate_and_prepare_insert_keep_notes_independent()
+    {
+        var suffix = Guid.NewGuid().ToString("N")[..8];
+        var create = await _client.PostAsJsonAsync("/api/notes", new
+        {
+            title = "Template source " + suffix,
+            folder = "",
+            markdown = $"# Template source {suffix}\n\n- [ ] Task\n\n```powershell\nGet-Date\n```\n"
+        });
+        var source = await create.Content.ReadFromJsonAsync<NoteDetailDto>();
+        Assert.NotNull(source);
+
+        // Attach a small file so asset copy can be verified
+        using (var content = new MultipartFormDataContent())
+        {
+            var bytes = new ByteArrayContent([1, 2, 3, 4, 5]);
+            bytes.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("application/octet-stream");
+            content.Add(bytes, "file", "payload.bin");
+            var upload = await _client.PostAsync($"/api/notes/{source!.Id}/attachments", content);
+            Assert.Equal(HttpStatusCode.OK, upload.StatusCode);
+            var up = await upload.Content.ReadFromJsonAsync<UploadDto>();
+            Assert.True(up!.Success);
+            // Put the attachment link into the note body so the template carries it
+            var get = await _client.GetFromJsonAsync<NoteDetailDto>($"/api/notes/{source.Id}");
+            Assert.NotNull(get);
+            var withLink = get!.Markdown + $"\n[{up.FileName}]({up.MarkdownPath})\n";
+            var put = await _client.PutAsJsonAsync($"/api/notes/{source.Id}", new { markdown = withLink, etag = get.ETag });
+            Assert.Equal(HttpStatusCode.OK, put.StatusCode);
+        }
+
+        Guid? templateId = null;
+        Guid? noteFromTemplateId = null;
+        Guid? targetId = null;
+        try
+        {
+            var saveAs = await _client.PostAsJsonAsync("/api/templates/from-note", new
+            {
+                noteId = source.Id,
+                title = "Reusable " + suffix,
+                description = "Smoke template"
+            });
+            Assert.Equal(HttpStatusCode.OK, saveAs.StatusCode);
+            var saved = await saveAs.Content.ReadFromJsonAsync<TemplateCreateDto>();
+            Assert.NotNull(saved?.Template);
+            templateId = saved!.Template!.NoteId;
+            Assert.Equal("Templates", saved.Template.FolderPath, ignoreCase: true);
+
+            // Source note still exists with original title
+            var sourceAgain = await _client.GetFromJsonAsync<NoteDetailDto>($"/api/notes/{source.Id}");
+            Assert.Contains("Template source", sourceAgain!.Title, StringComparison.OrdinalIgnoreCase);
+
+            // Templates stay out of the default notes list
+            var notes = await _client.GetFromJsonAsync<List<NoteSummaryDto>>("/api/notes");
+            Assert.DoesNotContain(notes!, n => n.Id == templateId);
+
+            var instantiate = await _client.PostAsJsonAsync($"/api/templates/{templateId}/instantiate", new
+            {
+                title = "From template " + suffix,
+                folder = ""
+            });
+            Assert.Equal(HttpStatusCode.OK, instantiate.StatusCode);
+            var created = await instantiate.Content.ReadFromJsonAsync<NoteDetailDto>();
+            Assert.NotNull(created);
+            noteFromTemplateId = created!.Id;
+            Assert.NotEqual(source.Id, created.Id);
+            Assert.NotEqual(templateId, created.Id);
+            Assert.Contains("From template", created.Title, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("jotdex_type: note-template", created.Markdown, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("payload.bin", created.Markdown, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains(".assets/", created.Markdown, StringComparison.Ordinal);
+
+            // Edit the new note — template must stay unchanged
+            var tmplBefore = await _client.GetFromJsonAsync<NoteDetailDto>($"/api/templates/{templateId}");
+            var putNote = await _client.PutAsJsonAsync($"/api/notes/{created.Id}", new
+            {
+                markdown = created.Markdown + "\n\nEdited after instantiate.\n",
+                etag = created.ETag
+            });
+            Assert.Equal(HttpStatusCode.OK, putNote.StatusCode);
+            var tmplAfter = await _client.GetFromJsonAsync<NoteDetailDto>($"/api/templates/{templateId}");
+            Assert.Equal(tmplBefore!.Markdown, tmplAfter!.Markdown);
+
+            // Prepare insert into a different note — preserves target body; returns remapped markdown
+            var targetCreate = await _client.PostAsJsonAsync("/api/notes", new
+            {
+                title = "Insert target " + suffix,
+                folder = "",
+                markdown = $"# Insert target {suffix}\n\nKeep me.\n"
+            });
+            var target = await targetCreate.Content.ReadFromJsonAsync<NoteDetailDto>();
+            Assert.NotNull(target);
+            targetId = target!.Id;
+            var beforeBody = target.Markdown;
+
+            var prep = await _client.PostAsJsonAsync($"/api/templates/{templateId}/prepare-insert", new
+            {
+                targetNoteId = target.Id
+            });
+            Assert.Equal(HttpStatusCode.OK, prep.StatusCode);
+            var prepJson = await prep.Content.ReadFromJsonAsync<PrepareInsertDto>();
+            Assert.True(prepJson!.Success);
+            Assert.False(string.IsNullOrWhiteSpace(prepJson.Markdown));
+            Assert.Contains("payload.bin", prepJson.Markdown!, StringComparison.OrdinalIgnoreCase);
+
+            var targetAfter = await _client.GetFromJsonAsync<NoteDetailDto>($"/api/notes/{target.Id}");
+            // Body unchanged until the client inserts (prepare-insert only copies assets)
+            Assert.Equal(beforeBody, targetAfter!.Markdown);
+            Assert.Contains("Keep me.", targetAfter.Markdown, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (targetId is Guid tid) await _client.DeleteAsync($"/api/notes/{tid}");
+            if (noteFromTemplateId is Guid nid) await _client.DeleteAsync($"/api/notes/{nid}");
+            if (templateId is Guid xid) await _client.DeleteAsync($"/api/templates/{xid}");
+            await _client.DeleteAsync($"/api/notes/{source!.Id}");
         }
     }
 
@@ -1050,6 +1208,26 @@ public class SmokeTests : IClassFixture<WebApplicationFactory<Program>>
         public string? AttachmentId { get; set; }
         public string? FileName { get; set; }
         public bool IsImage { get; set; }
+        public string? Error { get; set; }
+    }
+
+    private sealed class TemplateCreateDto
+    {
+        public TemplateSummaryDto? Template { get; set; }
+    }
+
+    private sealed class TemplateSummaryDto
+    {
+        public Guid NoteId { get; set; }
+        public string Title { get; set; } = "";
+        public string FolderPath { get; set; } = "";
+        public string? Description { get; set; }
+    }
+
+    private sealed class PrepareInsertDto
+    {
+        public bool Success { get; set; }
+        public string? Markdown { get; set; }
         public string? Error { get; set; }
     }
 }

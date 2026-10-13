@@ -974,7 +974,18 @@ public static class IntegrationEndpointExtensions
             if (file is null || file.Length == 0)
                 return Results.BadRequest(new { error = "file required", code = "invalid_body" });
             if (file.Length > jotOpts.Value.MaxAttachmentBytes)
-                return Results.Json(new { error = $"File exceeds max size ({jotOpts.Value.MaxAttachmentBytes} bytes)", code = "file_too_large" }, statusCode: 413);
+            {
+                var maxLabel = AttachmentServing.FormatByteSize(jotOpts.Value.MaxAttachmentBytes);
+                return Results.Json(
+                    new
+                    {
+                        error =
+                            $"File exceeds the maximum size ({maxLabel}). Choose a smaller file, or raise MaxAttachmentBytes in server config.",
+                        code = "file_too_large",
+                        maxBytes = jotOpts.Value.MaxAttachmentBytes
+                    },
+                    statusCode: 413);
+            }
 
             var filenameOverride = form["filename"].ToString();
             var altText = form["altText"].ToString();

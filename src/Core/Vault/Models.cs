@@ -31,6 +31,8 @@ public sealed class NoteSummary
     public bool Favorite { get; init; }
     /// <summary>True when front matter has jotdex_type: code-snippet (hidden from notes UI by default).</summary>
     public bool IsCodeSnippet { get; init; }
+    /// <summary>True when front matter has jotdex_type: note-template (hidden from notes UI by default).</summary>
+    public bool IsNoteTemplate { get; init; }
 }
 
 public sealed class NoteDetail
@@ -99,7 +101,8 @@ public interface IVaultService
     IReadOnlyList<NoteSummary> ListNotes(
         string? folderRelativePath,
         bool includeStandaloneTodosMd = false,
-        bool includeSnippetNotes = false);
+        bool includeSnippetNotes = false,
+        bool includeTemplateNotes = false);
     NoteDetail? GetNote(Guid id);
     NoteDetail? GetNoteByRelativePath(string relativePath);
     AttachmentInfo? GetAttachment(string attachmentId);

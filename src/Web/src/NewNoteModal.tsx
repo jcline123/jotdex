@@ -1,4 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { NOTE_TEMPLATES, type NoteTemplate } from './templates'
+import { fetchTemplates, instantiateTemplate, type VaultTemplateSummary } from './templateApi'
 
 type FolderNode = {
   relativePath?: string
@@ -20,6 +22,11 @@ function flattenFolders(node: FolderNode | null | undefined, acc: { path: string
   return acc
 }
 
+type TemplateChoice =
+  | { kind: 'blank' }
+  | { kind: 'builtin'; template: NoteTemplate }
+  | { kind: 'vault'; template: VaultTemplateSummary }
+
 export function NewNoteModal({ tree, defaultFolder, onClose, onCreated }: Props) {
   const folders = useMemo(() => {
     const list = flattenFolders(tree).sort((a, b) => a.label.localeCompare(b.label))
@@ -30,6 +37,27 @@ export function NewNoteModal({ tree, defaultFolder, onClose, onCreated }: Props)
   const [folder, setFolder] = useState(defaultFolder)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [vaultTemplates, setVaultTemplates] = useState<VaultTemplateSummary[]>([])
+  const [choice, setChoice] = useState<TemplateChoice>({ kind: 'blank' })
+
+  useEffect(() => {
+    void fetchTemplates()
+      .then(setVaultTemplates)
+      .catch(() => setVaultTemplates([]))
+  }, [])
+
+  function applyChoice(next: TemplateChoice) {
+    setChoice(next)
+    if (next.kind === 'builtin') {
+      const suggested =
+        typeof next.template.defaultTitle === 'function'
+          ? next.template.defaultTitle(new Date().toISOString().slice(0, 10))
+          : (next.template.defaultTitle ?? title)
+      if (suggested) setTitle(suggested)
+    } else if (next.kind === 'vault') {
+      setTitle(next.template.title)
+    }
+  }
 
   async function save(e: React.FormEvent) {
     e.preventDefault()
@@ -40,11 +68,23 @@ export function NewNoteModal({ tree, defaultFolder, onClose, onCreated }: Props)
     setBusy(true)
     setError(null)
     try {
+      if (choice.kind === 'vault') {
+        const note = await instantiateTemplate({
+          templateId: choice.template.noteId,
+          title: title.trim(),
+          folder: folder.trim(),
+        })
+        onCreated(note.id, folder.trim())
+        return
+      }
+
+      const markdown =
+        choice.kind === 'builtin' ? choice.template.body(title.trim()) : undefined
       const res = await fetch('/api/notes', {
         method: 'POST',
         credentials: 'same-origin',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: title.trim(), folder: folder.trim() }),
+        body: JSON.stringify({ title: title.trim(), folder: folder.trim(), markdown }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data.error ?? 'Could not create note')
@@ -70,7 +110,7 @@ export function NewNoteModal({ tree, defaultFolder, onClose, onCreated }: Props)
             Cancel
           </button>
         </div>
-        <p className="muted clip-save-lede">Choose a folder, then create the note.</p>
+        <p className="muted clip-save-lede">Choose a folder and optional template, then create the note.</p>
         <form className="auth-form" onSubmit={(e) => void save(e)}>
           <label className="field">
             Title
@@ -90,6 +130,54 @@ export function NewNoteModal({ tree, defaultFolder, onClose, onCreated }: Props)
                   {f.label}
                 </option>
               ))}
+            </select>
+          </label>
+          <label className="field">
+            Template
+            <select
+              value={
+                choice.kind === 'blank'
+                  ? 'blank'
+                  : choice.kind === 'builtin'
+                    ? `builtin:${choice.template.id}`
+                    : `vault:${choice.template.noteId}`
+              }
+              onChange={(e) => {
+                const v = e.target.value
+                if (v === 'blank') {
+                  applyChoice({ kind: 'blank' })
+                  return
+                }
+                if (v.startsWith('builtin:')) {
+                  const id = v.slice('builtin:'.length)
+                  const t = NOTE_TEMPLATES.find((x) => x.id === id)
+                  if (t) applyChoice({ kind: 'builtin', template: t })
+                  return
+                }
+                if (v.startsWith('vault:')) {
+                  const id = v.slice('vault:'.length)
+                  const t = vaultTemplates.find((x) => x.noteId === id)
+                  if (t) applyChoice({ kind: 'vault', template: t })
+                }
+              }}
+            >
+              <option value="blank">Blank note</option>
+              {vaultTemplates.length > 0 && (
+                <optgroup label="Your templates">
+                  {vaultTemplates.map((t) => (
+                    <option key={t.noteId} value={`vault:${t.noteId}`}>
+                      {t.title}
+                    </option>
+                  ))}
+                </optgroup>
+              )}
+              <optgroup label="Built-in">
+                {NOTE_TEMPLATES.filter((t) => t.id !== 'blank').map((t) => (
+                  <option key={t.id} value={`builtin:${t.id}`}>
+                    {t.name}
+                  </option>
+                ))}
+              </optgroup>
             </select>
           </label>
           {error && <p className="error">{error}</p>}

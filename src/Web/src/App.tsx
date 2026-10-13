@@ -18,6 +18,14 @@ import {
 import { FirstRunWizard, LoginScreen } from './AuthScreens'
 import { TrashPane } from './TrashPane'
 import { SnippetsPane } from './SnippetsPane'
+import { TemplatesPane } from './TemplatesPane'
+import {
+  fetchTemplates,
+  instantiateTemplate,
+  prepareTemplateInsert,
+  saveNoteAsTemplate,
+  type VaultTemplateSummary,
+} from './templateApi'
 import { extractOutline } from './outline'
 import { type LiveOutlineItem } from './editor/outline/liveOutline'
 import {
@@ -44,6 +52,11 @@ import { NoteMetadata, type NoteMetaFields } from './NoteMetadata'
 function isCodeSnippetNote(frontMatter: string, folderPath?: string): boolean {
   if (/jotdex_type:\s*code-snippet/i.test(frontMatter)) return true
   return (folderPath ?? '').replace(/\\/g, '/').trim().toLowerCase() === 'snippets'
+}
+
+function isNoteTemplateNote(frontMatter: string, folderPath?: string): boolean {
+  if (/jotdex_type:\s*note-template/i.test(frontMatter)) return true
+  return (folderPath ?? '').replace(/\\/g, '/').trim().toLowerCase() === 'templates'
 }
 
 
@@ -112,7 +125,7 @@ type NoteDetail = {
   lastApiUpdateAt?: string | null
   lastApiUpdateBy?: string | null
   provenanceInferred?: boolean
-  attachments: { id: string; fileName: string; contentType: string }[]
+  attachments: { id: string; fileName: string; contentType: string; sizeBytes?: number; relativePath?: string }[]
   htmlSidecars: { fileName: string; attachmentId: string }[]
   headingFolds?: string[]
 }
@@ -347,9 +360,14 @@ function App() {
   const [templateMenu, setTemplateMenu] = useState(false)
   const [templateMenuPos, setTemplateMenuPos] = useState<{ top: number; left: number } | null>(null)
   const templateBtnRef = useRef<HTMLButtonElement>(null)
-  const [mobilePane, setMobilePane] = useState<'folders' | 'notes' | 'editor' | 'todos' | 'trash' | 'snippets'>('editor')
+  const [mobilePane, setMobilePane] = useState<
+    'folders' | 'notes' | 'editor' | 'todos' | 'trash' | 'snippets' | 'templates'
+  >('editor')
   const [showTrash, setShowTrash] = useState(false)
   const [showSnippets, setShowSnippets] = useState(false)
+  const [showTemplates, setShowTemplates] = useState(false)
+  const [vaultTemplates, setVaultTemplates] = useState<VaultTemplateSummary[]>([])
+  const [insertRequest, setInsertRequest] = useState<{ markdown: string; nonce: number } | null>(null)
   const [tasksRefreshKey, setTasksRefreshKey] = useState(0)
   const bumpTasksRefresh = useCallback(() => setTasksRefreshKey((k) => k + 1), [])
   const [todosCollapsed, setTodosCollapsed] = useState(() => {
@@ -1819,6 +1837,14 @@ function App() {
     await loadVault()
   }
 
+  async function refreshVaultTemplates() {
+    try {
+      setVaultTemplates(await fetchTemplates())
+    } catch {
+      setVaultTemplates([])
+    }
+  }
+
   async function createNote(template?: NoteTemplate) {
     const suggested =
       typeof template?.defaultTitle === 'function'
@@ -1840,6 +1866,75 @@ function App() {
     setTemplateMenu(false)
     await loadVault()
     setSelectedId(data.id)
+  }
+
+  async function createNoteFromVaultTemplate(t: VaultTemplateSummary) {
+    const title = window.prompt('New note title', t.title)
+    if (!title?.trim()) return
+    setTemplateMenu(false)
+    try {
+      const note = await instantiateTemplate({
+        templateId: t.noteId,
+        title: title.trim(),
+        folder,
+      })
+      await loadVault()
+      setSelectedId(note.id)
+      setShowTemplates(false)
+      setMobilePane('editor')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not create note from template')
+    }
+  }
+
+  async function saveCurrentAsTemplate() {
+    if (!selectedId || !note) return
+    const title = window.prompt('Template name', note.title)
+    if (!title?.trim()) return
+    try {
+      const t = await saveNoteAsTemplate({ noteId: selectedId, title: title.trim() })
+      setNetworkHint(`Saved template “${t.title}” (original note unchanged).`)
+      await refreshVaultTemplates()
+      setShowTemplates(true)
+      setShowSnippets(false)
+      setShowTrash(false)
+      setMobilePane('templates')
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not save as template')
+    }
+  }
+
+  async function insertVaultTemplate(t: VaultTemplateSummary) {
+    if (!selectedId || !note) {
+      setError('Open a note first, then insert a template at the cursor.')
+      return
+    }
+    if (isNoteTemplateNote(splitFrontMatter(note.markdown).frontMatter, note.folderPath)) {
+      setError('Open a regular note to insert a template (not while editing a template).')
+      return
+    }
+    try {
+      const prepared = await prepareTemplateInsert(t.noteId, selectedId)
+      if (prepared.note) {
+        const meta = prepared.note as Partial<NoteDetail>
+        setNote((prev) =>
+          prev
+            ? {
+                ...prev,
+                attachments: (meta.attachments as NoteDetail['attachments']) ?? prev.attachments,
+                etag: meta.etag ?? prev.etag,
+              }
+            : prev,
+        )
+        if (meta.etag) etagRef.current = meta.etag
+      }
+      setInsertRequest({ markdown: prepared.markdown, nonce: Date.now() })
+      setShowTemplates(false)
+      setMobilePane('editor')
+      setNetworkHint(`Inserted “${t.title}” (undo with Ctrl+Z).`)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not insert template')
+    }
   }
 
   async function fetchPageInfo(url: string): Promise<{
@@ -2313,6 +2408,7 @@ function App() {
                 headingFolds={note.headingFolds}
                 onOutline={setLiveOutline}
                 attachments={note.attachments}
+                insertRequest={insertRequest}
                 onChange={(md, rev) => {
                   draftRef.current = md
                   setDraft(md)
@@ -3980,6 +4076,7 @@ function App() {
                 title="View and edit saved code snippets"
                 onClick={() => {
                   setShowSnippets(true)
+                  setShowTemplates(false)
                   setShowTrash(false)
                   setNotesCollapsed(false)
                   try {
@@ -3994,6 +4091,29 @@ function App() {
                   {'</>'}
                 </span>
                 Snippets
+              </button>
+              <button
+                type="button"
+                className={`snippets-rail-btn${showTemplates || mobilePane === 'templates' ? ' active' : ''}`}
+                title="Reusable note templates"
+                onClick={() => {
+                  setShowTemplates(true)
+                  setShowSnippets(false)
+                  setShowTrash(false)
+                  setNotesCollapsed(false)
+                  void refreshVaultTemplates()
+                  try {
+                    localStorage.setItem('jotdex.notesCollapsed', '0')
+                  } catch {
+                    /* ignore */
+                  }
+                  setMobilePane('templates')
+                }}
+              >
+                <span className="snippets-rail-icon" aria-hidden>
+                  ▤
+                </span>
+                Templates
               </button>
             </div>
           </aside>
@@ -4022,6 +4142,30 @@ function App() {
             }}
             onCollapse={() => {
               setShowSnippets(false)
+              setMobilePane('notes')
+            }}
+          />
+        ) : showTemplates || mobilePane === 'templates' ? (
+          <TemplatesPane
+            fill={narrowLayout && mobilePane === 'templates'}
+            activeTemplateId={selectedId}
+            canInsert={Boolean(
+              note &&
+                !isNoteTemplateNote(splitFrontMatter(note.markdown).frontMatter, note.folderPath) &&
+                !isCodeSnippetNote(splitFrontMatter(note.markdown).frontMatter, note.folderPath),
+            )}
+            onChanged={() => {
+              void loadVault()
+              void refreshVaultTemplates()
+            }}
+            onOpenTemplate={(t) => {
+              setSelectedId(t.noteId)
+              setMobilePane('editor')
+            }}
+            onUseTemplate={(t) => void createNoteFromVaultTemplate(t)}
+            onInsertTemplate={(t) => void insertVaultTemplate(t)}
+            onCollapse={() => {
+              setShowTemplates(false)
               setMobilePane('notes')
             }}
           />
@@ -4080,6 +4224,7 @@ function App() {
                   onClick={() => {
                     setShowTrash(true)
                     setShowSnippets(false)
+                    setShowTemplates(false)
                     setMobilePane('trash')
                   }}
                 >
@@ -4101,7 +4246,10 @@ function App() {
                     title="New note from template"
                     aria-expanded={templateMenu}
                     aria-haspopup="menu"
-                    onClick={() => setTemplateMenu((o) => !o)}
+                    onClick={() => {
+                      void refreshVaultTemplates()
+                      setTemplateMenu((o) => !o)
+                    }}
                   >
                     ▾
                   </button>
@@ -4113,6 +4261,18 @@ function App() {
                         role="menu"
                         style={{ top: templateMenuPos.top, left: templateMenuPos.left }}
                       >
+                        {vaultTemplates.length > 0 &&
+                          vaultTemplates.map((t) => (
+                            <button
+                              key={`vault-${t.noteId}`}
+                              type="button"
+                              role="menuitem"
+                              onClick={() => void createNoteFromVaultTemplate(t)}
+                            >
+                              <strong>{t.title}</strong>
+                              <span>{t.description || 'Your template'}</span>
+                            </button>
+                          ))}
                         {NOTE_TEMPLATES.map((t) => (
                           <button
                             key={t.id}
@@ -4255,9 +4415,21 @@ function App() {
                   <button
                     type="button"
                     className="ghost mobile-only mobile-back"
-                    onClick={() => setMobilePane(showSnippets || mobilePane === 'snippets' ? 'snippets' : 'notes')}
+                    onClick={() =>
+                      setMobilePane(
+                        showTemplates || mobilePane === 'templates'
+                          ? 'templates'
+                          : showSnippets || mobilePane === 'snippets'
+                            ? 'snippets'
+                            : 'notes',
+                      )
+                    }
                   >
-                    {showSnippets || mobilePane === 'snippets' ? '← Snippets' : '← Notes'}
+                    {showTemplates || mobilePane === 'templates'
+                      ? '← Templates'
+                      : showSnippets || mobilePane === 'snippets'
+                        ? '← Snippets'
+                        : '← Notes'}
                   </button>
                   {isCodeSnippetNote(frontMatter, note.folderPath) && (
                     <span className="snippet-note-badge" title="Reusable code snippet (stored in Snippets/)">
@@ -4350,6 +4522,14 @@ function App() {
                   <button type="button" className="ghost" onClick={() => void duplicateNote()}>
                     Duplicate
                   </button>
+                  <button
+                    type="button"
+                    className="ghost"
+                    title="Save a copy of this note as a reusable template (original unchanged)"
+                    onClick={() => void saveCurrentAsTemplate()}
+                  >
+                    Save as template
+                  </button>
                   <button type="button" className="ghost" onClick={() => void trashNote()}>
                     Trash
                   </button>
@@ -4440,6 +4620,7 @@ function App() {
                   headingFolds={note.headingFolds}
                   onOutline={setLiveOutline}
                   attachments={note.attachments}
+                  insertRequest={insertRequest}
                   onChange={(md, rev) => {
                     draftRef.current = md
                     setDraft(md)
@@ -4702,10 +4883,18 @@ function App() {
         </button>
         <button
           type="button"
-          className={mobilePane === 'notes' || mobilePane === 'trash' || mobilePane === 'snippets' ? 'on' : ''}
+          className={
+            mobilePane === 'notes' ||
+            mobilePane === 'trash' ||
+            mobilePane === 'snippets' ||
+            mobilePane === 'templates'
+              ? 'on'
+              : ''
+          }
           onClick={() => {
             setShowTrash(false)
             setShowSnippets(false)
+            setShowTemplates(false)
             setMobilePane('notes')
           }}
         >

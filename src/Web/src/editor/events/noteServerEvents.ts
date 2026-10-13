@@ -1,4 +1,10 @@
-export type AttachmentInfo = { id: string; fileName: string; contentType: string }
+export type AttachmentInfo = {
+  id: string
+  fileName: string
+  contentType: string
+  sizeBytes?: number
+  relativePath?: string
+}
 
 export type NoteServerEvent =
   | { kind: 'attachments-updated'; attachments: AttachmentInfo[] }

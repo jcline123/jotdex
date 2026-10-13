@@ -31,4 +31,19 @@ public class IntegrationAttachmentValidationTests
         Assert.True(IntegrationAttachmentValidation.TryDetect(pdf, "a.pdf", null, out var pct, out _));
         Assert.Equal("application/pdf", pct);
     }
+
+    [Fact]
+    public void Accepts_zip_and_plain_text()
+    {
+        var zip = new byte[] { 0x50, 0x4B, 0x03, 0x04, 0, 0, 0, 0 };
+        Assert.True(IntegrationAttachmentValidation.TryDetect(zip, "bundle.zip", null, out var zct, out _));
+        Assert.Equal("application/zip", zct);
+
+        var txt = "hello notes"u8.ToArray();
+        Assert.True(IntegrationAttachmentValidation.TryDetect(txt, "notes.txt", "text/plain", out var tct, out _));
+        Assert.Equal("text/plain", tct);
+
+        Assert.True(IntegrationAttachmentValidation.TryDetect(zip, "sheet.xlsx", null, out var xct, out _));
+        Assert.Equal("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", xct);
+    }
 }

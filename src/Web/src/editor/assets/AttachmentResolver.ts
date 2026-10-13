@@ -2,7 +2,13 @@ import { Extension } from '@tiptap/core'
 import { Plugin, PluginKey } from '@tiptap/pm/state'
 import type { Editor } from '@tiptap/core'
 
-export type AttachmentInfo = { id: string; fileName: string; contentType: string }
+export type AttachmentInfo = {
+  id: string
+  fileName: string
+  contentType: string
+  sizeBytes?: number
+  relativePath?: string
+}
 
 export type AttachmentResolverState = {
   byFileName: Map<string, string>

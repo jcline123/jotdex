@@ -27,7 +27,9 @@ using Jotdex.Infrastructure.Paths;
 using Jotdex.Infrastructure.Search;
 using Jotdex.Infrastructure.Secrets;
 using Jotdex.Core.Snippets;
+using Jotdex.Core.Templates;
 using Jotdex.Infrastructure.Snippets;
+using Jotdex.Infrastructure.Templates;
 using Jotdex.Infrastructure.Vault;
 using Jotdex.Server.Auth;
 using Jotdex.Server.CloudBackup;
@@ -35,6 +37,7 @@ using Jotdex.Server.CodeDiagnostics;
 using Jotdex.Server.Hosting;
 using Jotdex.Server.Integrations;
 using Jotdex.Server.Snippets;
+using Jotdex.Server.Templates;
 using Microsoft.Extensions.Options;
 
 // Offline helper: Jotdex.Server.exe --decrypt-kit <kit.jotdexkit> <out.zip>
@@ -232,6 +235,7 @@ builder.Services.AddSingleton<IPowerShellDiagnosticsService, PowerShellDiagnosti
 builder.Services.AddSingleton<SnippetIndexService>();
 builder.Services.AddSingleton<ISnippetIndex>(sp => sp.GetRequiredService<SnippetIndexService>());
 builder.Services.AddSingleton<ISnippetCommandService, SnippetCommandService>();
+builder.Services.AddSingleton<INoteTemplateService, NoteTemplateService>();
 builder.Services.AddSingleton<ISecretStore, DpapiSecretStore>();
 builder.Services.AddSingleton<ILocalAuthProbe, LocalAuthProbe>();
 builder.Services.AddSingleton<IMoveKitCryptoService, MoveKitCryptoService>();
@@ -338,6 +342,7 @@ app.MapIntegrationEndpoints();
 app.MapCloudBackupEndpoints();
 app.MapCodeDiagnosticsEndpoints();
 app.MapSnippetEndpoints();
+app.MapTemplateEndpoints();
 
 app.MapGet("/api/health", (IAppVersion version, IDataRootResolver paths, IVaultPathGuard vault, ISearchIndex search, StopwatchHolder uptime, IOptions<JotdexOptions> options) =>
 {
@@ -440,19 +445,28 @@ app.MapGet("/api/notes/{id:guid}/backlinks", (Guid id, INoteLinkService links, I
     return Results.Json(new { links = links.GetBacklinks(id) });
 });
 
-app.MapGet("/api/attachments/{attachmentId}", (string attachmentId, IVaultService vault, IVaultPathGuard paths, HttpResponse response) =>
+app.MapGet("/api/attachments/{attachmentId}", (string attachmentId, HttpRequest request, IVaultService vault, IVaultPathGuard paths, HttpResponse response) =>
 {
     if (!paths.IsConfigured) return Results.NotFound();
     var info = vault.GetAttachment(attachmentId);
     if (info is null) return Results.NotFound();
 
-    var inline = info.ContentType is "image/png" or "image/jpeg" or "image/gif" or "image/webp";
+    // ?download=1 forces save-as (images keep an explicit Download control in the UI).
+    var forceDownload = request.Query.ContainsKey("download")
+        || string.Equals(request.Query["download"], "1", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(request.Query["download"], "true", StringComparison.OrdinalIgnoreCase);
+    var canInline = AttachmentServing.IsInlineImage(info.ContentType) && !forceDownload
+        && !AttachmentServing.IsActiveOrUnsafeInline(info.ContentType);
+    var mediaType = AttachmentServing.EffectiveMediaType(info.ContentType, forceDownload: !canInline);
+
     response.Headers.Append("X-Content-Type-Options", "nosniff");
+    // Set disposition ourselves (with filename*) — do not also pass fileDownloadName or ASP.NET overwrites it.
     response.Headers.Append("Content-Disposition",
-        $"{(inline ? "inline" : "attachment")}; filename=\"{info.FileName}\"");
+        AttachmentServing.ContentDispositionHeader(info.FileName, attachment: !canInline));
+    response.Headers.Append("Cache-Control", "private, max-age=0, must-revalidate");
 
     var stream = vault.OpenAttachmentStream(attachmentId);
-    return Results.File(stream, inline ? info.ContentType : "application/octet-stream", fileDownloadName: inline ? null : info.FileName);
+    return Results.File(stream, mediaType);
 });
 
 app.MapGet("/api/attachments/{attachmentId}/text", async (string attachmentId, IVaultService vault, IVaultPathGuard paths) =>

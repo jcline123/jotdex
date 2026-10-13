@@ -101,6 +101,15 @@ Optional notebook-wide to-do list used by the UI rail/tab. Open items only:
 
 Done items are deleted from the file (not kept as `- [x]`). Attributes: `id`, `priority` (`low`|`normal`|`high`|`critical`), optional `due` (ISO-8601), `remind` (`off`|`once:ISO`|`every:30m`|`every:1h`).
 
+### Reserved `Templates/` folder
+
+Reusable **note templates** are ordinary Markdown files under `Templates/` with:
+
+- `jotdex_type: note-template`
+- optional `jotdex_description: …`
+
+They are hidden from the notes list and folders rail (like `Snippets/`). Creating a note from a template (or inserting a template into an existing note) copies any `.assets` files into the target note and rewrites links — notes stay independent of the template. Templates are not versioned with note history.
+
 ### Reserved `Snippets/` folder
 
 Reusable code snippets are ordinary Markdown files under `Snippets/` with:

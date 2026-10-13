@@ -135,7 +135,8 @@ public sealed class VaultService : IVaultService
                         Created = FrontMatterParser.ParseDate(fm.Fields, "created"),
                         HasAttachments = noteAttachments.Count > 0,
                         Favorite = IsFavoriteField(fm.Fields),
-                        IsCodeSnippet = IsCodeSnippetField(fm.Fields)
+                        IsCodeSnippet = IsCodeSnippetField(fm.Fields),
+                        IsNoteTemplate = IsNoteTemplateField(fm.Fields)
                     },
                     full,
                     text,
@@ -200,9 +201,9 @@ public sealed class VaultService : IVaultService
     public FolderNode GetTree()
     {
         var s = Snapshot;
-        // Hide reserved Snippets folder from the folders rail (notes still live on disk).
+        // Hide reserved Snippets / Templates folders from the folders rail (notes still live on disk).
         var folders = s.Folders
-            .Where(f => !IsReservedSnippetsFolder(f))
+            .Where(f => !IsReservedSnippetsFolder(f) && !IsReservedTemplatesFolder(f))
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
         return BuildTree(folders);
     }
@@ -210,7 +211,8 @@ public sealed class VaultService : IVaultService
     public IReadOnlyList<NoteSummary> ListNotes(
         string? folderRelativePath,
         bool includeStandaloneTodosMd = false,
-        bool includeSnippetNotes = false)
+        bool includeSnippetNotes = false,
+        bool includeTemplateNotes = false)
     {
         var s = Snapshot;
         var folder = (folderRelativePath ?? "").Replace('\\', '/').Trim('/');
@@ -222,6 +224,7 @@ public sealed class VaultService : IVaultService
                   n.FolderPath.StartsWith(folder + "/", StringComparison.OrdinalIgnoreCase))
             .Where(n => includeStandaloneTodosMd || !IsStandaloneTodosNote(n.RelativePath))
             .Where(n => includeSnippetNotes || !n.IsCodeSnippet)
+            .Where(n => includeTemplateNotes || !n.IsNoteTemplate)
             .OrderByDescending(n => n.Favorite)
             .ThenByDescending(n => n.Modified ?? n.Created ?? DateTimeOffset.MinValue)
             .ThenBy(n => n.Title, StringComparer.OrdinalIgnoreCase)
@@ -246,9 +249,21 @@ public sealed class VaultService : IVaultService
         return f.StartsWith(Jotdex.Core.Snippets.SnippetConstants.DefaultFolder + "/", StringComparison.OrdinalIgnoreCase);
     }
 
+    private static bool IsReservedTemplatesFolder(string folderPath)
+    {
+        var f = (folderPath ?? "").Replace('\\', '/').Trim('/');
+        if (f.Equals(Jotdex.Core.Templates.TemplateConstants.DefaultFolder, StringComparison.OrdinalIgnoreCase))
+            return true;
+        return f.StartsWith(Jotdex.Core.Templates.TemplateConstants.DefaultFolder + "/", StringComparison.OrdinalIgnoreCase);
+    }
+
     private static bool IsCodeSnippetField(IReadOnlyDictionary<string, string?> fields) =>
         fields.TryGetValue(Jotdex.Core.Snippets.SnippetConstants.TypeKey, out var t) &&
         string.Equals(t?.Trim(), Jotdex.Core.Snippets.SnippetConstants.TypeValue, StringComparison.OrdinalIgnoreCase);
+
+    private static bool IsNoteTemplateField(IReadOnlyDictionary<string, string?> fields) =>
+        fields.TryGetValue(Jotdex.Core.Templates.TemplateConstants.TypeKey, out var t) &&
+        string.Equals(t?.Trim(), Jotdex.Core.Templates.TemplateConstants.TypeValue, StringComparison.OrdinalIgnoreCase);
 
     public NoteDetail? GetNote(Guid id)
     {
@@ -386,11 +401,30 @@ public sealed class VaultService : IVaultService
         ".jpg" or ".jpeg" => "image/jpeg",
         ".gif" => "image/gif",
         ".webp" => "image/webp",
+        ".bmp" => "image/bmp",
+        ".tif" or ".tiff" => "image/tiff",
         ".svg" => "image/svg+xml",
         ".pdf" => "application/pdf",
+        ".doc" => "application/msword",
+        ".docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        ".xls" => "application/vnd.ms-excel",
+        ".xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        ".ppt" => "application/vnd.ms-powerpoint",
+        ".pptx" => "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        ".odt" => "application/vnd.oasis.opendocument.text",
+        ".ods" => "application/vnd.oasis.opendocument.spreadsheet",
+        ".odp" => "application/vnd.oasis.opendocument.presentation",
+        ".zip" => "application/zip",
+        ".7z" => "application/x-7z-compressed",
+        ".rar" => "application/vnd.rar",
+        ".gz" or ".tgz" => "application/gzip",
         ".html" or ".htm" => "text/html",
         ".json" => "application/json",
-        ".txt" or ".md" => "text/plain",
+        ".csv" => "text/csv",
+        ".xml" => "application/xml",
+        ".txt" or ".md" or ".log" => "text/plain",
+        ".rtf" => "application/rtf",
+        ".epub" => "application/epub+zip",
         _ => "application/octet-stream"
     };
 
