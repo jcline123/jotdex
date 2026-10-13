@@ -1,3 +1,9 @@
+## 2026-10-13 — Browser / authenticated Integrations concurrency regression coverage
+
+**Why:** The v1.4.3 concurrency and Integrations tests covered the two write paths separately, leaving the reported Grok Bot append followed by stale browser autosave sequence untested across authentication boundaries.
+
+**What:** Isolated-vault HTTP regression tests use a real admin cookie and a scoped bearer token on the same host, with development auth bypass disabled. Cover unchanged and dirty stale browser buffers, repeated 409 conflicts returning current content/ETag, byte-for-byte disk preservation, all 40 prior log entries plus the bot addition, and explicit fresh-read merge recovery for the held local edit. This tests browser endpoint requests, not rendered UI/autosave scheduling. No production behavior change. Relevant concurrency and Integrations smoke tests: 18 passed.
+
 ## 2026-10-12 — Slash menu “No matching commands” on note open
 
 **Why:** Opening a note showed a small “No matching commands” plate under the Paste row until the editor was clicked. The `/` insert menu treated an existing `/…` already in the document (or a load/selection) like a freshly typed slash, and the empty-state box stayed visible.

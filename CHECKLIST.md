@@ -340,3 +340,4 @@ ADR: [`docs/decisions/0011-integrations-api.md`](docs/decisions/0011-integration
 - [x] `INT-GATE` Scheme-isolated bearer API; folder ACL; history + If-Match; idempotency; subtle timestamps; ui/api/external provenance; portable FM; docs + sample client without secrets
 - [x] `INT-10` Concurrent-edit integrity: disk-only ETag, no LWW autosave retry, live clean refresh via editorEpoch, destructive replace confirm, concurrency tests
 
+- [x] `INT-11` Authenticated Integrations append → stale browser save regression: unchanged/dirty buffers, repeated 409, disk preservation, fresh-read merge recovery

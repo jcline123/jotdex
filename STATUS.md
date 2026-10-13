@@ -1,11 +1,17 @@
 # Jotdex STATUS
 
 **Active milestone:** INT complete — portable **1.4.3**. Baseline was **1.4.2** (`v1.4.2` @ `5f726b9`).  
-**Last updated:** 2026-10-12
+**Last updated:** 2026-10-13
 
 ## In progress
 
 - (none)
+
+## Verified follow-up
+
+- `INT-11` Regression coverage for cookie-authenticated browser read → bearer-authenticated Grok Bot append → stale browser autosave (unchanged and dirty drafts). Repeated stale saves return 409 with current content/ETag and leave disk bytes unchanged; fresh-read merge preserves prior entries, bot addition, and local edit. No production behavior change.
+- Validation: 18/18 tests passed across `BrowserIntegrationConcurrencyTests`, `ConcurrentNoteWriteTests`, `IntegrationAuthSmokeTests`, `IntegrationTasksApiSmokeTests`, and `IntegrationExportAttachApiSmokeTests` (.NET SDK 10.0.401, Linux). These are in-process HTTP tests, not browser UI automation.
+- Run: `dotnet test tests/Unit/Jotdex.Tests.Smoke -m:1 -p:UseSharedCompilation=false --filter "FullyQualifiedName~BrowserIntegrationConcurrencyTests|FullyQualifiedName~ConcurrentNoteWriteTests|FullyQualifiedName~IntegrationAuthSmokeTests|FullyQualifiedName~IntegrationTasksApiSmokeTests|FullyQualifiedName~IntegrationExportAttachApiSmokeTests"`
 
 ## Just shipped
 
