@@ -7,7 +7,7 @@
 - Vault templates under `Templates/` (`jotdex_type: note-template`): save current note as template, CRUD pane, new-note picker (built-in + vault), instantiate with fresh IDs + copied `.assets`, prepare-insert remaps assets for undoable cursor insert (append confirm when unfocused). Hidden from notes list/folders rail like Snippets.
 
 **Portable release 1.4.4**
-- Tag `v1.4.4` (commit filled after tag) — attachments download + note templates. Live vault Markdown was **not** rewritten by the release. Rollback is the previous exe (1.4.3).
+- Tag `v1.4.4` (`12a2b44`) — attachments download + note templates. Live vault Markdown was **not** rewritten by the release. Rollback is the previous exe (1.4.3).
 
 ## 2026-10-12 — Slash menu “No matching commands” on note open
 
