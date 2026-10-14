@@ -5,7 +5,7 @@
 **What:** Home panel is **Favorites** (starred notes) instead of open to-dos. Note header **Insert template** opens a picker; Templates pane copy clarifies Use vs Insert. Clicking outside the Insert/slash menu dismisses it (Escape still works). Insert/slash menu is `position: fixed` next to the caret (flips above if near the bottom of the viewport).
 
 **Portable release 1.4.5**
-- Tag `v1.4.5` (commit filled after tag) — home favorites + Insert UX polish. Live vault Markdown was **not** rewritten by the release. Rollback is the previous exe (1.4.4).
+- Tag `v1.4.5` (`bee45ce`) — home favorites + Insert UX polish. Live vault Markdown was **not** rewritten by the release. Rollback is the previous exe (1.4.4).
 
 ## 2026-10-13 — Downloadable attachments + reusable note templates
 
