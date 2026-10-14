@@ -897,6 +897,22 @@ export function NoteEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only on nonce
   }, [editor, insertRequest?.nonce])
 
+  // Dismiss Insert / slash menu when clicking outside (Escape already handled in keydown).
+  useEffect(() => {
+    if (!editor || !slashState?.active) return
+    const onPointerDown = (e: PointerEvent) => {
+      const t = e.target as HTMLElement | null
+      if (!t) return
+      if (t.closest?.('.jotdex-slash')) return
+      if (t.closest?.('.jotdex-toolbar-insert')) return
+      if (t.closest?.('.jotdex-gutter-plus')) return
+      editor.view.dispatch(editor.state.tr.setMeta(slashMenuKey, { clear: true }))
+      overlaysRef.current.close()
+    }
+    document.addEventListener('pointerdown', onPointerDown, true)
+    return () => document.removeEventListener('pointerdown', onPointerDown, true)
+  }, [editor, slashState?.active])
+
   useEffect(() => {
     if (!editor || !jumpHeading?.text) return
     const target = jumpHeading.text.trim().toLowerCase()
@@ -1051,6 +1067,13 @@ export function NoteEditor({
   const openInsertMenu = (fromGap: boolean) => {
     const plus = plusStateRef.current
     if (fromGap && plus?.fromGap) insertTransientParagraphAt(editor.view, plus.pos)
+    // Keep the caret in view so the Insert list appears next to it (not at the top of a long note).
+    try {
+      editor.commands.focus()
+      editor.view.dispatch(editor.state.tr.scrollIntoView())
+    } catch {
+      /* ignore */
+    }
     const next = {
       active: true as const,
       from: editor.state.selection.from,

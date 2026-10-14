@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import { formatDueLabel, parseTodosMarkdown, sortTodos, type TodoItem } from './todosMarkdown'
 import { cacheRecentNoteIds, loadRecentNoteIds } from './recentNotes'
 import { isStandaloneTodosNote } from './systemNotes'
 import { CloudBackupHealthBanner } from './CloudBackupHealthBanner'
@@ -11,6 +10,7 @@ export type HomeNote = {
   folderPath: string
   modified?: string
   created?: string
+  favorite?: boolean
 }
 
 type Props = {
@@ -62,13 +62,6 @@ async function fetchTodosNoteId(): Promise<string | null> {
   return typeof note.id === 'string' ? note.id : null
 }
 
-async function fetchOpenTodos(): Promise<TodoItem[]> {
-  const byPath = await fetch('/api/notes/by-path?path=Todos.md', { credentials: 'same-origin' })
-  if (!byPath.ok) return []
-  const note = await byPath.json()
-  return sortTodos(parseTodosMarkdown(String(note.markdown ?? ''))).slice(0, 8)
-}
-
 export function HomeLanding({
   vaultName,
   noteCount,
@@ -81,7 +74,6 @@ export function HomeLanding({
   onRetryCloudBackup,
 }: Props) {
   const [notes, setNotes] = useState<HomeNote[]>([])
-  const [todos, setTodos] = useState<TodoItem[]>([])
   const [recentIds, setRecentIds] = useState<string[]>(() => loadRecentNoteIds())
   const [busy, setBusy] = useState(true)
 
@@ -90,9 +82,8 @@ export function HomeLanding({
     setBusy(true)
     void (async () => {
       try {
-        const [all, openTodos, todosId, uiRes] = await Promise.all([
+        const [all, todosId, uiRes] = await Promise.all([
           fetchAllNotes(),
-          fetchOpenTodos(),
           fetchTodosNoteId(),
           fetch('/api/settings/ui', { credentials: 'same-origin' }),
         ])
@@ -100,7 +91,6 @@ export function HomeLanding({
         const hiddenIds = new Set<string>()
         if (todosId) hiddenIds.add(todosId)
         setNotes(visibleHomeNotes(all, hiddenIds))
-        setTodos(openTodos)
         if (uiRes.ok) {
           const ui = (await uiRes.json()) as { recentNoteIds?: string[] }
           if (Array.isArray(ui.recentNoteIds) && ui.recentNoteIds.length > 0) {
@@ -109,10 +99,7 @@ export function HomeLanding({
           }
         }
       } catch {
-        if (!cancelled) {
-          setNotes([])
-          setTodos([])
-        }
+        if (!cancelled) setNotes([])
       } finally {
         if (!cancelled) setBusy(false)
       }
@@ -136,6 +123,11 @@ export function HomeLanding({
     .sort((a, b) => ts(b.modified) - ts(a.modified))
     .slice(0, 8)
 
+  const favorites = notes
+    .filter((n) => n.favorite)
+    .sort((a, b) => ts(b.modified) - ts(a.modified) || a.title.localeCompare(b.title))
+    .slice(0, 12)
+
   return (
     <div className="home-landing">
       <header className="home-hero">
@@ -157,7 +149,7 @@ export function HomeLanding({
             'Your Markdown notebook'
           )}
         </p>
-        <p className="home-tagline">Pick up where you left off, clear a to-do, or start a fresh note.</p>
+        <p className="home-tagline">Pick up where you left off, open a favorite, or start a fresh note.</p>
         <div className="home-actions">
           <button type="button" className="primary" onClick={onNewNote}>
             New note
@@ -166,8 +158,8 @@ export function HomeLanding({
             Search
             <kbd>Ctrl+K</kbd>
           </button>
-          <button type="button" className="ghost" onClick={onOpenTodos}>
-            Todos{todos.length ? ` · ${todos.length}` : ''}
+          <button type="button" className="ghost" onClick={onOpenTodos} title="Focus the Todos rail">
+            Todos
           </button>
         </div>
       </header>
@@ -238,24 +230,26 @@ export function HomeLanding({
             )}
           </section>
 
-          <section className="home-panel home-panel-todos">
-            <div className="home-panel-head">
-              <h2>Open to-dos</h2>
-              <button type="button" className="ghost home-panel-link" onClick={onOpenTodos}>
-                Open list
-              </button>
-            </div>
-            {todos.length === 0 ? (
-              <p className="muted home-empty">No open to-dos — add some from the Todos rail.</p>
+          <section className="home-panel home-panel-favorites">
+            <h2>Favorites</h2>
+            {favorites.length === 0 ? (
+              <p className="muted home-empty">
+                Star a note with <strong>Favorite</strong> in the note header — they show up here.
+              </p>
             ) : (
               <ul className="home-list">
-                {todos.map((t) => (
-                  <li key={t.id}>
-                    <button type="button" className="home-row" onClick={onOpenTodos}>
-                      <span className="home-row-title">{t.title}</span>
+                {favorites.map((n) => (
+                  <li key={n.id}>
+                    <button type="button" className="home-row" onClick={() => onOpenNote(n.id)}>
+                      <span className="home-row-title">
+                        <span className="fav-star" aria-hidden>
+                          ★{' '}
+                        </span>
+                        {n.title}
+                      </span>
                       <span className="home-row-meta">
-                        <span className={`todos-pri pri-${t.priority}`}>{t.priority}</span>
-                        {formatDueLabel(t.due) ? ` · ${formatDueLabel(t.due)}` : ''}
+                        {n.folderPath || '/'}
+                        {n.modified ? ` · ${formatWhen(n.modified)}` : ''}
                       </span>
                     </button>
                   </li>

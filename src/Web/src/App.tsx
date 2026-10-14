@@ -19,6 +19,7 @@ import { FirstRunWizard, LoginScreen } from './AuthScreens'
 import { TrashPane } from './TrashPane'
 import { SnippetsPane } from './SnippetsPane'
 import { TemplatesPane } from './TemplatesPane'
+import { InsertTemplateModal } from './InsertTemplateModal'
 import {
   fetchTemplates,
   instantiateTemplate,
@@ -368,6 +369,7 @@ function App() {
   const [showTemplates, setShowTemplates] = useState(false)
   const [vaultTemplates, setVaultTemplates] = useState<VaultTemplateSummary[]>([])
   const [insertRequest, setInsertRequest] = useState<{ markdown: string; nonce: number } | null>(null)
+  const [insertTemplateOpen, setInsertTemplateOpen] = useState(false)
   const [tasksRefreshKey, setTasksRefreshKey] = useState(0)
   const bumpTasksRefresh = useCallback(() => setTasksRefreshKey((k) => k + 1), [])
   const [todosCollapsed, setTodosCollapsed] = useState(() => {
@@ -1906,12 +1908,14 @@ function App() {
 
   async function insertVaultTemplate(t: VaultTemplateSummary) {
     if (!selectedId || !note) {
-      setError('Open a note first, then insert a template at the cursor.')
-      return
+      const msg = 'Open a note first, then insert a template at the cursor.'
+      setError(msg)
+      throw new Error(msg)
     }
     if (isNoteTemplateNote(splitFrontMatter(note.markdown).frontMatter, note.folderPath)) {
-      setError('Open a regular note to insert a template (not while editing a template).')
-      return
+      const msg = 'Open a regular note to insert a template (not while editing a template).'
+      setError(msg)
+      throw new Error(msg)
     }
     try {
       const prepared = await prepareTemplateInsert(t.noteId, selectedId)
@@ -1930,10 +1934,13 @@ function App() {
       }
       setInsertRequest({ markdown: prepared.markdown, nonce: Date.now() })
       setShowTemplates(false)
+      setInsertTemplateOpen(false)
       setMobilePane('editor')
       setNetworkHint(`Inserted “${t.title}” (undo with Ctrl+Z).`)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Could not insert template')
+      const msg = e instanceof Error ? e.message : 'Could not insert template'
+      setError(msg)
+      throw e instanceof Error ? e : new Error(msg)
     }
   }
 
@@ -2654,6 +2661,14 @@ function App() {
               setShowTrash(false)
               setMobilePane('editor')
             })
+          }}
+        />
+      )}
+      {insertTemplateOpen && note && (
+        <InsertTemplateModal
+          onClose={() => setInsertTemplateOpen(false)}
+          onPick={async (t) => {
+            await insertVaultTemplate(t)
           }}
         />
       )}
@@ -4530,6 +4545,17 @@ function App() {
                   >
                     Save as template
                   </button>
+                  {!isNoteTemplateNote(frontMatter, note.folderPath) &&
+                    !isCodeSnippetNote(frontMatter, note.folderPath) && (
+                      <button
+                        type="button"
+                        className="ghost"
+                        title="Insert a template at the cursor in this note"
+                        onClick={() => setInsertTemplateOpen(true)}
+                      >
+                        Insert template
+                      </button>
+                    )}
                   <button type="button" className="ghost" onClick={() => void trashNote()}>
                     Trash
                   </button>

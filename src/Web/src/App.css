@@ -2518,6 +2518,57 @@ button {
   padding: 0 0.35rem 0.35rem;
 }
 
+.insert-template-modal {
+  max-width: 28rem;
+}
+
+.insert-template-list {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  max-height: min(50vh, 22rem);
+  overflow: auto;
+  border: 1px solid var(--border, #e4e7ec);
+  border-radius: 8px;
+}
+
+.insert-template-list > li {
+  border-bottom: 1px solid var(--border, #e4e7ec);
+}
+
+.insert-template-list > li:last-child {
+  border-bottom: none;
+}
+
+.insert-template-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.15rem;
+  width: 100%;
+  padding: 0.65rem 0.85rem;
+  border: none;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+}
+
+.insert-template-row:hover:not(:disabled),
+.insert-template-row:focus-visible {
+  background: var(--panel-muted, #f8fafc);
+}
+
+.insert-template-row span {
+  font-size: 0.85rem;
+  color: var(--muted, #667085);
+}
+
+.insert-template-list > li.muted {
+  padding: 0.85rem;
+}
+
 .note-image-resize {
   position: absolute;
   z-index: 4;

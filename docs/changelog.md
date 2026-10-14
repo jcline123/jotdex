@@ -1,3 +1,12 @@
+## 2026-10-14 — Home favorites; Insert template discoverability; dismiss Insert menu
+
+**Why:** Home “Open to-dos” duplicated the always-visible Todos rail and only read standalone `Todos.md` (missing note-linked tasks). Template insert existed but was hard to find. The formatting **Insert** list stayed open when changing your mind. The Insert list was also pinned to the top of the editor stage, so in a long note you had to scroll up to see it.
+
+**What:** Home panel is **Favorites** (starred notes) instead of open to-dos. Note header **Insert template** opens a picker; Templates pane copy clarifies Use vs Insert. Clicking outside the Insert/slash menu dismisses it (Escape still works). Insert/slash menu is `position: fixed` next to the caret (flips above if near the bottom of the viewport).
+
+**Portable release 1.4.5**
+- Tag `v1.4.5` (commit filled after tag) — home favorites + Insert UX polish. Live vault Markdown was **not** rewritten by the release. Rollback is the previous exe (1.4.4).
+
 ## 2026-10-13 — Downloadable attachments + reusable note templates
 
 **Why:** Notes needed first-class file attachments (not only images) with reliable downloads on desktop and mobile, and reusable note layouts that stay portable with the vault — without coupling templates to note identity/history.

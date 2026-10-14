@@ -34,6 +34,10 @@ Upload **`artifacts\jotdex-win-x64.zip`** to a GitHub Release (tag like `v1.1.0`
 3. Download the Release zip, extract over the install folder, **keep `data\`**.
 4. Start `start-portable.cmd`.
 
+## 1.4.5 (Home favorites + Insert UX)
+
+1.4.5 replaces the home “Open to-dos” panel with **Favorites** (Todos stay on the always-visible rail). Note header **Insert template** opens a picker; the formatting **Insert** menu dismisses on outside click and appears next to the caret in long notes. Rollback is the previous portable exe (1.4.4).
+
 ## 1.4.4 (Downloadable attachments + note templates)
 
 1.4.4 adds reliable file attachment downloads (click a PDF/Office/ZIP link to save with the original name; images keep display plus an explicit Download) and reusable note templates stored under vault `Templates/` (save current note as template, Templates pane, new-note picker, insert at cursor with asset copy). Integrations attachment allowlist is broader for common document types. Rollback is the previous portable exe (1.4.3).

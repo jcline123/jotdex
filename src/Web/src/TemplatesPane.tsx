@@ -104,8 +104,9 @@ export function TemplatesPane({
         </div>
       </div>
       <p className="muted snippets-lede">
-        Reusable note layouts stored in <code>Templates/</code>. Editing a template does not change notes already
-        created from it.
+        Reusable layouts in <code>Templates/</code>. <strong>Use</strong> creates a new note; <strong>Insert</strong>{' '}
+        pastes into the open note at the cursor (also: note header → <strong>Insert template</strong>). Editing a
+        template does not change notes already created from it.
       </p>
       <div className="snippets-search">
         <label className="sr-only" htmlFor="templates-search-input">

@@ -1,11 +1,14 @@
+import { useLayoutEffect, useState } from 'react'
 import type { Editor } from '@tiptap/core'
 import type { CommandContext, EditorCommandDescriptor } from '../commands/types'
 import type { EditorCommandRegistry } from '../commands/createEditorCommandRegistry'
 import type { SlashMenuState } from './slashMenuPlugin'
 
+type ActiveSlashState = NonNullable<SlashMenuState>
+
 type Props = {
   editor: Editor
-  state: SlashMenuState
+  state: ActiveSlashState
   registry: EditorCommandRegistry
   ctx: CommandContext
   index: number
@@ -13,8 +16,38 @@ type Props = {
   onClose: () => void
 }
 
+type MenuPos = { top: number; left: number }
+
+function menuPositionNearCursor(editor: Editor, docPos: number): MenuPos {
+  let coords: { top: number; bottom: number; left: number }
+  try {
+    coords = editor.view.coordsAtPos(docPos)
+  } catch {
+    const sel = editor.view.dom.getBoundingClientRect()
+    return { top: Math.min(sel.top + 40, window.innerHeight - 240), left: Math.max(8, sel.left + 8) }
+  }
+
+  const menuW = 260
+  const menuH = 224 // matches max-height ~14rem
+  const gap = 6
+  let top = coords.bottom + gap
+  if (top + menuH > window.innerHeight - 8) {
+    top = Math.max(8, coords.top - menuH - gap)
+  }
+  let left = coords.left
+  left = Math.min(left, window.innerWidth - menuW - 8)
+  left = Math.max(8, left)
+  return { top, left }
+}
+
 export function SlashMenu({ editor, state, registry, ctx, index, onIndex: _onIndex, onClose }: Props) {
-  if (!state?.active) return null
+  const [pos, setPos] = useState<MenuPos>(() => menuPositionNearCursor(editor, state.from))
+
+  useLayoutEffect(() => {
+    setPos(menuPositionNearCursor(editor, state.from))
+  }, [editor, state.from, state.to, state.query])
+
+  if (!state.active) return null
   const items =
     state.source === 'plus' ? registry.plusItems(state.query) : registry.slashItems(state.query)
   const enabled = items.filter((c) => c.isEnabled(editor)).slice(0, 12)
@@ -29,7 +62,12 @@ export function SlashMenu({ editor, state, registry, ctx, index, onIndex: _onInd
     onClose()
   }
   return (
-    <div className="wiki-suggest jotdex-slash" role="listbox" aria-label="Insert">
+    <div
+      className="wiki-suggest jotdex-slash"
+      role="listbox"
+      aria-label="Insert"
+      style={{ position: 'fixed', top: pos.top, left: pos.left, zIndex: 40 }}
+    >
       {enabled.map((cmd, i) => (
         <button
           key={cmd.id}
