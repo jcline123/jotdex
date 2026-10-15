@@ -5,7 +5,7 @@
 **What:** Vault mirror now zips the live vault to `jotdex-vault-mirror.zip` in the destination (read-only; live vault untouched). After a successful zip, legacy mirrored folders/files are removed from the destination (keeps `jotdex-move-kits\` and the zip/readme). UI + `scripts/mirror-vault.ps1` + docs updated.
 
 **Portable release 1.4.6**
-- Tag `v1.4.6` — vault mirror as a single zip (iCloud-friendly). Live vault Markdown was **not** rewritten by the release. Rollback is the previous exe (1.4.5).
+- Tag `v1.4.6` (`8beba8a`) — vault mirror as a single zip (iCloud-friendly). Live vault Markdown was **not** rewritten by the release. Rollback is the previous exe (1.4.5).
 
 ## 2026-10-14 — Home favorites; Insert template discoverability; dismiss Insert menu
 

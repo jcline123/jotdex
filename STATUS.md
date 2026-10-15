@@ -9,7 +9,7 @@
 
 ## Just shipped
 
-- Portable **1.4.6** — Vault mirror writes a single `jotdex-vault-mirror.zip` (cleans legacy file-tree copies in the destination). Live vault Markdown was **not** rewritten. Rollback is the previous exe (1.4.5); keep `artifacts/jotdex-win-x64-1.4.5.zip` and `C:\JotdexBackupHold\jotdex-win-x64-1.4.5.zip`.
+- Portable **1.4.6** (`v1.4.6` @ `8beba8a`) — Vault mirror writes a single `jotdex-vault-mirror.zip` (cleans legacy file-tree copies in the destination). Live vault Markdown was **not** rewritten. Rollback is the previous exe (1.4.5); keep `artifacts/jotdex-win-x64-1.4.5.zip` and `C:\JotdexBackupHold\jotdex-win-x64-1.4.5.zip`.
 - Portable **1.4.5** (`v1.4.5` @ `bee45ce`) — Home Favorites; Insert template in note header; Insert menu dismisses outside click and anchors to caret. Live vault Markdown was **not** rewritten. Rollback is the previous exe (1.4.4); keep `artifacts/jotdex-win-x64-1.4.4.zip` and `C:\JotdexBackupHold\jotdex-win-x64-1.4.4.zip`.
 - Portable **1.4.4** (`v1.4.4` @ `12a2b44`) — Downloadable attachments (safe Content-Disposition, click-to-download, toolbar Attach + drag-drop) + reusable note templates (`Templates/`). Live vault Markdown was **not** rewritten. Rollback is the previous exe (1.4.3); keep `artifacts/jotdex-win-x64-1.4.3.zip` and `C:\JotdexBackupHold\jotdex-win-x64-1.4.3.zip`.
 - Portable **1.4.3** (`v1.4.3` @ `91bf7c4`) — Concurrent-edit / stale-autosave protections (INT-10); slash menu no longer flashes “No matching commands” on open; README leads with editor/todos/tunnel/Integrations story. Live vault Markdown was **not** rewritten. Rollback is the previous exe (1.4.2); keep `artifacts/jotdex-win-x64-1.4.2.zip` and `C:\JotdexBackupHold\jotdex-win-x64-1.4.2.zip`.
