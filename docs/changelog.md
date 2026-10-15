@@ -1,3 +1,12 @@
+## 2026-10-15 — Vault mirror writes a single zip (iCloud-friendly)
+
+**Why:** File-tree robocopy into iCloud Drive flooded the sync client with thousands of small notes/assets; Windows iCloud could not keep up.
+
+**What:** Vault mirror now zips the live vault to `jotdex-vault-mirror.zip` in the destination (read-only; live vault untouched). After a successful zip, legacy mirrored folders/files are removed from the destination (keeps `jotdex-move-kits\` and the zip/readme). UI + `scripts/mirror-vault.ps1` + docs updated.
+
+**Portable release 1.4.6**
+- Tag `v1.4.6` — vault mirror as a single zip (iCloud-friendly). Live vault Markdown was **not** rewritten by the release. Rollback is the previous exe (1.4.5).
+
 ## 2026-10-14 — Home favorites; Insert template discoverability; dismiss Insert menu
 
 **Why:** Home “Open to-dos” duplicated the always-visible Todos rail and only read standalone `Todos.md` (missing note-linked tasks). Template insert existed but was hard to find. The formatting **Insert** list stayed open when changing your mind. The Insert list was also pinned to the top of the editor stage, so in a long note you had to scroll up to see it.

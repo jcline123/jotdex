@@ -1,39 +1,41 @@
-# Vault mirror (filesystem copy)
+# Vault mirror (zip archive)
 
-**Never** point the live Jotdex vault at a cloud-synced folder. Use a local-disk vault, then optionally mirror a one-way copy elsewhere (another local path, USB, UNC share, or a sync-client folder for offline browsing).
+**Never** point the live Jotdex vault at a cloud-synced folder. Use a local-disk vault, then optionally mirror a one-way **zip** elsewhere (another local path, USB, UNC share, or a sync-client folder such as iCloud Drive).
 
-## Recommended flow
+## Why a zip?
+
+Windows sync clients (especially iCloud) are unreliable with thousands of small Markdown and `.assets` files. Jotdex writes a single archive:
 
 ```text
-C:\JotdexVault          (live, local disk)
+C:\JotdexVault                 (live, local disk)
         |
-        |  scheduled robocopy / in-app mirror
+        |  scheduled / in-app mirror
         v
-D:\JotdexMirror   or   \\server\share\JotdexMirror
-        (browse / recover; not written by the server as the live vault)
+…\JotdexMirror\
+    jotdex-vault-mirror.zip    (one file for sync)
+    README-JOTDEX-MIRROR.txt
+    jotdex-move-kits\          (optional daily recovery kits)
 ```
 
-In the app: **Settings → Backup → Vault mirror**.
+The live vault is **never** modified by the mirror. After each successful zip, leftover file-tree copies from older Jotdex versions are removed from the destination (the zip and `jotdex-move-kits\` are kept).
+
+## In the app
+
+**Settings → Backup → Vault mirror** — enable, set destination folder, interval, optional daily move kit, **Mirror now**.
 
 ## Script
-
-From the repo (or copy beside your install):
 
 ```powershell
 .\scripts\mirror-vault.ps1 `
   -Source "C:\JotdexVault" `
-  -Destination "D:\JotdexMirror"
+  -Destination "C:\Users\you\iCloudDrive\JotdexMirror"
 ```
-
-Uses `robocopy /MIR` by default (destination mirrors source). Review the destination path carefully — `/MIR` deletes files on the destination that are gone from the source.
-
-Schedule with Task Scheduler (daily/hourly) while Jotdex is idle or running; robocopy handles locked files with retries.
 
 ## Rules
 
 - Source = authoritative local vault only.
-- Destination = read-only for humans / other devices.
-- Do not run Jotdex with `VaultPath` set to the mirror.
+- Destination = read-only for humans / other devices (browse by unzipping elsewhere).
+- Do not run Jotdex with `VaultPath` set to the mirror folder or an unzip of the archive.
 - Auth, history, and search indexes stay in app `data\` — they are not part of this mirror.
 
 This filesystem mirror is **independent** of multi-provider cloud backup (API uploads of encrypted Move Kits). Configure that under **Settings → Backup → Cloud backups** — see [cloud-backup.md](cloud-backup.md).

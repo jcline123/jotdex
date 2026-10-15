@@ -15,7 +15,7 @@ No separate decrypt command required.
 
 ### Daily kit in the vault mirror
 
-Mirror still copies your **whole vault** as normal. Optionally also enable **Also drop a daily recovery move kit** — that adds `jotdex-move-kits\` inside the same mirror destination (one archive + Restore script) for PC-loss recovery.
+Mirror writes a single **`jotdex-vault-mirror.zip`** of the live vault into the destination (friendlier for iCloud than thousands of files). Optionally also enable **Also drop a daily recovery move kit** — that adds `jotdex-move-kits\` inside the same mirror destination (one archive + Restore script) for PC-loss recovery. See [vault-mirror.md](vault-mirror.md).
 
 ---
 

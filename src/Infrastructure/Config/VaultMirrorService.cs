@@ -1,4 +1,4 @@
-using System.Diagnostics;
+using System.IO.Compression;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Jotdex.Core.Configuration;
@@ -34,6 +34,8 @@ public sealed class VaultMirrorStatus
     public string? Hint { get; init; }
     public bool IncludeDailyMoveKit { get; init; }
     public DateTimeOffset? LastMoveKitUtc { get; init; }
+    /// <summary>Stable zip name written into the destination folder.</summary>
+    public string? ZipFileName { get; init; }
 }
 
 public interface IVaultMirrorService
@@ -47,6 +49,11 @@ public interface IVaultMirrorService
 
 public sealed class VaultMirrorService : IVaultMirrorService
 {
+    /// <summary>Single archive name so sync clients (iCloud, etc.) only handle one large file.</summary>
+    public const string MirrorZipFileName = "jotdex-vault-mirror.zip";
+    public const string MoveKitsFolderName = "jotdex-move-kits";
+    public const string MirrorReadmeFileName = "README-JOTDEX-MIRROR.txt";
+
     private static readonly JsonSerializerOptions JsonOpts = new()
     {
         WriteIndented = true,
@@ -94,7 +101,10 @@ public sealed class VaultMirrorService : IVaultMirrorService
                 Running = _running,
                 IncludeDailyMoveKit = _settings.IncludeDailyMoveKit,
                 LastMoveKitUtc = _settings.LastMoveKitUtc,
-                Hint = "One-way copy: live vault (local) → destination. Never point VaultPath at the mirror."
+                ZipFileName = MirrorZipFileName,
+                Hint =
+                    $"One-way zip: live vault → {MirrorZipFileName} in the destination. " +
+                    "Never point VaultPath at the mirror. Sync clients (iCloud) handle one archive better than thousands of files."
             };
         }
     }
@@ -158,10 +168,12 @@ public sealed class VaultMirrorService : IVaultMirrorService
         {
             Directory.CreateDirectory(dest);
             var source = _paths.VaultRoot;
-            // Hard cap so a stuck iCloud/robocopy cannot block the 15‑minute schedule forever.
+            // Hard cap so a stuck sync destination cannot block the schedule forever.
             using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             timeoutCts.CancelAfter(TimeSpan.FromMinutes(12));
-            var result = await Task.Run(() => RunRobocopy(source, dest, timeoutCts.Token), timeoutCts.Token)
+            var result = await Task.Run(
+                    () => CreateVaultZipMirror(source, dest, timeoutCts.Token),
+                    timeoutCts.Token)
                 .ConfigureAwait(false);
             lock (_gate)
             {
@@ -182,7 +194,7 @@ public sealed class VaultMirrorService : IVaultMirrorService
             }
 
             if (result.Success)
-                _logger.LogInformation("Vault mirror succeeded → {Dest}", dest);
+                _logger.LogInformation("Vault mirror zip succeeded → {Dest}\\{Zip}", dest, MirrorZipFileName);
             else
                 _logger.LogWarning("Vault mirror failed: {Error}", result.Error);
 
@@ -190,7 +202,7 @@ public sealed class VaultMirrorService : IVaultMirrorService
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
-            const string msg = "Mirror timed out after 12 minutes (often iCloud lag). Will retry on the next interval.";
+            const string msg = "Mirror timed out after 12 minutes (often slow sync destination). Will retry on the next interval.";
             lock (_gate) _lastError = msg;
             _logger.LogWarning("{Msg}", msg);
             return (false, msg);
@@ -226,7 +238,6 @@ public sealed class VaultMirrorService : IVaultMirrorService
                     return "Destination cannot be a parent of the live vault.";
             }
 
-            // Soft warning only — cloud paths are expected for mirrors
             return null;
         }
         catch (Exception ex)
@@ -235,210 +246,218 @@ public sealed class VaultMirrorService : IVaultMirrorService
         }
     }
 
-    private static (bool Success, string? Error) RunRobocopy(string source, string dest, CancellationToken ct) =>
-        RunRobocopyCore(source, dest, ct, retryOnAccessDenied: true);
-
-    private static (bool Success, string? Error) RunRobocopyCore(string source, string dest, CancellationToken ct, bool retryOnAccessDenied)
+    /// <summary>
+    /// Zip the live vault into destination\<see cref="MirrorZipFileName"/>, then remove legacy
+    /// file-tree mirror contents (preserves move-kits folder and the zip itself). Never writes the live vault.
+    /// </summary>
+    private (bool Success, string? Error) CreateVaultZipMirror(string source, string dest, CancellationToken ct)
     {
-        // Clear ReadOnly on dest with a short budget — full unbounded walks hang on iCloud.
-        // /A-:R only applies after a successful copy, so existing ReadOnly dest files still fail.
+        var sourceRoot = Path.GetFullPath(source).TrimEnd('\\', '/');
+        var destRoot = Path.GetFullPath(dest).TrimEnd('\\', '/');
+        if (string.Equals(sourceRoot, destRoot, StringComparison.OrdinalIgnoreCase))
+            return (false, "Destination cannot be the live vault folder.");
+
+        var zipPath = Path.Combine(destRoot, MirrorZipFileName);
+        var tempZip = Path.Combine(destRoot, MirrorZipFileName + "." + Guid.NewGuid().ToString("N")[..8] + ".tmp");
+        var skipped = 0;
+        var added = 0;
+
         try
         {
-            ClearReadOnlyAttributes(dest, TimeSpan.FromSeconds(45), ct);
+            if (File.Exists(tempZip))
+            {
+                try { File.Delete(tempZip); } catch { /* ignore */ }
+            }
+
+            using (var archive = ZipFile.Open(tempZip, ZipArchiveMode.Create))
+            {
+                foreach (var file in Directory.EnumerateFiles(sourceRoot, "*", SearchOption.AllDirectories))
+                {
+                    ct.ThrowIfCancellationRequested();
+                    string rel;
+                    try
+                    {
+                        rel = Path.GetRelativePath(sourceRoot, file);
+                    }
+                    catch
+                    {
+                        skipped++;
+                        continue;
+                    }
+
+                    if (ShouldSkipVaultRelativePath(rel))
+                        continue;
+
+                    var entryName = rel.Replace('\\', '/');
+                    try
+                    {
+                        // Fastest keeps scheduled mirrors snappy; sync clients care about file count more than size.
+                        archive.CreateEntryFromFile(file, entryName, CompressionLevel.Fastest);
+                        added++;
+                    }
+                    catch (IOException)
+                    {
+                        skipped++;
+                    }
+                    catch (UnauthorizedAccessException)
+                    {
+                        skipped++;
+                    }
+                }
+            }
+
+            if (added == 0)
+            {
+                try { File.Delete(tempZip); } catch { /* ignore */ }
+                return (false, "No files could be read from the live vault to build the mirror zip.");
+            }
+
+            // Atomic replace of the destination zip (does not touch the live vault).
+            File.Move(tempZip, zipPath, overwrite: true);
+
+            WriteMirrorReadme(destRoot);
+
+            // Remove old robocopy-style tree so iCloud only has the zip (+ optional move kits).
+            var cleanupError = CleanupLegacyMirrorContents(destRoot, ct);
+            if (cleanupError is not null)
+                _logger.LogWarning("Mirror zip written but legacy cleanup incomplete: {Error}", cleanupError);
+
+            if (skipped > 0)
+                _logger.LogInformation("Vault mirror zip included {Added} files; skipped {Skipped} locked/unreadable", added, skipped);
+
+            return (true, null);
         }
         catch (OperationCanceledException)
         {
+            try { if (File.Exists(tempZip)) File.Delete(tempZip); } catch { /* ignore */ }
             throw;
+        }
+        catch (Exception ex)
+        {
+            try { if (File.Exists(tempZip)) File.Delete(tempZip); } catch { /* ignore */ }
+            return (false, ex.Message);
+        }
+    }
+
+    private static bool ShouldSkipVaultRelativePath(string relativePath)
+    {
+        var rel = relativePath.Replace('/', Path.DirectorySeparatorChar);
+        if (rel.Equals(".git", StringComparison.OrdinalIgnoreCase)) return true;
+        if (rel.StartsWith(".git" + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)) return true;
+        var name = Path.GetFileName(rel);
+        if (name.Equals("Thumbs.db", StringComparison.OrdinalIgnoreCase)) return true;
+        if (name.Equals("desktop.ini", StringComparison.OrdinalIgnoreCase)) return true;
+        return false;
+    }
+
+    private static void WriteMirrorReadme(string destRoot)
+    {
+        var path = Path.Combine(destRoot, MirrorReadmeFileName);
+        var text =
+            """
+            Jotdex vault mirror (read-only zip)
+            ==================================
+
+            This folder holds a one-way copy of the live vault as a single archive:
+
+              jotdex-vault-mirror.zip
+
+            Why a zip? Sync clients on Windows (especially iCloud) struggle with thousands of
+            small Markdown/asset files. One archive syncs more reliably.
+
+            Rules
+            -----
+            - Do NOT open this folder (or unzip into it) as the live Jotdex vault.
+            - Keep VaultPath on local disk only.
+            - Optional jotdex-move-kits\ is a separate daily recovery kit, not the live vault.
+            - To browse notes offline, unzip jotdex-vault-mirror.zip somewhere else.
+
+            """;
+        try
+        {
+            File.WriteAllText(path, text);
         }
         catch
         {
             /* best-effort */
         }
+    }
 
-        var psi = new ProcessStartInfo
-        {
-            FileName = "robocopy.exe",
-            ArgumentList =
-            {
-                source,
-                dest,
-                "/MIR",
-                "/COPY:DT",
-                "/DCOPY:T",
-                "/A-:R",
-                "/R:2",
-                "/W:2",
-                "/NP",
-                "/NFL",
-                "/NDL",
-                "/XD", ".git"
-            },
-            CreateNoWindow = true,
-            UseShellExecute = false,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true
-        };
-
-        using var proc = Process.Start(psi) ?? throw new InvalidOperationException("Could not start robocopy.");
-        var stdoutTask = proc.StandardOutput.ReadToEndAsync(ct);
-        var stderrTask = proc.StandardError.ReadToEndAsync(ct);
-
+    /// <summary>
+    /// Delete everything in the mirror destination except the zip, readme, and move-kits folder.
+    /// Never called on the live vault path (validated before mirror runs).
+    /// </summary>
+    private static string? CleanupLegacyMirrorContents(string destRoot, CancellationToken ct)
+    {
         try
         {
-            while (!proc.WaitForExit(500))
+            destRoot = Path.GetFullPath(destRoot).TrimEnd('\\', '/');
+            foreach (var entry in Directory.EnumerateFileSystemEntries(destRoot))
             {
                 ct.ThrowIfCancellationRequested();
+                var name = Path.GetFileName(entry);
+                if (name.Equals(MirrorZipFileName, StringComparison.OrdinalIgnoreCase)) continue;
+                if (name.Equals(MirrorReadmeFileName, StringComparison.OrdinalIgnoreCase)) continue;
+                if (name.Equals(MoveKitsFolderName, StringComparison.OrdinalIgnoreCase)) continue;
+                // Ignore in-progress temp zips from a crashed prior run briefly — delete them too if .tmp
+                try
+                {
+                    ClearReadOnlyBestEffort(entry);
+                    if (Directory.Exists(entry))
+                        Directory.Delete(entry, recursive: true);
+                    else if (File.Exists(entry))
+                        File.Delete(entry);
+                }
+                catch (Exception ex)
+                {
+                    return $"Could not remove legacy mirror item '{name}': {ex.Message}";
+                }
             }
+
+            return null;
         }
         catch (OperationCanceledException)
         {
-            try
-            {
-                if (!proc.HasExited) proc.Kill(entireProcessTree: true);
-            }
-            catch
-            {
-                /* ignore */
-            }
-
             throw;
         }
+        catch (Exception ex)
+        {
+            return ex.Message;
+        }
+    }
 
-        string stdout;
-        string stderr;
+    private static void ClearReadOnlyBestEffort(string path)
+    {
         try
         {
-            stdout = stdoutTask.GetAwaiter().GetResult();
-            stderr = stderrTask.GetAwaiter().GetResult();
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch
-        {
-            stdout = "";
-            stderr = "";
-        }
-
-        if (proc.ExitCode < 8)
-            return (true, null);
-
-        if (retryOnAccessDenied)
-        {
-            var denied = ExtractAccessDeniedSourcePaths(stdout + "\n" + stderr);
-            if (denied.Count > 0)
+            var attrs = File.GetAttributes(path);
+            if ((attrs & FileAttributes.ReadOnly) != 0)
+                File.SetAttributes(path, attrs & ~FileAttributes.ReadOnly);
+            if (Directory.Exists(path))
             {
-                var destRoot = Path.GetFullPath(dest).TrimEnd('\\', '/');
-                foreach (var srcPath in denied)
+                foreach (var child in Directory.EnumerateFileSystemEntries(path, "*", new EnumerationOptions
+                {
+                    RecurseSubdirectories = true,
+                    IgnoreInaccessible = true
+                }))
                 {
                     try
                     {
-                        var rel = Path.GetRelativePath(source, srcPath);
-                        if (rel.StartsWith("..", StringComparison.Ordinal)) continue;
-                        var destPath = Path.GetFullPath(Path.Combine(dest, rel));
-                        if (!destPath.StartsWith(destRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
-                            && !string.Equals(destPath, destRoot, StringComparison.OrdinalIgnoreCase))
-                            continue;
-                        if (File.Exists(destPath))
-                            File.Delete(destPath);
+                        var a = File.GetAttributes(child);
+                        if ((a & FileAttributes.ReadOnly) != 0)
+                            File.SetAttributes(child, a & ~FileAttributes.ReadOnly);
                     }
                     catch
                     {
-                        /* ignore */
+                        /* skip */
                     }
                 }
-
-                ct.ThrowIfCancellationRequested();
-                return RunRobocopyCore(source, dest, ct, retryOnAccessDenied: false);
             }
-        }
-
-        var detail = SummarizeRobocopyOutput(stdout, stderr);
-        var msg = $"robocopy failed with exit code {proc.ExitCode}";
-        if (!string.IsNullOrWhiteSpace(detail))
-            msg += ": " + detail;
-        return (false, msg);
-    }
-
-    private static List<string> ExtractAccessDeniedSourcePaths(string output)
-    {
-        var paths = new List<string>();
-        foreach (var line in (output ?? "").Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-        {
-            if (!line.Contains("ERROR 5", StringComparison.OrdinalIgnoreCase) &&
-                !line.Contains("Access is denied", StringComparison.OrdinalIgnoreCase))
-                continue;
-            // Robocopy: "ERROR 5 (0x00000005) Copying File C:\path\file.png"
-            const string marker = "Copying File ";
-            var idx = line.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
-            if (idx < 0) continue;
-            var path = line[(idx + marker.Length)..].Trim();
-            if (path.Length > 0 && Path.IsPathRooted(path))
-                paths.Add(path);
-        }
-        return paths.Distinct(StringComparer.OrdinalIgnoreCase).Take(40).ToList();
-    }
-
-    private static void ClearReadOnlyAttributes(string root, TimeSpan budget, CancellationToken ct)
-    {
-        if (!Directory.Exists(root)) return;
-        var sw = Stopwatch.StartNew();
-        var opts = new EnumerationOptions
-        {
-            RecurseSubdirectories = true,
-            IgnoreInaccessible = true
-        };
-
-        IEnumerable<string> entries;
-        try
-        {
-            entries = Directory.EnumerateFileSystemEntries(root, "*", opts);
         }
         catch
         {
-            return;
+            /* best-effort for iCloud placeholders */
         }
-
-        foreach (var path in entries)
-        {
-            ct.ThrowIfCancellationRequested();
-            if (sw.Elapsed >= budget) return;
-            try
-            {
-                var attrs = File.GetAttributes(path);
-                if ((attrs & FileAttributes.ReadOnly) != 0)
-                    File.SetAttributes(path, attrs & ~FileAttributes.ReadOnly);
-            }
-            catch
-            {
-                /* skip locked/cloud-only entries */
-            }
-        }
-    }
-
-    private static string SummarizeRobocopyOutput(string stdout, string stderr)
-    {
-        var combined = (stdout ?? "") + "\n" + (stderr ?? "");
-        var lines = combined
-            .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Where(l =>
-                l.Contains("ERROR", StringComparison.OrdinalIgnoreCase) ||
-                l.Contains("Access is denied", StringComparison.OrdinalIgnoreCase) ||
-                l.Contains("RETRY LIMIT", StringComparison.OrdinalIgnoreCase))
-            .Take(6)
-            .ToList();
-        if (lines.Count == 0)
-        {
-            lines = combined
-                .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                .TakeLast(8)
-                .ToList();
-        }
-
-        var text = string.Join(" | ", lines);
-        const int max = 900;
-        return text.Length <= max ? text : text[..max] + "…";
     }
 
     private VaultMirrorSettings? Load()
@@ -502,7 +521,6 @@ public sealed class VaultMirrorHostedService : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        // Stagger first run so startup isn't blocked
         try { await Task.Delay(TimeSpan.FromSeconds(45), stoppingToken); }
         catch (OperationCanceledException) { return; }
 

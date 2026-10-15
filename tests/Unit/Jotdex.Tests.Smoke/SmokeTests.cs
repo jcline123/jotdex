@@ -1057,6 +1057,51 @@ public class SmokeTests : IClassFixture<WebApplicationFactory<Program>>
     }
 
     [Fact]
+    public async Task Mirror_now_writes_zip_not_file_tree()
+    {
+        var settings = await _client.GetFromJsonAsync<VaultSettingsDto>("/api/settings/vault");
+        Assert.NotNull(settings?.VaultPath);
+        var dest = Path.Combine(Path.GetTempPath(), "jotdex-mirror-smoke-" + Guid.NewGuid().ToString("N")[..8]);
+        Directory.CreateDirectory(dest);
+        // Simulate a legacy file-tree mirror entry that should be cleaned up after zip.
+        File.WriteAllText(Path.Combine(dest, "legacy-note.md"), "old tree\n");
+        try
+        {
+            var put = await _client.PutAsJsonAsync("/api/settings/mirror", new
+            {
+                enabled = true,
+                destinationPath = dest,
+                intervalMinutes = 15,
+                includeDailyMoveKit = false
+            });
+            Assert.Equal(HttpStatusCode.OK, put.StatusCode);
+
+            var run = await _client.PostAsync("/api/settings/mirror/run", null);
+            Assert.Equal(HttpStatusCode.OK, run.StatusCode);
+            var body = await run.Content.ReadAsStringAsync();
+            Assert.DoesNotContain("\"success\":false", body, StringComparison.OrdinalIgnoreCase);
+
+            var zip = Path.Combine(dest, "jotdex-vault-mirror.zip");
+            Assert.True(File.Exists(zip), "Expected jotdex-vault-mirror.zip in destination");
+            Assert.True(new FileInfo(zip).Length > 0);
+            Assert.False(File.Exists(Path.Combine(dest, "legacy-note.md")), "Legacy tree files should be removed");
+            using var archive = System.IO.Compression.ZipFile.OpenRead(zip);
+            Assert.True(archive.Entries.Count >= 1);
+        }
+        finally
+        {
+            try { Directory.Delete(dest, recursive: true); } catch { /* ignore */ }
+            // Leave mirror disabled so later tests are not coupled to this temp path.
+            await _client.PutAsJsonAsync("/api/settings/mirror", new
+            {
+                enabled = false,
+                destinationPath = "",
+                intervalMinutes = 15
+            });
+        }
+    }
+
+    [Fact]
     public async Task Backup_bundle_creates_zip()
     {
         var res = await _client.PostAsync("/api/admin/backup?includeAuth=false&includeHistory=false", null);

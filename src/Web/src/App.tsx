@@ -3617,9 +3617,10 @@ function App() {
             <div className="settings-backup-mirror">
             <h2 className="settings-section">Vault mirror</h2>
             <p className="lede">
-              One-way filesystem copy of the live vault to another path — a second local folder, a USB drive, or a UNC
-              share. This is not the API cloud backups above. Keep the live vault on local disk; never open the mirror
-              folder as the vault.
+              One-way zip of the live vault into another folder (local, USB, UNC, or iCloud Drive). Writes a single{' '}
+              <code>jotdex-vault-mirror.zip</code> so sync clients are not flooded with thousands of small files. This is
+              not the API cloud backups above. Keep the live vault on local disk; never open the mirror folder as the
+              vault.
             </p>
             <label className="field checkbox-row">
               <input type="checkbox" checked={mirrorEnabled} onChange={(e) => setMirrorEnabled(e.target.checked)} />
@@ -3634,8 +3635,9 @@ function App() {
               />
             </label>
             <p className="muted">
-              Use a distinct folder name (for example <code>JotdexMirror</code>), not the live vault path. Copy is
-              one-way: live vault → destination.
+              Use a distinct folder name (for example <code>JotdexMirror</code>), not the live vault path. Each run
+              replaces <code>jotdex-vault-mirror.zip</code> and removes any old file-tree copy left in that folder
+              (keeps <code>jotdex-move-kits\</code> if enabled).
             </p>
             <label className="field">
               Interval (minutes)
@@ -3656,7 +3658,7 @@ function App() {
               Also drop a daily recovery move kit into that mirror folder
             </label>
             <p className="muted">
-              Extra safety net: still mirrors the full vault, and adds <code>jotdex-move-kits\</code> with one archive
+              Extra safety net: still writes the vault zip, and adds <code>jotdex-move-kits\</code> with one archive
               (encrypted when a password is set) plus <code>Restore-Jotdex.ps1</code>.
             </p>
             <div className="modal-actions">

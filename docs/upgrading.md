@@ -34,6 +34,10 @@ Upload **`artifacts\jotdex-win-x64.zip`** to a GitHub Release (tag like `v1.1.0`
 3. Download the Release zip, extract over the install folder, **keep `data\`**.
 4. Start `start-portable.cmd`.
 
+## 1.4.6 (Vault mirror as a single zip)
+
+1.4.6 changes the vault mirror from a file-tree copy to a single `jotdex-vault-mirror.zip` in the destination folder (friendlier for iCloud / other sync clients). After each successful zip, leftover file-tree copies in that destination are removed (`jotdex-move-kits\` kept). Live vault is never modified. Rollback is the previous portable exe (1.4.5).
+
 ## 1.4.5 (Home favorites + Insert UX)
 
 1.4.5 replaces the home “Open to-dos” panel with **Favorites** (Todos stay on the always-visible rail). Note header **Insert template** opens a picker; the formatting **Insert** menu dismisses on outside click and appears next to the caret in long notes. Rollback is the previous portable exe (1.4.4).
