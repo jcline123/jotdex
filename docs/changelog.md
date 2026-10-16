@@ -5,7 +5,7 @@
 **What:** Clicking a link that points at another vault note opens that note. `[[Title]]` does the same when the title matches one note. Web and mailto links still use Open / Ctrl+click. Alt+click leaves the caret in a note link so Edit still works. Type `[[` to insert a link to another note.
 
 **Portable release 1.4.7**
-- Tag `v1.4.7` — folder HTML share, 30-day trash retention, open/edit links, and click-through to other notes. Live vault Markdown was **not** rewritten by the release. Rollback is the previous exe (1.4.6).
+- Tag `v1.4.7` (`792dc93`) — folder HTML share, 30-day trash retention, open/edit links, and click-through to other notes. Live vault Markdown was **not** rewritten by the release. Rollback is the previous exe (1.4.6).
 
 ## 2026-10-16 — Smaller folder and notes rail buttons
 
