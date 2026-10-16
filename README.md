@@ -2,7 +2,7 @@
 
 **Your private notebook — on a Windows PC you already own — that feels like a modern app and still speaks Markdown files.**
 
-[![Latest release](https://img.shields.io/github/v/release/jcline123/jotdex?label=latest)](https://github.com/jcline123/jotdex/releases/latest)
+[![Latest release](https://badgen.net/github/release/jcline123/jotdex?label=latest)](https://github.com/jcline123/jotdex/releases/latest)
 
 Open it in a browser on this PC, a Mac on the LAN, or your phone from anywhere through a [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/). Write with a visual editor. Check off todos from a shared rail. Let automation (including Grok Bot) search, append, and update notes through a secure Integrations API. Your vault stays ordinary Markdown on disk — no subscription, no telemetry, no proprietary lock-in.
 
