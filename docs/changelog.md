@@ -1,6 +1,6 @@
 ## 2026-10-16 — Click a note link to open that note
 
-**Why:** Bright Gauge and ConnectWise notes already store real note links (`[Title](Other%20Note.md)` and `[[Title]]`). In the editor a click only moved the caret, so those links felt broken.
+**Why:** Note-to-note links (`[Title](Other%20Note.md)` and `[[Title]]`) only moved the caret in the editor, so they felt broken.
 
 **What:** Clicking a link that points at another vault note opens that note. `[[Title]]` does the same when the title matches one note. Web and mailto links still use Open / Ctrl+click. Alt+click leaves the caret in a note link so Edit still works. Type `[[` to insert a link to another note.
 
