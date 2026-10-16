@@ -118,7 +118,9 @@ export function TrashPane({ fill, collapsed, onExpand, onCollapse, onRestored }:
           )}
         </div>
       </div>
-      <p className="muted trash-lede">Deleted notes live in app data until restored or emptied.</p>
+      <p className="muted trash-lede">
+        Deleted notes stay here for 30 days, then are removed automatically. Restore anytime before that.
+      </p>
       {error && <p className="error">{error}</p>}
       {hint && <p className="muted">{hint}</p>}
       <ul className="note-list trash-list">

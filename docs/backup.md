@@ -95,4 +95,4 @@ Same vault + appdata as above, **without** the program or restore script. Query 
 
 ## Static HTML export
 
-**Settings / note → Share HTML** or full-vault static export under Maintenance. Read-only escape hatch — not the primary editor.
+**Share HTML** on an open note, or **Share folder** at the top of the notes list when a folder is selected (zip of HTML files plus `index.html`; links between notes in that export open the matching HTML files). Full-vault static export remains under Maintenance. Read-only escape hatch — not the primary editor.

@@ -1207,6 +1207,78 @@ public class SmokeTests : IClassFixture<WebApplicationFactory<Program>>
         public string? Path { get; set; }
     }
 
+    [Fact]
+    public async Task Folder_export_rewrites_links_inside_the_zip()
+    {
+        var token = Guid.NewGuid().ToString("N")[..8];
+        var folder = "Share" + token;
+        var alpha = "Alpha" + token;
+        var beta = "Beta" + token;
+        var gamma = "Gamma" + token;
+
+        var createA = await _client.PostAsJsonAsync("/api/notes", new
+        {
+            title = alpha,
+            folder,
+            markdown = $"# {alpha}\n\nSee [{beta}]({beta}.md) and [site](https://example.com/docs).\n"
+        });
+        var createB = await _client.PostAsJsonAsync("/api/notes", new
+        {
+            title = beta,
+            folder,
+            markdown = $"# {beta}\n\nBack to [[{alpha}]].\n"
+        });
+        var createC = await _client.PostAsJsonAsync("/api/notes", new
+        {
+            title = gamma,
+            folder = folder + "/Sub",
+            markdown = $"# {gamma}\n\nUp to [{alpha}](../{alpha}.md).\n"
+        });
+        Assert.Equal(HttpStatusCode.OK, createA.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, createB.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, createC.StatusCode);
+        var noteA = await createA.Content.ReadFromJsonAsync<NoteDetailDto>();
+        var noteB = await createB.Content.ReadFromJsonAsync<NoteDetailDto>();
+        var noteC = await createC.Content.ReadFromJsonAsync<NoteDetailDto>();
+
+        try
+        {
+            var export = await _client.GetAsync("/api/folders/export-html?path=" + Uri.EscapeDataString(folder));
+            Assert.Equal(HttpStatusCode.OK, export.StatusCode);
+            var bytes = await export.Content.ReadAsByteArrayAsync();
+            using var zip = new System.IO.Compression.ZipArchive(new MemoryStream(bytes), System.IO.Compression.ZipArchiveMode.Read);
+            string Read(string name)
+            {
+                var entry = zip.GetEntry(name);
+                Assert.NotNull(entry);
+                using var reader = new StreamReader(entry!.Open());
+                return reader.ReadToEnd();
+            }
+
+            var index = Read("index.html");
+            Assert.Contains(alpha, index, StringComparison.Ordinal);
+            Assert.Contains(beta, index, StringComparison.Ordinal);
+            Assert.Contains("Sub/", index, StringComparison.Ordinal);
+
+            var pageA = Read(alpha + ".html");
+            Assert.Contains($"href=\"{beta}.html\"", pageA, StringComparison.Ordinal);
+            Assert.Contains("https://example.com/docs", pageA, StringComparison.Ordinal);
+
+            var pageB = Read(beta + ".html");
+            Assert.Contains($"href=\"{alpha}.html\"", pageB, StringComparison.Ordinal);
+            Assert.DoesNotContain("[[", pageB, StringComparison.Ordinal);
+
+            var pageC = Read("Sub/" + gamma + ".html");
+            Assert.Contains($"href=\"../{alpha}.html\"", pageC, StringComparison.Ordinal);
+        }
+        finally
+        {
+            if (noteA is not null) await _client.DeleteAsync($"/api/notes/{noteA.Id}");
+            if (noteB is not null) await _client.DeleteAsync($"/api/notes/{noteB.Id}");
+            if (noteC is not null) await _client.DeleteAsync($"/api/notes/{noteC.Id}");
+        }
+    }
+
     private sealed class NoteDetailDto
     {
         public Guid Id { get; set; }

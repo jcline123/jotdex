@@ -61,6 +61,20 @@ describe('official Jotdex dialect', () => {
     editor.destroy()
   })
 
+  it('keeps parentheses inside note link targets', () => {
+    const src = '- [Tickets By Day (90 Days)](../Gauges/Tickets%20By%20Day%20(90%20Days).md)\n'
+    const editor = createTestEditor(src)
+    const hrefs: string[] = []
+    editor.state.doc.descendants((node) => {
+      node.marks.forEach((mark) => {
+        if (mark.type.name === 'link' && typeof mark.attrs.href === 'string') hrefs.push(mark.attrs.href)
+      })
+    })
+    expect(hrefs).toContain('../Gauges/Tickets%20By%20Day%20(90%20Days).md')
+    expect(editorMarkdown(editor)).toContain('Tickets%20By%20Day%20(90%20Days).md')
+    editor.destroy()
+  })
+
   it('preserves unresolved wikilinks', () => {
     const editor = createTestEditor('See [[Missing Note]] please')
     expect(editorMarkdown(editor)).toContain('[[Missing Note]]')

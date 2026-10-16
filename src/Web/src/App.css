@@ -2083,6 +2083,20 @@ button {
   border-bottom: 1px solid var(--border);
 }
 
+.pane.left .pane-tools,
+.pane.middle .pane-tools {
+  gap: 0.15rem;
+  padding: 0.15rem 0.4rem 0.28rem;
+}
+
+.pane.left .pane-tools .ghost,
+.pane.middle .pane-tools .ghost {
+  padding: 0.12rem 0.38rem;
+  border-radius: 6px;
+  font-size: 0.72rem;
+  line-height: 1.25;
+}
+
 .pane-head {
   display: flex;
   align-items: center;
@@ -3744,6 +3758,12 @@ body.jotdex-image-resizing .jotdex-gutter-plus {
     flex-wrap: wrap;
   }
 
+  .pane.left .pane-tools .ghost,
+  .pane.middle .pane-tools .ghost {
+    padding: 0.28rem 0.45rem;
+    font-size: 0.78rem;
+  }
+
   .tree-item,
   .note-list button {
     min-height: 2.75rem;
@@ -4292,6 +4312,27 @@ html.popout-mode #root {
   line-height: 1;
 }
 .jotdex-table-chrome,
+.link-action-chip {
+  position: fixed;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  max-width: min(28rem, calc(100vw - 1rem));
+  padding: 0.25rem 0.35rem 0.25rem 0.6rem;
+  border: 1px solid var(--border, #333);
+  border-radius: 8px;
+  background: var(--panel, #1c1f26);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+}
+.link-action-chip .link-action-url {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.78rem;
+  color: var(--muted, #a8a29e);
+}
 .jotdex-link-popover,
 .jotdex-emoji-picker,
 .jotdex-image-inspector {
@@ -4321,6 +4362,15 @@ html.popout-mode #root {
 }
 .jotdex-math-block { margin: 0.75rem 0; overflow-x: auto; }
 .jotdex-math-inline { padding: 0 0.15rem; }
+.tiptap-editor a,
+.unresolved-wiki {
+  cursor: pointer;
+}
+.unresolved-wiki {
+  color: var(--accent);
+  text-decoration: underline;
+  text-underline-offset: 0.12em;
+}
 .tiptap-editor details.jotdex-details {
   border: 1px solid var(--border, #444);
   border-radius: 8px;

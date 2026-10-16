@@ -1,7 +1,7 @@
 # Jotdex STATUS
 
-**Active milestone:** INT complete — portable **1.4.6**. Baseline was **1.4.5** (`v1.4.5` @ `bee45ce`).  
-**Last updated:** 2026-10-15
+**Active milestone:** INT complete — portable **1.4.7**. Baseline was **1.4.6** (`v1.4.6` @ `8beba8a`).  
+**Last updated:** 2026-10-16
 
 ## In progress
 
@@ -9,6 +9,7 @@
 
 ## Just shipped
 
+- Portable **1.4.7** — Folder HTML share, 30-day trash retention, open/edit formatted links, and click a note link to open that note. Smaller folder and notes rail buttons. Live vault Markdown was **not** rewritten. Rollback is the previous exe (1.4.6); keep `artifacts/jotdex-win-x64-1.4.6.zip` and `C:\JotdexBackupHold\jotdex-win-x64-1.4.6.zip`.
 - Portable **1.4.6** (`v1.4.6` @ `8beba8a`) — Vault mirror writes a single `jotdex-vault-mirror.zip` (cleans legacy file-tree copies in the destination). Live vault Markdown was **not** rewritten. Rollback is the previous exe (1.4.5); keep `artifacts/jotdex-win-x64-1.4.5.zip` and `C:\JotdexBackupHold\jotdex-win-x64-1.4.5.zip`.
 - Portable **1.4.5** (`v1.4.5` @ `bee45ce`) — Home Favorites; Insert template in note header; Insert menu dismisses outside click and anchors to caret. Live vault Markdown was **not** rewritten. Rollback is the previous exe (1.4.4); keep `artifacts/jotdex-win-x64-1.4.4.zip` and `C:\JotdexBackupHold\jotdex-win-x64-1.4.4.zip`.
 - Portable **1.4.4** (`v1.4.4` @ `12a2b44`) — Downloadable attachments (safe Content-Disposition, click-to-download, toolbar Attach + drag-drop) + reusable note templates (`Templates/`). Live vault Markdown was **not** rewritten. Rollback is the previous exe (1.4.3); keep `artifacts/jotdex-win-x64-1.4.3.zip` and `C:\JotdexBackupHold\jotdex-win-x64-1.4.3.zip`.

@@ -251,6 +251,7 @@ builder.Services.AddSingleton<IVaultMirrorService, VaultMirrorService>();
 builder.Services.AddSingleton<INoteLinkService, NoteLinkService>();
 builder.Services.AddHostedService<VaultMirrorHostedService>();
 builder.Services.AddSingleton<IVaultService, VaultService>();
+builder.Services.AddHostedService<TrashRetentionHostedService>();
 builder.Services.AddHostedService<VaultBootstrapHostedService>();
 builder.Services.AddHostedService<VaultFileWatcher>();
 builder.Services.AddSingleton<IAppVersion>(_ => new AssemblyAppVersion());
@@ -916,6 +917,15 @@ app.MapGet("/api/notes/{id:guid}/export-html", (Guid id, INoteShareExportService
 
     var bytes = System.Text.Encoding.UTF8.GetBytes(result.Html);
     return Results.File(bytes, "text/html; charset=utf-8", result.FileName);
+});
+
+app.MapGet("/api/folders/export-html", (string? path, INoteShareExportService share, IVaultPathGuard paths) =>
+{
+    if (!paths.IsConfigured) return Results.NotFound(new { error = "Vault not configured" });
+    var result = share.ExportFolderZip(path);
+    if (!result.Success || result.Zip is null || string.IsNullOrEmpty(result.FileName))
+        return Results.BadRequest(new { success = false, error = result.Error ?? "Export failed" });
+    return Results.File(result.Zip, "application/zip", result.FileName);
 });
 
 app.MapGet("/api/notes/{id:guid}/history/{snapshotId}", (Guid id, string snapshotId, INoteHistoryService history, IVaultPathGuard paths) =>

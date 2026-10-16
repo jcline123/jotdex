@@ -4,7 +4,7 @@ import type { Editor } from '@tiptap/react'
 import { normalizeBlockSelection } from './selectionUtils'
 import { type CalloutType } from './callout'
 import { type WikiSuggestState } from './wikiLinkSuggest'
-import { relativeMdPath } from './paths'
+import { relativeMdPath, resolveNoteLink, resolveWikiTarget } from './paths'
 import { cleanPasteHtml } from './pasteHtml'
 import {
   copyPlainTextFromCodeBox,
@@ -106,6 +106,8 @@ type Props = {
   insertRequest?: { markdown: string; nonce: number } | null
   /** Test/host override for uploads. Production uses the live `/api/notes/...` endpoints. */
   assetTransport?: AssetTransport
+  /** Open another vault note from a relative link or [[wikilink]]. */
+  onOpenNote?: (noteId: string) => void
 }
 
 type UploadResult = PasteUploadResult & { isImage?: boolean }
@@ -218,6 +220,7 @@ export function NoteEditor({
   assetTransport,
   onOutline,
   insertRequest = null,
+  onOpenNote,
 }: Props) {
   const [uploadStatus, setUploadStatus] = useState<string | null>(null)
   const [validationBanner, setValidationBanner] = useState<string | null>(null)
@@ -236,6 +239,9 @@ export function NoteEditor({
   const [dragPos, setDragPos] = useState<{ top: number; left: number; pos: number } | null>(null)
   const [linkOpen, setLinkOpen] = useState(false)
   const [linkHref, setLinkHref] = useState('')
+  const [linkChip, setLinkChip] = useState<{ href: string; top: number; left: number } | null>(null)
+  const linkOpenRef = useRef(false)
+  linkOpenRef.current = linkOpen
   const [emojiOpen, setEmojiOpen] = useState(false)
   const [emojiQuery, setEmojiQuery] = useState('')
   const [moreFormatting, setMoreFormatting] = useState(false)
@@ -252,6 +258,45 @@ export function NoteEditor({
     setWikiIndex(0)
   }
   const notePathRef = useRef(noteRelativePath)
+  const noteIdRef = useRef(noteId)
+  const onOpenNoteRef = useRef(onOpenNote)
+  noteIdRef.current = noteId
+  onOpenNoteRef.current = onOpenNote
+  const followLinkRef = useRef<(event: MouseEvent) => boolean>(() => false)
+  followLinkRef.current = (event) => {
+    if (event.button !== 0) return false
+    const target = event.target as HTMLElement | null
+    if (!target) return false
+
+    const wiki = target.closest('[data-unresolved-wiki]')
+    if (wiki && !event.altKey && !event.shiftKey) {
+      const raw = wiki.getAttribute('data-unresolved-wiki') || ''
+      const note = resolveWikiTarget(notePathRef.current, raw, catalogRef.current)
+      if (!note || note.id === noteIdRef.current) return false
+      event.preventDefault()
+      event.stopPropagation()
+      onOpenNoteRef.current?.(note.id)
+      return true
+    }
+
+    const href = target.closest('a')?.getAttribute('href') ?? ''
+    if (!href) return false
+    if (event.metaKey || event.ctrlKey) {
+      if (/^https?:\/\//i.test(href) || /^mailto:/i.test(href)) {
+        event.preventDefault()
+        event.stopPropagation()
+        window.open(href, '_blank', 'noopener,noreferrer')
+        return true
+      }
+    }
+    if (event.altKey || event.shiftKey || event.metaKey || event.ctrlKey) return false
+    const note = resolveNoteLink(notePathRef.current, href, catalogRef.current)
+    if (!note || note.id === noteIdRef.current) return false
+    event.preventDefault()
+    event.stopPropagation()
+    onOpenNoteRef.current?.(note.id)
+    return true
+  }
   const catalogRef = useRef(noteCatalog)
   notePathRef.current = noteRelativePath
   catalogRef.current = noteCatalog
@@ -262,7 +307,6 @@ export function NoteEditor({
   const lastAttKeyRef = useRef(attachments.map((a) => a.id).join(','))
   const pasteModeRef = useRef<PasteMode>('smart')
   const attachmentsRef = useRef(attachments)
-  const noteIdRef = useRef(noteId)
   const headingFoldsRef = useRef(headingFolds)
   const lastWrittenFoldsRef = useRef<string | null>(null)
   const persistFoldsRef = useRef<(keys: string[]) => void>(() => {})
@@ -587,6 +631,7 @@ export function NoteEditor({
         class: 'tiptap-editor',
         spellcheck: 'true',
       },
+      handleClick: (_view, _pos, event) => followLinkRef.current(event),
       handlePaste: (_view, event) => {
         const clipboard = event.clipboardData
         if (!clipboard) return false
@@ -1002,6 +1047,49 @@ export function NoteEditor({
     if (!editor) return
     editor.setEditable(editable)
   }, [editable, editor])
+
+  useEffect(() => {
+    if (!editor) return
+    const dom = editor.view.dom
+    const onClick = (event: Event) => {
+      followLinkRef.current(event as MouseEvent)
+    }
+    dom.addEventListener('click', onClick)
+    return () => dom.removeEventListener('click', onClick)
+  }, [editor])
+
+  useEffect(() => {
+    if (!editor) return
+    const sync = () => {
+      if (linkOpenRef.current || !editor.isActive('link')) {
+        setLinkChip((prev) => (prev === null ? prev : null))
+        return
+      }
+      const href = String(editor.getAttributes('link').href ?? '').trim()
+      if (!href) {
+        setLinkChip((prev) => (prev === null ? prev : null))
+        return
+      }
+      try {
+        const coords = editor.view.coordsAtPos(editor.state.selection.from)
+        const top = Math.min(window.innerHeight - 44, coords.bottom + 6)
+        const left = Math.min(window.innerWidth - 320, Math.max(8, coords.left))
+        setLinkChip((prev) =>
+          prev && prev.href === href && Math.abs(prev.top - top) < 1 && Math.abs(prev.left - left) < 1
+            ? prev
+            : { href, top, left },
+        )
+      } catch {
+        setLinkChip((prev) => (prev === null ? prev : null))
+      }
+    }
+    editor.on('selectionUpdate', sync)
+    editor.on('transaction', sync)
+    return () => {
+      editor.off('selectionUpdate', sync)
+      editor.off('transaction', sync)
+    }
+  }, [editor])
 
   useEffect(() => {
     const chrome = chromeRef.current
@@ -1567,6 +1655,55 @@ export function NoteEditor({
               onClick={() => runCmd('block.moveDown')}
             >
               ↓
+            </button>
+          </div>
+        )}
+        {linkChip && !linkOpen && (
+          <div
+            className="link-action-chip"
+            style={{ top: linkChip.top, left: linkChip.left }}
+            role="toolbar"
+            aria-label="Link actions"
+          >
+            <span className="link-action-url" title={linkChip.href}>
+              {linkChip.href}
+            </span>
+            {(() => {
+              const linked = resolveNoteLink(noteRelativePath, linkChip.href, noteCatalog)
+              if (!linked || linked.id === noteId) return null
+              return (
+                <button
+                  type="button"
+                  className="ghost"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => onOpenNote?.(linked.id)}
+                >
+                  Open note
+                </button>
+              )
+            })()}
+            {/^https?:\/\//i.test(linkChip.href) || /^mailto:/i.test(linkChip.href) ? (
+              <button
+                type="button"
+                className="ghost"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => window.open(linkChip.href, '_blank', 'noopener,noreferrer')}
+              >
+                Open
+              </button>
+            ) : null}
+            <button
+              type="button"
+              className="ghost"
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => {
+                setLinkHref(linkChip.href)
+                setLinkOpen(true)
+                overlaysRef.current.open('link')
+                setLinkChip(null)
+              }}
+            >
+              Edit
             </button>
           </div>
         )}

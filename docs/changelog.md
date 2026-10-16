@@ -1,3 +1,27 @@
+## 2026-10-16 — Click a note link to open that note
+
+**Why:** Bright Gauge and ConnectWise notes already store real note links (`[Title](Other%20Note.md)` and `[[Title]]`). In the editor a click only moved the caret, so those links felt broken.
+
+**What:** Clicking a link that points at another vault note opens that note. `[[Title]]` does the same when the title matches one note. Web and mailto links still use Open / Ctrl+click. Alt+click leaves the caret in a note link so Edit still works. Type `[[` to insert a link to another note.
+
+**Portable release 1.4.7**
+- Tag `v1.4.7` — folder HTML share, 30-day trash retention, open/edit links, and click-through to other notes. Live vault Markdown was **not** rewritten by the release. Rollback is the previous exe (1.4.6).
+
+## 2026-10-16 — Smaller folder and notes rail buttons
+
+**Why:** The action buttons at the top of the folder and notes rails wrapped into a tall strip and crowded out the lists.
+
+**What:** Those rail tool buttons use tighter padding and a smaller type size. Other buttons in the app are unchanged.
+
+## 2026-10-16 — Folder HTML share, trash retention, link open/edit
+
+**Why:** Share HTML was one note at a time. Deleted notes already went to Trash, but nothing removed them after a waiting period. Formatted links in the editor only moved the caret, with no way to open or change the URL after it was created.
+
+**What:**
+- **Share folder** (notes-list toolbar, when a folder is selected) downloads a zip of that folder and its subfolders: one HTML file per note, plus `index.html`. Links to other notes included in the export open those HTML files.
+- Trash keeps deleted notes for 30 days, then a background sweep removes that day’s trash folder. The Trash pane says so.
+- Putting the caret in a formatted link shows **Open** (web and mailto addresses; Ctrl/Cmd+click does the same) and **Edit** (the existing link popover).
+
 ## 2026-10-15 — Vault mirror writes a single zip (iCloud-friendly)
 
 **Why:** File-tree robocopy into iCloud Drive flooded the sync client with thousands of small notes/assets; Windows iCloud could not keep up.

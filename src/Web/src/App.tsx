@@ -2144,6 +2144,14 @@ function App() {
     setMovePicker({ kind: 'note' })
   }
 
+  function openLinkedNote(id: string) {
+    setSelectedId(id)
+    setShowTrash(false)
+    setShowSnippets(false)
+    setShowTemplates(false)
+    setMobilePane('editor')
+  }
+
   async function duplicateNote() {
     if (!selectedId) return
     const res = await fetch(`/api/notes/${selectedId}/duplicate`, { method: 'POST' })
@@ -2180,6 +2188,38 @@ function App() {
       URL.revokeObjectURL(url)
     } catch {
       setError('Could not export note')
+    }
+  }
+
+  async function exportFolderHtml() {
+    if (!folder) return
+    setError(null)
+    setNetworkHint('Sharing folder…')
+    try {
+      const res = await fetch(`/api/folders/export-html?path=${encodeURIComponent(folder)}`)
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        setError((data as { error?: string }).error ?? 'Could not share folder')
+        setNetworkHint(null)
+        return
+      }
+      const blob = await res.blob()
+      const cd = res.headers.get('Content-Disposition') ?? ''
+      const match = /filename\*?=(?:UTF-8''|")?([^\";]+)/i.exec(cd)
+      const leaf = folder.split('/').filter(Boolean).pop() || 'folder'
+      const rawName = match?.[1] ? decodeURIComponent(match[1].replace(/"/g, '')) : `${leaf}-share.zip`
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = rawName
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+      setNetworkHint(null)
+    } catch {
+      setError('Could not share folder')
+      setNetworkHint(null)
     }
   }
 
@@ -2416,6 +2456,7 @@ function App() {
                 onOutline={setLiveOutline}
                 attachments={note.attachments}
                 insertRequest={insertRequest}
+                onOpenNote={openLinkedNote}
                 onChange={(md, rev) => {
                   draftRef.current = md
                   setDraft(md)
@@ -4234,6 +4275,16 @@ function App() {
                 </button>
               </div>
               <div className="pane-tools">
+                {folder && (
+                  <button
+                    type="button"
+                    className="ghost"
+                    title="Download this folder and its subfolders as HTML (zip with an index). Links between exported notes open those HTML files."
+                    onClick={() => void exportFolderHtml()}
+                  >
+                    Share folder
+                  </button>
+                )}
                 <button
                   type="button"
                   className="ghost"
@@ -4649,6 +4700,7 @@ function App() {
                   onOutline={setLiveOutline}
                   attachments={note.attachments}
                   insertRequest={insertRequest}
+                  onOpenNote={openLinkedNote}
                   onChange={(md, rev) => {
                     draftRef.current = md
                     setDraft(md)

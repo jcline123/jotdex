@@ -22,6 +22,12 @@ public interface INoteShareExportService
 
     /// <summary>Share HTML with optional theme / title for Integrations export.</summary>
     NoteShareExportResult ExportSelfContainedHtml(Guid noteId, NoteShareExportOptions options);
+
+    /// <summary>
+    /// Zip of self-contained HTML for every note in the folder and its subfolders, plus index.html.
+    /// Links to notes included in the zip point at those HTML files.
+    /// </summary>
+    FolderShareExportResult ExportFolderZip(string? folderRelativePath);
 }
 
 /// <summary>

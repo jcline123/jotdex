@@ -1,3 +1,4 @@
+using System.Globalization;
 using Jotdex.Core.Configuration;
 using Microsoft.Extensions.Logging;
 
@@ -66,18 +67,44 @@ public sealed class MaintenanceService : IMaintenanceService
         if (!Directory.Exists(trash))
             return new TrashCleanupResult { Success = true, DeletedFiles = 0, DeletedDirs = 0 };
 
-        var cutoff = DateTime.UtcNow.AddDays(-Math.Max(1, olderThanDays));
+        var retentionDays = Math.Max(1, olderThanDays);
+        var cutoffDay = DateTime.UtcNow.Date.AddDays(-retentionDays);
+        var cutoff = DateTime.UtcNow.AddDays(-retentionDays);
         var deletedFiles = 0;
         var deletedDirs = 0;
 
         try
         {
-            foreach (var file in Directory.EnumerateFiles(trash, "*", SearchOption.AllDirectories).ToList())
+            if (olderThanDaysOnly)
             {
-                if (olderThanDaysOnly && File.GetLastWriteTimeUtc(file) > cutoff)
-                    continue;
-                File.Delete(file);
-                deletedFiles++;
+                foreach (var dayDir in Directory.EnumerateDirectories(trash).ToList())
+                {
+                    var name = Path.GetFileName(dayDir);
+                    if (!DateTime.TryParseExact(name, "yyyyMMdd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var day))
+                        continue;
+                    // Day folder name is the deletion date. File timestamps stay at the original note time.
+                    if (day.Date > cutoffDay)
+                        continue;
+                    deletedFiles += Directory.EnumerateFiles(dayDir, "*", SearchOption.AllDirectories).Count();
+                    Directory.Delete(dayDir, recursive: true);
+                    deletedDirs++;
+                }
+
+                foreach (var file in Directory.EnumerateFiles(trash).ToList())
+                {
+                    if (File.GetLastWriteTimeUtc(file) > cutoff)
+                        continue;
+                    File.Delete(file);
+                    deletedFiles++;
+                }
+            }
+            else
+            {
+                foreach (var file in Directory.EnumerateFiles(trash, "*", SearchOption.AllDirectories).ToList())
+                {
+                    File.Delete(file);
+                    deletedFiles++;
+                }
             }
 
             foreach (var dir in Directory.EnumerateDirectories(trash, "*", SearchOption.AllDirectories)

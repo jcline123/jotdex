@@ -34,6 +34,10 @@ Upload **`artifacts\jotdex-win-x64.zip`** to a GitHub Release (tag like `v1.1.0`
 3. Download the Release zip, extract over the install folder, **keep `data\`**.
 4. Start `start-portable.cmd`.
 
+## 1.4.7 (Folder share, trash retention, note links)
+
+1.4.7 adds **Share folder** on the notes list (zip of HTML files plus an index; links between exported notes open those files). Trash deletes notes only after 30 days. Formatted web links can be opened or edited from the editor. Clicking a link to another note opens that note. Folder and notes rail buttons are smaller. Rollback is the previous portable exe (1.4.6).
+
 ## 1.4.6 (Vault mirror as a single zip)
 
 1.4.6 changes the vault mirror from a file-tree copy to a single `jotdex-vault-mirror.zip` in the destination folder (friendlier for iCloud / other sync clients). After each successful zip, leftover file-tree copies in that destination are removed (`jotdex-move-kits\` kept). Live vault is never modified. Rollback is the previous portable exe (1.4.5).

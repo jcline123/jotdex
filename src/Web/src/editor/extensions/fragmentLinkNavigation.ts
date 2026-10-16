@@ -15,7 +15,7 @@ function fragmentFromHref(href: string | null | undefined): string | null {
   try {
     if (typeof window !== 'undefined') {
       const u = new URL(t, window.location.href)
-      if (u.hash && u.origin === window.location.origin && !u.search) {
+      if (u.hash && u.origin === window.location.origin && u.pathname === window.location.pathname && !u.search) {
         const id = decodeURIComponent(u.hash.slice(1)).trim()
         return id || null
       }
@@ -25,6 +25,8 @@ function fragmentFromHref(href: string | null | undefined): string | null {
   }
   const hash = t.indexOf('#')
   if (hash >= 0 && !/^[a-z][a-z0-9+.-]*:/i.test(t.slice(0, hash))) {
+    const before = t.slice(0, hash).trim()
+    if (before && before !== '.' && before !== './') return null
     const id = decodeURIComponent(t.slice(hash + 1)).trim()
     return id || null
   }
