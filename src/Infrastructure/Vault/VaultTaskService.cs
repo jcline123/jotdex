@@ -19,6 +19,8 @@ public sealed class VaultTaskDto
     public string? Added { get; init; }
     public int LineIndex { get; init; }
     public bool StandaloneTodosMd { get; init; }
+    public bool FromCalendar { get; init; }
+    public string? CalendarUid { get; init; }
     public bool Done { get; init; }
     public required string ETag { get; init; }
     public DateTimeOffset? NoteCreated { get; init; }
@@ -59,6 +61,8 @@ public interface IVaultTaskService
     VaultTaskActionResult Complete(string taskId);
     VaultTaskActionResult Update(string taskId, VaultTaskUpdate patch);
     VaultTaskActionResult CreateStandalone(string text, string? due, NoteChangeContext change);
+    /// <summary>Create or update a Todos.md item that came from a calendar event titled "todo:".</summary>
+    VaultTaskActionResult UpsertFromCalendar(string calendarUid, string text, string? due, NoteChangeContext change);
     VaultTaskActionResult Patch(string taskId, VaultTaskPatch patch, string expectedETag, NoteChangeContext change);
 }
 
@@ -124,6 +128,8 @@ public sealed class VaultTaskService : IVaultTaskService
                     Added = attrs.GetValueOrDefault("added"),
                     LineIndex = i,
                     StandaloneTodosMd = standalone,
+                    FromCalendar = string.Equals(attrs.GetValueOrDefault("source"), "calendar", StringComparison.OrdinalIgnoreCase),
+                    CalendarUid = attrs.GetValueOrDefault("caluid"),
                     Done = done,
                     ETag = note.ETag,
                     NoteCreated = note.Created,
@@ -294,6 +300,78 @@ public sealed class VaultTaskService : IVaultTaskService
         }
     }
 
+    public VaultTaskActionResult UpsertFromCalendar(string calendarUid, string text, string? due, NoteChangeContext change)
+    {
+        try
+        {
+            var uid = (calendarUid ?? "").Trim();
+            var title = (text ?? "").Trim().Replace('\n', ' ');
+            if (string.IsNullOrWhiteSpace(uid) || string.IsNullOrWhiteSpace(title))
+                return new VaultTaskActionResult { Success = false, Error = "Calendar todo is incomplete" };
+
+            var note = EnsureTodosNote(change);
+            if (note is null)
+                return new VaultTaskActionResult { Success = false, Error = "Could not create Todos.md" };
+
+            var dueValue = string.IsNullOrWhiteSpace(due) ? null : due.Trim();
+            var lines = note.Markdown.Replace("\r\n", "\n").Split('\n').ToList();
+            for (var i = 0; i < lines.Count; i++)
+            {
+                var m = TaskLine.Match(lines[i]);
+                if (!m.Success) continue;
+                if (m.Groups[2].Value is "x" or "X") continue;
+                var attrs = ParseAttrs(m.Groups[4].Success ? m.Groups[4].Value : "");
+                if (!string.Equals(attrs.GetValueOrDefault("caluid"), uid, StringComparison.Ordinal))
+                    continue;
+
+                var current = PlainTaskTitle(m.Groups[3].Value);
+                var currentDue = attrs.GetValueOrDefault("due");
+                if (string.Equals(current, title, StringComparison.Ordinal) &&
+                    string.Equals(currentDue ?? "", dueValue ?? "", StringComparison.Ordinal))
+                {
+                    return new VaultTaskActionResult { Success = true, NoteId = note.Id, ETag = note.ETag };
+                }
+
+                attrs["source"] = "calendar";
+                attrs["caluid"] = uid;
+                if (dueValue is null) attrs.Remove("due");
+                else attrs["due"] = dueValue;
+                if (!attrs.ContainsKey("id") || string.IsNullOrWhiteSpace(attrs["id"]))
+                    attrs["id"] = Guid.NewGuid().ToString("D");
+                lines[i] = $"- [ ] {title}{BuildTaskComment(attrs, standalone: true)}";
+                var save = SaveLines(note.Id, note, lines, note.ETag, change);
+                if (!save.Success)
+                    return new VaultTaskActionResult { Success = false, Error = save.Error ?? "Save failed", Conflict = save.Conflict, ETag = save.ETag };
+                return new VaultTaskActionResult { Success = true, NoteId = note.Id, ETag = save.ETag };
+            }
+
+            var id = Guid.NewGuid().ToString("D");
+            var created = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["id"] = id,
+                ["priority"] = "normal",
+                ["added"] = DateTimeOffset.UtcNow.ToString("O"),
+                ["source"] = "calendar",
+                ["caluid"] = uid
+            };
+            if (dueValue is not null)
+                created["due"] = dueValue;
+            var line = $"- [ ] {title}{BuildTaskComment(created, standalone: true)}";
+            var nl = note.Markdown.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
+            var body = note.Markdown.TrimEnd();
+            var next = body + nl + line + nl;
+            var createdSave = _commands.Save(note.Id, next, note.ETag, force: false, change);
+            if (!createdSave.Success)
+                return new VaultTaskActionResult { Success = false, Error = createdSave.Error ?? "Save failed", Conflict = createdSave.Conflict, ETag = createdSave.ETag };
+            return new VaultTaskActionResult { Success = true, NoteId = note.Id, ETag = createdSave.ETag };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Calendar todo import failed");
+            return new VaultTaskActionResult { Success = false, Error = ex.Message };
+        }
+    }
+
     public VaultTaskActionResult Patch(string taskId, VaultTaskPatch patch, string expectedETag, NoteChangeContext change)
     {
         try
@@ -456,6 +534,8 @@ public sealed class VaultTaskService : IVaultTaskService
         Append("due");
         Append("remind");
         Append("added");
+        Append("source");
+        Append("caluid");
         sb.Append(" -->");
         return sb.ToString();
     }

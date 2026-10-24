@@ -60,7 +60,7 @@ Headings, lists, tables, callouts, tasks, code boxes (PowerShell diagnostics inc
 SQLite FTS5 with word **and** trigram indexes — find `192.168.1.50`, error codes, and half a cmdlet across a real vault. Attachment text is indexed too. The index rebuilds from files if it ever gets lost.
 
 ### Todos
-One rail for note checkboxes and standalone items: priority, due dates, browser reminders, and jump-to-note. Edit the line in the note or patch it through the Integrations API.
+One rail for note checkboxes and standalone items: priority, due dates, browser reminders, and jump-to-note. Edit the line in the note or patch it through the Integrations API. **Settings → Calendar** can copy open todos onto an Apple (or other CalDAV) calendar you choose. Events are titled `todo:`. Undated items stay on today and roll forward until you clear them. Note todos include a link when you set the Jotdex address. An all-day phone event titled `todo:` comes back into the list with a Calendar chip.
 
 ### Integrations API (optional)
 Bearer tokens under **Settings → Integrations** — folder ACL, scopes (read / append / update / tasks / attachments / …), `If-Match`, idempotency keys, never-expire option. Built for Grok Bot and other automation: append to activity logs, insert under a heading, sync tasks, export HTML, upload into `.assets/`. Docs: [docs/integrations-api.md](docs/integrations-api.md).

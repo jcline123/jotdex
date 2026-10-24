@@ -1,3 +1,12 @@
+## 2026-10-24 — Open todos can sync to a calendar
+
+**Why:** The todo list is mostly undated work. Those items should show up on a chosen calendar for the current day, move forward if they are still open tomorrow, and disappear when they leave the list. Shared calendars should stay out of it unless chosen.
+
+**What:** Settings → Calendar connects with CalDAV (iCloud by default) using an Apple ID and an app-specific password. The password is stored with the other app secrets and is not written into notes or returned by the API. You pick which calendar receives todos. Open todos become all-day events titled `todo:`: a future due date stays on that day; anything else stays on today and is moved forward on the next sync. Completing or deleting a todo removes its event. A Jotdex address in those settings adds a link on events that belong to a note. An all-day event you add on the phone titled `todo: …` is imported on the next sync and shows a Calendar chip. See [docs/calendar.md](docs/calendar.md).
+
+**Portable release 1.4.8**
+- Tag `v1.4.8` — calendar sync for open todos. Live vault Markdown was **not** rewritten by the release. Rollback is the previous exe (1.4.7).
+
 ## 2026-10-16 — Click a note link to open that note
 
 **Why:** Note-to-note links (`[Title](Other%20Note.md)` and `[[Title]]`) only moved the caret in the editor, so they felt broken.

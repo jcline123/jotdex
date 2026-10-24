@@ -339,6 +339,7 @@ ADR: [`docs/decisions/0011-integrations-api.md`](docs/decisions/0011-integration
 
 - [x] `INT-GATE` Scheme-isolated bearer API; folder ACL; history + If-Match; idempotency; subtle timestamps; ui/api/external provenance; portable FM; docs + sample client without secrets
 - [x] `INT-10` Concurrent-edit integrity: disk-only ETag, no LWW autosave retry, live clean refresh via editorEpoch, destructive replace confirm, concurrency tests
+- [x] `CAL-01` CalDAV calendar sync for open todos: pick a calendar in Settings, undated/past items roll forward on today, future due dates stay, completed todos are removed. App password stays in the secret store.
 
 ### Post-INT polish (unreleased)
 

@@ -48,6 +48,7 @@ import { runCloudBackup } from './cloudBackupApi'
 import { isStandaloneTodosNote } from './systemNotes'
 import { diffLines } from './diffLines'
 import { IntegrationSettings } from './IntegrationSettings'
+import { CalendarSettings } from './CalendarSettings'
 import { NoteMetadata, type NoteMetaFields } from './NoteMetadata'
 
 function isCodeSnippetNote(frontMatter: string, folderPath?: string): boolean {
@@ -447,6 +448,7 @@ function App() {
     | 'network'
     | 'security'
     | 'notifications'
+    | 'calendar'
     | 'backup'
     | 'updates'
     | 'advanced'
@@ -2758,6 +2760,7 @@ function App() {
                   ['integrations', 'Integrations'],
                   ['capture', 'Capture'],
                   ['notifications', 'Notifications'],
+                  ['calendar', 'Calendar'],
                   ['backup', 'Backup'],
                   ['updates', 'Updates'],
                   ['advanced', 'Advanced'],
@@ -3562,6 +3565,8 @@ function App() {
             {opsNotifyHint && <p className="muted">{opsNotifyHint}</p>}
               </>
             )}
+
+            {settingsTab === 'calendar' && <CalendarSettings />}
 
             {settingsTab === 'backup' && (
               <>

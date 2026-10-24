@@ -461,18 +461,28 @@ export function TodosRail({
                         aria-label={`Complete ${t.title}`}
                         onChange={() => completeTodo(t.id)}
                       />
-                      <button
-                        type="button"
-                        className="todos-row-main"
-                        onClick={() => setSelection({ kind: 'local', id: t.id })}
-                      >
-                        <span className="todos-title">{t.title}</span>
-                        <span className="todos-meta">
-                          <span className={`todos-pri pri-${t.priority}`}>{t.priority}</span>
-                          {formatDueLabel(t.due) && <span className="todos-due">{formatDueLabel(t.due)}</span>}
-                          {t.remind !== 'off' && <span className="todos-remind">remind</span>}
-                        </span>
-                      </button>
+                      <div className="todos-row-body">
+                        <button
+                          type="button"
+                          className="todos-row-main"
+                          onClick={() => setSelection({ kind: 'local', id: t.id })}
+                        >
+                          <span className="todos-title">{t.title}</span>
+                          <span className="todos-meta">
+                            <span className={`todos-pri pri-${t.priority}`}>{t.priority}</span>
+                            {formatDueLabel(t.due) && <span className="todos-due">{formatDueLabel(t.due)}</span>}
+                            {t.remind !== 'off' && <span className="todos-remind">remind</span>}
+                          </span>
+                        </button>
+                        {t.source === 'calendar' && (
+                          <span className="todos-note-open static" title="Added from your calendar">
+                            <span className="todos-note-open-mark" aria-hidden>
+                              ↗
+                            </span>
+                            <span className="todos-note-open-title">Calendar</span>
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </li>
                 )
@@ -551,7 +561,7 @@ export function TodosRail({
       {selectedLocal && (
         <div className="todos-detail">
           <div className="todos-detail-head">
-            <strong>Edit</strong>
+            <strong>{selectedLocal.source === 'calendar' ? 'Edit · from calendar' : 'Edit'}</strong>
             <button type="button" className="ghost" onClick={() => setSelection(null)}>
               Close
             </button>

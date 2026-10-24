@@ -1,7 +1,7 @@
 # Jotdex STATUS
 
-**Active milestone:** INT complete — portable **1.4.7**. Baseline was **1.4.6** (`v1.4.6` @ `8beba8a`).  
-**Last updated:** 2026-10-16
+**Active milestone:** INT complete — portable **1.4.8**. Baseline was **1.4.7** (`v1.4.7` @ `792dc93`).  
+**Last updated:** 2026-10-24
 
 ## In progress
 
@@ -9,6 +9,7 @@
 
 ## Just shipped
 
+- Portable **1.4.8** — Settings → Calendar. Open todos sync to a CalDAV calendar you choose as all-day events titled `todo:`. Undated items roll forward; note todos can link back to the note; an all-day phone event titled `todo:` is imported with a Calendar chip. Live vault Markdown was **not** rewritten. Rollback is the previous exe (1.4.7); keep `artifacts/jotdex-win-x64-1.4.7.zip` and `C:\JotdexBackupHold\jotdex-win-x64-1.4.7.zip`.
 - Portable **1.4.7** (`v1.4.7` @ `792dc93`) — Folder HTML share, 30-day trash retention, open/edit formatted links, and click a note link to open that note. Smaller folder and notes rail buttons. Live vault Markdown was **not** rewritten. Rollback is the previous exe (1.4.6); keep `artifacts/jotdex-win-x64-1.4.6.zip` and `C:\JotdexBackupHold\jotdex-win-x64-1.4.6.zip`.
 - Portable **1.4.6** (`v1.4.6` @ `8beba8a`) — Vault mirror writes a single `jotdex-vault-mirror.zip` (cleans legacy file-tree copies in the destination). Live vault Markdown was **not** rewritten. Rollback is the previous exe (1.4.5); keep `artifacts/jotdex-win-x64-1.4.5.zip` and `C:\JotdexBackupHold\jotdex-win-x64-1.4.5.zip`.
 - Portable **1.4.5** (`v1.4.5` @ `bee45ce`) — Home Favorites; Insert template in note header; Insert menu dismisses outside click and anchors to caret. Live vault Markdown was **not** rewritten. Rollback is the previous exe (1.4.4); keep `artifacts/jotdex-win-x64-1.4.4.zip` and `C:\JotdexBackupHold\jotdex-win-x64-1.4.4.zip`.

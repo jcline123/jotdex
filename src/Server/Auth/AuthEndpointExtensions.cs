@@ -3,6 +3,7 @@ using Jotdex.Core.Auth;
 using Jotdex.Core.Configuration;
 using Jotdex.Core.Integrations;
 using Jotdex.Core.Notifications;
+using Jotdex.Infrastructure.Calendar;
 using Jotdex.Infrastructure.Config;
 using Jotdex.Infrastructure.Maintenance;
 using Jotdex.Infrastructure.Net;
@@ -510,6 +511,45 @@ public static class AuthEndpointExtensions
                 ? Results.Json(new { success = true, warning = error })
                 : Results.BadRequest(new { error });
         });
+
+        app.MapGet("/api/settings/calendar", (ICalendarSyncService calendar) =>
+            Results.Json(calendar.GetStatus()));
+
+        app.MapPut("/api/settings/calendar", async (HttpRequest request, ICalendarSyncService calendar) =>
+        {
+            var body = await request.ReadFromJsonAsync<CalendarSettingsBody>();
+            if (body is null)
+                return Results.BadRequest(new { error = "Invalid body" });
+            var (ok, error) = calendar.Save(new CalendarSettings
+            {
+                Enabled = body.Enabled,
+                ServerUrl = body.ServerUrl ?? "",
+                Username = body.Username ?? "",
+                CalendarUrl = body.CalendarUrl ?? "",
+                CalendarName = body.CalendarName ?? "",
+                PublicBaseUrl = body.PublicBaseUrl ?? ""
+            }, body.Password);
+            return ok
+                ? Results.Json(new { success = true, status = calendar.GetStatus() })
+                : Results.BadRequest(new { error });
+        });
+
+        app.MapPost("/api/settings/calendar/discover", async (HttpRequest request, ICalendarSyncService calendar, CancellationToken ct) =>
+        {
+            var body = await request.ReadFromJsonAsync<CalendarSettingsBody>(ct) ?? new CalendarSettingsBody();
+            var found = await calendar.DiscoverAsync(body.ServerUrl, body.Username, body.Password, ct);
+            return found.Success
+                ? Results.Json(new { calendars = found.Calendars.Select(c => new { url = c.Url, name = c.Name }) })
+                : Results.BadRequest(new { error = found.Error });
+        });
+
+        app.MapPost("/api/settings/calendar/sync", async (ICalendarSyncService calendar, CancellationToken ct) =>
+        {
+            var (ok, error, upserted, removed) = await calendar.SyncNowAsync(ct);
+            return ok
+                ? Results.Json(new { success = true, upserted, removed, status = calendar.GetStatus() })
+                : Results.BadRequest(new { error, upserted, removed, status = calendar.GetStatus() });
+        });
     }
 
     public static IApplicationBuilder UseJotdexAuthGate(this IApplicationBuilder app)
@@ -660,6 +700,17 @@ public static class AuthEndpointExtensions
         public string? TelegramBotToken { get; set; }
         public bool? ClearSmtpPassword { get; set; }
         public bool? ClearTelegramToken { get; set; }
+    }
+
+    private sealed class CalendarSettingsBody
+    {
+        public bool Enabled { get; set; }
+        public string? ServerUrl { get; set; }
+        public string? Username { get; set; }
+        public string? CalendarUrl { get; set; }
+        public string? CalendarName { get; set; }
+        public string? PublicBaseUrl { get; set; }
+        public string? Password { get; set; }
     }
 
     private sealed class SmtpBody

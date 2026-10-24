@@ -24,7 +24,7 @@ Notes travel with the vault. Search index is rebuilt.
 | Note history snapshots | AppData `history\` | Optional / included in move kit |
 | Trash | AppData `trash\` | Optional |
 | Auth / sessions | AppData `auth\` | Recreate or copy carefully / included in move kit |
-| Secrets (SMTP/Telegram/TOTP) | AppData `secrets\secrets.json` (DPAPI) | Move kit unwraps to `secrets-portable.json`; rewrapped on first start |
+| Secrets (SMTP/Telegram/TOTP/calendar app password) | AppData `secrets\secrets.json` (DPAPI) | Move kit unwraps to `secrets-portable.json`; rewrapped on first start |
 | Cloud backup settings | AppData `config\cloud-backup.json` | Included in move kit (preferences only) |
 | Integrations preferences | AppData `config\integrations.json` | Included if present; restore **disables** Integrations |
 | Integration API tokens | AppData `integrations\tokens.json` | Not activated on restore — re-issue tokens |

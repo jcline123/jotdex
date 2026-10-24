@@ -13,6 +13,10 @@ export type TodoItem = {
   remind: TodoRemind
   /** ISO-8601 instant when the item was added from the rail; omitted on older lines. */
   added?: string | null
+  /** "calendar" when the item was created from an all-day calendar event. */
+  source?: string | null
+  /** Calendar event UID so a later sync updates the same item. */
+  calUid?: string | null
 }
 
 const TODO_RE =
@@ -74,6 +78,8 @@ export function parseTodosMarkdown(markdown: string): TodoItem[] {
       due: attrs.due || null,
       remind: attrs.remind || 'off',
       added: attrs.added || null,
+      source: attrs.source || null,
+      calUid: attrs.caluid || null,
     })
   }
   return items
@@ -155,7 +161,9 @@ export function serializeTodosMarkdown(frontMatterNote: string, items: TodoItem[
     const due = t.due ? ` due="${t.due}"` : ''
     const remind = t.remind && t.remind !== 'off' ? ` remind="${t.remind}"` : ' remind="off"'
     const added = t.added ? ` added="${t.added}"` : ''
-    return `- [ ] ${escapeTitle(t.title)} <!-- jotdex-todo id="${t.id}" priority="${t.priority}"${due}${remind}${added} -->`
+    const source = t.source ? ` source="${t.source}"` : ''
+    const calUid = t.calUid ? ` caluid="${t.calUid}"` : ''
+    return `- [ ] ${escapeTitle(t.title)} <!-- jotdex-todo id="${t.id}" priority="${t.priority}"${due}${remind}${added}${source}${calUid} -->`
   })
   const body = lines.length ? lines.join('\n') + '\n' : ''
   if (split.fm) return `${split.fm}\n\n${body}`

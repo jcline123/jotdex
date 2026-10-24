@@ -27,6 +27,17 @@ describe('todosMarkdown', () => {
     expect(serializeTodosMarkdown('', items)).toContain('added="2026-09-01T12:00:00.000Z"')
   })
 
+  it('keeps a calendar source on the todo line', () => {
+    const md =
+      '- [ ] Pick up parts <!-- jotdex-todo id="a" priority="normal" remind="off" source="calendar" caluid="phone-1" -->\n'
+    const items = parseTodosMarkdown(md)
+    expect(items[0]!.source).toBe('calendar')
+    expect(items[0]!.calUid).toBe('phone-1')
+    const saved = serializeTodosMarkdown('', items)
+    expect(saved).toContain('source="calendar"')
+    expect(saved).toContain('caluid="phone-1"')
+  })
+
   it('sorts by priority then newest added', () => {
     const sorted = sortTodos([
       item({ id: 'old', title: 'older normal', added: '2026-01-01T00:00:00.000Z' }),

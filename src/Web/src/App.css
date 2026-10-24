@@ -3274,6 +3274,10 @@ body.jotdex-image-resizing .jotdex-gutter-plus {
   cursor: pointer;
 }
 
+.todos-note-open.static {
+  cursor: default;
+}
+
 .todos-note-open:hover,
 .todos-note-open:focus-visible {
   color: var(--link-hover);

@@ -28,10 +28,10 @@ Mirror writes a single **`jotdex-vault-mirror.zip`** of the live vault into the 
 | Entry | Purpose |
 |---|---|
 | `vault/` | Full live vault |
-| `appdata/config/` | Vault path, network, mirror settings, **cloud-backup.json** / **integrations.json** preferences (portable) |
+| `appdata/config/` | Vault path, network, mirror settings, **calendar.json**, **cloud-backup.json** / **integrations.json** preferences (portable) |
 | `appdata/auth/` | Password hash (secret) |
 | `appdata/history/` | Note rollback snapshots |
-| `appdata/secrets/secrets-portable.json` | Unwrapped notification / TOTP secrets for transfer (re-wrapped with DPAPI on first start) |
+| `appdata/secrets/secrets-portable.json` | Unwrapped notification / TOTP / calendar app-password secrets for transfer (re-wrapped with DPAPI on first start) |
 | `app/` | Portable `Jotdex.Server.exe` when the kit was created from the portable build |
 | `Restore-Jotdex.ps1` | Guided restore on the new PC |
 | `README-MOVE.txt` | Plain-English steps |
