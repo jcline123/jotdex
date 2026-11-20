@@ -5,7 +5,7 @@
 **What:** Calendar sync wraps each cycle so timeouts and HTTP failures are logged and retried with backoff (1 → 2 → 5 → 10 minutes) instead of crashing. A per-sync cancellation token is separate from host shutdown. Other background services use the same “only rethrow when the host is stopping” pattern. `HostOptions.BackgroundServiceExceptionBehavior` is `Ignore` as a backstop. Daily rolling logs under `data/logs/` keep the trail when there is no console. `/api/health` includes the last calendar sync result.
 
 **Portable release 1.4.9**
-- Tag `v1.4.9` — calendar sync timeouts no longer stop the host. Live vault Markdown was **not** rewritten by the release. Rollback is the previous exe (1.4.8).
+- Tag `v1.4.9` (`64b561c`) — calendar sync timeouts no longer stop the host. Live vault Markdown was **not** rewritten by the release. Rollback is the previous exe (1.4.8).
 
 ## 2026-10-24 — Open todos can sync to a calendar
 
