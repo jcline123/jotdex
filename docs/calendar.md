@@ -26,3 +26,5 @@ Timed events are left alone, even if the title starts with `todo:`.
 Jotdex does not write calendar ids into the note body beyond the todo line’s own comment. The same todo always updates the same event, so a later sync replaces it instead of duplicating it.
 
 Sync runs about every ten minutes while it is turned on, and again shortly after a note or todo change. **Sync now** runs immediately.
+
+If CalDAV is slow or unreachable, Jotdex logs a warning (see `data/logs/jotdex-yyyyMMdd.log`), backs off, and keeps serving the app. A failed sync does not stop the server. `/api/health` includes the last calendar sync time and error.

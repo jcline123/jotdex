@@ -3,11 +3,16 @@ using Microsoft.Extensions.Logging;
 
 namespace Jotdex.Infrastructure.Logging;
 
-/// <summary>Appends logs under {dataRoot}/logs/jotdex-yyyyMMdd.log for offline troubleshooting.</summary>
+/// <summary>
+/// Appends logs under {dataRoot}/logs/jotdex-yyyyMMdd.log (daily rolling files).
+/// Portable / Startup-script installs have no console, so this is the durable trail for CalDAV timeouts and similar.
+/// </summary>
 public sealed class FileLoggerProvider : ILoggerProvider
 {
+    private const int RetainDays = 14;
     private readonly string _logsDir;
     private readonly object _gate = new();
+    private DateTime _lastPruneUtc = DateTime.MinValue;
 
     public FileLoggerProvider(string dataRoot)
     {
@@ -31,6 +36,33 @@ public sealed class FileLoggerProvider : ILoggerProvider
         lock (_gate)
         {
             File.AppendAllText(path, line + Environment.NewLine, Encoding.UTF8);
+            PruneOldFilesUnlocked();
+        }
+    }
+
+    private void PruneOldFilesUnlocked()
+    {
+        if (DateTime.UtcNow - _lastPruneUtc < TimeSpan.FromHours(6)) return;
+        _lastPruneUtc = DateTime.UtcNow;
+        try
+        {
+            var cutoff = DateTime.Now.Date.AddDays(-RetainDays);
+            foreach (var file in Directory.EnumerateFiles(_logsDir, "jotdex-*.log"))
+            {
+                var name = Path.GetFileNameWithoutExtension(file);
+                if (name.Length < 15) continue;
+                var stamp = name["jotdex-".Length..];
+                if (!DateTime.TryParseExact(stamp, "yyyyMMdd", null, System.Globalization.DateTimeStyles.None, out var day))
+                    continue;
+                if (day.Date < cutoff)
+                {
+                    try { File.Delete(file); } catch { /* ignore */ }
+                }
+            }
+        }
+        catch
+        {
+            // Logging must never throw into the app.
         }
     }
 

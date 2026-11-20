@@ -521,8 +521,8 @@ public sealed class VaultMirrorHostedService : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        try { await Task.Delay(TimeSpan.FromSeconds(45), stoppingToken); }
-        catch (OperationCanceledException) { return; }
+        await Jotdex.Infrastructure.Hosting.HostedLoopGuard.DelayUnlessStoppingAsync(TimeSpan.FromSeconds(45), stoppingToken);
+        if (stoppingToken.IsCancellationRequested) return;
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -542,15 +542,19 @@ public sealed class VaultMirrorHostedService : BackgroundService
                     {
                         await _mirror.RunNowAsync(stoppingToken);
                     }
+                    catch (Exception ex) when (Jotdex.Infrastructure.Hosting.HostedLoopGuard.IsHostStopping(ex, stoppingToken))
+                    {
+                        break;
+                    }
                     catch (Exception ex)
                     {
-                        _logger.LogWarning(ex, "Scheduled vault mirror failed");
+                        Jotdex.Infrastructure.Hosting.HostedLoopGuard.LogCycleFailure(
+                            _logger, ex, "Vault mirror", null, TimeSpan.Zero);
                     }
                 }
             }
 
-            try { await Task.Delay(delay, stoppingToken); }
-            catch (OperationCanceledException) { break; }
+            await Jotdex.Infrastructure.Hosting.HostedLoopGuard.DelayUnlessStoppingAsync(delay, stoppingToken);
         }
     }
 }

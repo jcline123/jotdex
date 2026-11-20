@@ -1,4 +1,5 @@
 using Jotdex.Core.CloudBackup;
+using Jotdex.Infrastructure.Hosting;
 using Jotdex.Infrastructure.Maintenance;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -29,14 +30,8 @@ public sealed class CloudBackupHostedService : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        try
-        {
-            await Task.Delay(TimeSpan.FromMinutes(2), stoppingToken).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
-        {
-            return;
-        }
+        await HostedLoopGuard.DelayUnlessStoppingAsync(TimeSpan.FromMinutes(2), stoppingToken).ConfigureAwait(false);
+        if (stoppingToken.IsCancellationRequested) return;
 
         try
         {
@@ -53,19 +48,16 @@ public sealed class CloudBackupHostedService : BackgroundService
             {
                 await EvaluateAsync(stoppingToken).ConfigureAwait(false);
             }
-            catch (Exception ex) when (ex is not OperationCanceledException)
-            {
-                _logger.LogWarning(ex, "Cloud backup schedule tick failed");
-            }
-
-            try
-            {
-                await Task.Delay(TimeSpan.FromMinutes(15), stoppingToken).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            catch (Exception ex) when (HostedLoopGuard.IsHostStopping(ex, stoppingToken))
             {
                 break;
             }
+            catch (Exception ex)
+            {
+                HostedLoopGuard.LogCycleFailure(_logger, ex, "Cloud backup", null, TimeSpan.Zero);
+            }
+
+            await HostedLoopGuard.DelayUnlessStoppingAsync(TimeSpan.FromMinutes(15), stoppingToken).ConfigureAwait(false);
         }
     }
 

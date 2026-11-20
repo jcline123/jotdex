@@ -1,3 +1,12 @@
+## 2026-11-19 — Calendar sync timeouts must not stop the host
+
+**Why:** A CalDAV request that hit the HttpClient 40s timeout threw `TaskCanceledException` (an `OperationCanceledException`). The hosted service filter let that escape `ExecuteAsync`, and the default `BackgroundServiceExceptionBehavior.StopHost` shut down the whole process — ports 5180/5181 closed and Cloudflare showed 502s. It happened three times in two days with nothing to restart the app.
+
+**What:** Calendar sync wraps each cycle so timeouts and HTTP failures are logged and retried with backoff (1 → 2 → 5 → 10 minutes) instead of crashing. A per-sync cancellation token is separate from host shutdown. Other background services use the same “only rethrow when the host is stopping” pattern. `HostOptions.BackgroundServiceExceptionBehavior` is `Ignore` as a backstop. Daily rolling logs under `data/logs/` keep the trail when there is no console. `/api/health` includes the last calendar sync result.
+
+**Portable release 1.4.9**
+- Tag `v1.4.9` — calendar sync timeouts no longer stop the host. Live vault Markdown was **not** rewritten by the release. Rollback is the previous exe (1.4.8).
+
 ## 2026-10-24 — Open todos can sync to a calendar
 
 **Why:** The todo list is mostly undated work. Those items should show up on a chosen calendar for the current day, move forward if they are still open tomorrow, and disappear when they leave the list. Shared calendars should stay out of it unless chosen.

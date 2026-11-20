@@ -1,4 +1,5 @@
 using Jotdex.Infrastructure.Config;
+using Jotdex.Infrastructure.Hosting;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
@@ -26,19 +27,25 @@ public sealed class DailyMirrorMoveKitHostedService : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        await Task.Delay(TimeSpan.FromMinutes(5), stoppingToken).ConfigureAwait(false);
+        await HostedLoopGuard.DelayUnlessStoppingAsync(TimeSpan.FromMinutes(5), stoppingToken).ConfigureAwait(false);
+        if (stoppingToken.IsCancellationRequested) return;
+
         while (!stoppingToken.IsCancellationRequested)
         {
             try
             {
                 await TryPublishAsync(stoppingToken).ConfigureAwait(false);
             }
-            catch (Exception ex) when (ex is not OperationCanceledException)
+            catch (Exception ex) when (HostedLoopGuard.IsHostStopping(ex, stoppingToken))
             {
-                _logger.LogWarning(ex, "Daily mirror move-kit check failed");
+                break;
+            }
+            catch (Exception ex)
+            {
+                HostedLoopGuard.LogCycleFailure(_logger, ex, "Daily mirror move-kit", null, TimeSpan.Zero);
             }
 
-            await Task.Delay(TimeSpan.FromHours(1), stoppingToken).ConfigureAwait(false);
+            await HostedLoopGuard.DelayUnlessStoppingAsync(TimeSpan.FromHours(1), stoppingToken).ConfigureAwait(false);
         }
     }
 

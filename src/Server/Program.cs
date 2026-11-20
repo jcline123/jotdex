@@ -15,6 +15,7 @@ using Jotdex.Core.CodeDiagnostics;
 using Jotdex.PowerShellDiagnostics;
 using Jotdex.Infrastructure.Auth;
 using Jotdex.Infrastructure.Calendar;
+using Microsoft.Extensions.Hosting;
 using Jotdex.Infrastructure.CloudBackup;
 using Jotdex.Infrastructure.Config;
 using Jotdex.Infrastructure.Export;
@@ -199,6 +200,13 @@ static void DecryptKitFile(string encryptedPath, string password, string outputZ
 var builder = WebApplication.CreateBuilder(args);
 Jotdex.Server.Hosting.NetworkListenConfigurator.Apply(builder);
 
+// A single BackgroundService fault must not take down ports 5180/5181 (default is StopHost).
+// Calendar CalDAV timeouts used to surface as TaskCanceledException and stop the process.
+builder.Services.Configure<HostOptions>(o =>
+{
+    o.BackgroundServiceExceptionBehavior = BackgroundServiceExceptionBehavior.Ignore;
+});
+
 if (OperatingSystem.IsWindows())
     builder.Host.UseWindowsService();
 
@@ -351,9 +359,10 @@ app.MapCodeDiagnosticsEndpoints();
 app.MapSnippetEndpoints();
 app.MapTemplateEndpoints();
 
-app.MapGet("/api/health", (IAppVersion version, IDataRootResolver paths, IVaultPathGuard vault, ISearchIndex search, StopwatchHolder uptime, IOptions<JotdexOptions> options) =>
+app.MapGet("/api/health", (IAppVersion version, IDataRootResolver paths, IVaultPathGuard vault, ISearchIndex search, StopwatchHolder uptime, IOptions<JotdexOptions> options, ICalendarSyncService calendar) =>
 {
     var index = search.Probe();
+    var cal = calendar.GetStatus();
     return Results.Json(new
     {
         status = "ok",
@@ -362,7 +371,16 @@ app.MapGet("/api/health", (IAppVersion version, IDataRootResolver paths, IVaultP
         vaultConfigured = vault.IsConfigured,
         portableMode = options.Value.PortableMode,
         dataRootConfigured = !string.IsNullOrWhiteSpace(paths.ResolveDataRoot()),
-        search = new { index.Ready, index.Fts5, index.Trigram, index.NoteCount }
+        search = new { index.Ready, index.Fts5, index.Trigram, index.NoteCount },
+        calendar = new
+        {
+            enabled = cal.Enabled,
+            lastSyncUtc = cal.LastSyncUtc,
+            lastError = cal.LastError,
+            lastUpserted = cal.LastUpserted,
+            lastRemoved = cal.LastRemoved,
+            calendarName = string.IsNullOrWhiteSpace(cal.CalendarName) ? null : cal.CalendarName
+        }
     });
 });
 

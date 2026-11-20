@@ -34,6 +34,10 @@ Upload **`artifacts\jotdex-win-x64.zip`** to a GitHub Release (tag like `v1.1.0`
 3. Download the Release zip, extract over the install folder, **keep `data\`**.
 4. Start `start-portable.cmd`.
 
+## 1.4.9 (Calendar sync cannot stop the host)
+
+1.4.9 keeps the app running when a CalDAV request times out. Calendar sync logs the failure, backs off (1 → 2 → 5 → 10 minutes), and retries. Other background services use the same guard. Rolling logs stay under `data/logs/`. `/api/health` includes the last calendar sync result. Rollback is the previous portable exe (1.4.8).
+
 ## 1.4.8 (Calendar sync for todos)
 
 1.4.8 adds **Settings → Calendar**. Open todos become all-day events titled `todo:` on a CalDAV calendar you choose (iCloud with an app-specific password). Undated items stay on today and roll forward until you clear them. Note todos can include a link when you set the Jotdex address. An all-day event you add on your phone titled `todo:` is imported and shows a Calendar chip. Rollback is the previous portable exe (1.4.7).

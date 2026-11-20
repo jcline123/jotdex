@@ -1,5 +1,6 @@
 using Jotdex.Core.Notifications;
 using Jotdex.Infrastructure.Config;
+using Jotdex.Infrastructure.Hosting;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
@@ -30,19 +31,25 @@ public sealed class MirrorStaleAlertHostedService : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        await Task.Delay(TimeSpan.FromMinutes(2), stoppingToken).ConfigureAwait(false);
+        await HostedLoopGuard.DelayUnlessStoppingAsync(TimeSpan.FromMinutes(2), stoppingToken).ConfigureAwait(false);
+        if (stoppingToken.IsCancellationRequested) return;
+
         while (!stoppingToken.IsCancellationRequested)
         {
             try
             {
                 await CheckOnceAsync(stoppingToken).ConfigureAwait(false);
             }
-            catch (Exception ex) when (ex is not OperationCanceledException)
+            catch (Exception ex) when (HostedLoopGuard.IsHostStopping(ex, stoppingToken))
             {
-                _logger.LogWarning(ex, "Mirror stale alert check failed");
+                break;
+            }
+            catch (Exception ex)
+            {
+                HostedLoopGuard.LogCycleFailure(_logger, ex, "Mirror stale alert", null, TimeSpan.Zero);
             }
 
-            await Task.Delay(TimeSpan.FromHours(1), stoppingToken).ConfigureAwait(false);
+            await HostedLoopGuard.DelayUnlessStoppingAsync(TimeSpan.FromHours(1), stoppingToken).ConfigureAwait(false);
         }
     }
 

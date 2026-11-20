@@ -1,3 +1,4 @@
+using Jotdex.Infrastructure.Hosting;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
@@ -21,8 +22,8 @@ public sealed class TrashRetentionHostedService : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        try { await Task.Delay(TimeSpan.FromMinutes(2), stoppingToken).ConfigureAwait(false); }
-        catch (OperationCanceledException) { return; }
+        await HostedLoopGuard.DelayUnlessStoppingAsync(TimeSpan.FromMinutes(2), stoppingToken).ConfigureAwait(false);
+        if (stoppingToken.IsCancellationRequested) return;
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -34,13 +35,16 @@ public sealed class TrashRetentionHostedService : BackgroundService
                 else if (!result.Success)
                     _logger.LogWarning("Trash retention failed: {Error}", result.Error);
             }
-            catch (Exception ex) when (ex is not OperationCanceledException)
+            catch (Exception ex) when (HostedLoopGuard.IsHostStopping(ex, stoppingToken))
             {
-                _logger.LogWarning(ex, "Trash retention sweep failed");
+                break;
+            }
+            catch (Exception ex)
+            {
+                HostedLoopGuard.LogCycleFailure(_logger, ex, "Trash retention", null, TimeSpan.Zero);
             }
 
-            try { await Task.Delay(TimeSpan.FromHours(12), stoppingToken).ConfigureAwait(false); }
-            catch (OperationCanceledException) { break; }
+            await HostedLoopGuard.DelayUnlessStoppingAsync(TimeSpan.FromHours(12), stoppingToken).ConfigureAwait(false);
         }
     }
 }

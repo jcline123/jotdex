@@ -298,7 +298,13 @@ public sealed class CalendarSyncService : ICalendarSyncService
                 _logger.LogWarning("Calendar sync partial: {Error}", error);
             return (error is null, error, upserted, removed);
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (OperationCanceledException)
+        {
+            // HttpClient / linked CTS timeouts are TaskCanceledException. Record them as a failed sync
+            // so the hosted service can back off without the exception escaping ExecuteAsync.
+            return Fail("Calendar request timed out or was cancelled.");
+        }
+        catch (Exception ex)
         {
             return Fail(ex.Message);
         }
@@ -398,44 +404,4 @@ public sealed class CalendarSyncService : ICalendarSyncService
         LastRemoved = s.LastRemoved,
         Events = new Dictionary<string, string>(s.Events ?? [], StringComparer.Ordinal)
     };
-}
-
-public sealed class CalendarSyncHostedService : Microsoft.Extensions.Hosting.BackgroundService
-{
-    private readonly ICalendarSyncService _sync;
-    private readonly ILogger<CalendarSyncHostedService> _logger;
-
-    public CalendarSyncHostedService(ICalendarSyncService sync, ILogger<CalendarSyncHostedService> logger)
-    {
-        _sync = sync;
-        _logger = logger;
-    }
-
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-    {
-        var lastFull = DateTimeOffset.MinValue;
-        while (!stoppingToken.IsCancellationRequested)
-        {
-            try
-            {
-                await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException)
-            {
-                break;
-            }
-
-            var due = _sync.ConsumeSyncRequest() || DateTimeOffset.UtcNow - lastFull > TimeSpan.FromMinutes(10);
-            if (!due || !_sync.GetStatus().Enabled) continue;
-            try
-            {
-                await _sync.SyncNowAsync(stoppingToken).ConfigureAwait(false);
-                lastFull = DateTimeOffset.UtcNow;
-            }
-            catch (Exception ex) when (ex is not OperationCanceledException)
-            {
-                _logger.LogWarning(ex, "Scheduled calendar sync failed");
-            }
-        }
-    }
 }

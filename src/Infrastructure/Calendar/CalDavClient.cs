@@ -113,9 +113,13 @@ public sealed class CalDavClient
 
             return new CalDavResult { Success = true, Calendars = calendars };
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
-            return Fail(Friendly(ex));
+            throw;
+        }
+        catch (Exception ex)
+        {
+            return Fail(FriendlyTimeout(ex));
         }
     }
 
@@ -184,9 +188,13 @@ public sealed class CalDavClient
             }
             return new CalDavEventsResult { Success = true, Events = events };
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
-            return new CalDavEventsResult { Success = false, Error = Friendly(ex) };
+            throw;
+        }
+        catch (Exception ex)
+        {
+            return new CalDavEventsResult { Success = false, Error = FriendlyTimeout(ex) };
         }
     }
 
@@ -202,9 +210,13 @@ public sealed class CalDavClient
                 return new CalDavResult { Success = true };
             return Fail(StatusMessage(response.StatusCode));
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
-            return Fail(Friendly(ex));
+            throw;
+        }
+        catch (Exception ex)
+        {
+            return Fail(FriendlyTimeout(ex));
         }
     }
 
@@ -217,9 +229,13 @@ public sealed class CalDavClient
                 return new CalDavResult { Success = true };
             return Fail(StatusMessage(response.StatusCode));
         }
-        catch (Exception ex) when (ex is not OperationCanceledException)
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
-            return Fail(Friendly(ex));
+            throw;
+        }
+        catch (Exception ex)
+        {
+            return Fail(FriendlyTimeout(ex));
         }
     }
 
@@ -342,4 +358,11 @@ public sealed class CalDavClient
         ex.Message.Contains("password", StringComparison.OrdinalIgnoreCase)
             ? "Could not reach the calendar server."
             : ex.Message;
+
+    private static string FriendlyTimeout(Exception ex) =>
+        ex is TimeoutException ||
+        (ex is TaskCanceledException && ex.InnerException is TimeoutException) ||
+        (ex is TaskCanceledException tce && !tce.CancellationToken.IsCancellationRequested)
+            ? "Calendar request timed out."
+            : Friendly(ex);
 }
